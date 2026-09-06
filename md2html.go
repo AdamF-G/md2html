@@ -4,6 +4,7 @@ package md2html
 
 import (
 	"bytes"
+	"fmt"
 
 	fences "github.com/stefanfritsch/goldmark-fences"
 	"github.com/yuin/goldmark"
@@ -61,11 +62,20 @@ func newParser() goldmark.Markdown {
 	)
 }
 
-// Convert renders Markdown to HTML.
+// Convert renders Markdown to HTML, running transforms over the parsed tree.
 func Convert(src []byte, opt Options) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := newParser().Convert(src, &buf); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	root, err := parseFragment(buf.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range opt.Transforms {
+		if err := t.Fn(root); err != nil {
+			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
+		}
+	}
+	return renderTree(root)
 }
