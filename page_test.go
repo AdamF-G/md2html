@@ -69,6 +69,22 @@ func TestDefaultCSSDefinesBothThemes(t *testing.T) {
 	}
 }
 
+// Long inline code must be able to wrap. Block code sits in a <pre> with its
+// own overflow-x, but inline code has no scroll container, so without this a
+// single long snippet widens the whole page — found by converting this repo's
+// own plan, where `go test ./... -run 'A|B|C'` pushed a 360px page 627px wide.
+func TestDefaultCSSWrapsInlineCode(t *testing.T) {
+	for _, want := range []string{":not(pre) > code", "overflow-wrap: anywhere"} {
+		if !strings.Contains(defaultCSS, want) {
+			t.Errorf("default.css missing %q; long inline code would widen the page", want)
+		}
+	}
+	// Block code must keep scrolling rather than wrapping.
+	if !strings.Contains(defaultCSS, "overflow-x: auto") {
+		t.Error("default.css: pre lost its overflow-x")
+	}
+}
+
 // The derived title must not include the "#" that HeadingAnchors appends.
 func TestConvertTitleExcludesAnchorText(t *testing.T) {
 	got, err := Convert([]byte("# Doc Title\n\ntext"), Options{})
