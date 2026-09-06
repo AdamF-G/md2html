@@ -150,6 +150,35 @@ func HeadingAnchors() Transform {
 	}}
 }
 
+// LinkRewrite replaces hrefs and srcs using a map keyed by the link exactly
+// as written in the source document. Links absent from the map are left
+// untouched, which is how remote URLs, fragments, and deliberately
+// unrewritten links survive.
+func LinkRewrite(m map[string]string) Transform {
+	return Transform{Name: "linkRewrite", Fn: func(root *html.Node) error {
+		if len(m) == 0 {
+			return nil
+		}
+		walk(root, func(n *html.Node) {
+			if n.Type != html.ElementNode {
+				return
+			}
+			key := linkAttrFor(n)
+			if key == "" {
+				return
+			}
+			href, ok := attr(n, key)
+			if !ok {
+				return
+			}
+			if repl, found := m[href]; found {
+				setAttr(n, key, repl)
+			}
+		})
+		return nil
+	}}
+}
+
 // isExternal reports whether an href points off-site.
 func isExternal(href string) bool {
 	return strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") ||

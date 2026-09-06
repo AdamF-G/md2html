@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -193,6 +194,11 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		}
 	}
 
+	// linksBySrc caches the links extracted from each document during
+	// discovery, keyed by resolved source path, so buildLinkMaps can reuse
+	// them below instead of re-reading and re-parsing every document.
+	linksBySrc := map[string][]Link{}
+
 	var order []string
 	for len(queue) > 0 {
 		cur := queue[0]
@@ -212,7 +218,9 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 			continue
 		}
 
-		for _, l := range ExtractLinks(root, filepath.Dir(cur)) {
+		links := ExtractLinks(root, filepath.Dir(cur))
+		linksBySrc[cur] = links
+		for _, l := range links {
 			if l.Kind == LinkAsset {
 				if _, statErr := os.Stat(l.Abs); statErr != nil {
 					res.Warnings = append(res.Warnings, Warning{cur,
@@ -253,7 +261,74 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	}
 	sort.Strings(res.External)
 	res.External = dedupe(res.External)
+
+	buildLinkMaps(res, opt, linksBySrc)
 	return res, nil
+}
+
+// buildLinkMaps computes, for every document, the replacement for each
+// href it contains. Document links resolve to other emitted documents
+// inside the output tree; asset links point back out at the original file
+// on disk, since assets are never copied. linksBySrc supplies the links
+// already extracted for each document during discovery, so this does not
+// re-read or re-parse any file.
+func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]Link) {
+	// Index the emit set by source path for O(1) lookup.
+	outBySrc := make(map[string]string, len(res.Docs))
+	for _, d := range res.Docs {
+		outBySrc[d.Src] = d.Out
+	}
+
+	for i := range res.Docs {
+		d := &res.Docs[i]
+		d.LinkMap = map[string]string{}
+
+		outDir := filepath.Dir(d.Out)
+		for _, l := range linksBySrc[d.Src] {
+			switch l.Kind {
+			case LinkDoc:
+				if opt.NoMdLinks {
+					continue
+				}
+				target, err := resolve(l.Abs)
+				if err != nil {
+					continue
+				}
+				targetOut, ok := outBySrc[target]
+				if !ok {
+					continue // not emitted: leave the link as written
+				}
+				rel, err := filepath.Rel(outDir, targetOut)
+				if err != nil {
+					continue
+				}
+				d.LinkMap[l.Href] = filepath.ToSlash(rel) + fragmentOf(l.Href)
+
+			case LinkAsset:
+				if opt.NoAssets || opt.OutDir == "" {
+					// In place, the HTML sits beside its source and existing
+					// relative links already resolve.
+					continue
+				}
+				if _, err := os.Stat(l.Abs); err != nil {
+					continue // missing asset: Crawl already warned; leave link as written
+				}
+				rel, err := filepath.Rel(outDir, l.Abs)
+				if err != nil {
+					continue
+				}
+				d.LinkMap[l.Href] = filepath.ToSlash(rel)
+			}
+		}
+	}
+}
+
+// fragmentOf returns the #fragment portion of an href, or "".
+func fragmentOf(href string) string {
+	if i := strings.IndexByte(href, '#'); i >= 0 {
+		return href[i:]
+	}
+	return ""
 }
 
 // dedupe removes adjacent duplicates from a sorted slice.

@@ -84,6 +84,11 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if transforms == nil {
 		transforms = Builtins()
 	}
+	if opt.LinkMap != nil {
+		// Full-slice expression: never append into the caller's array.
+		transforms = append(transforms[:len(transforms):len(transforms)],
+			LinkRewrite(opt.LinkMap))
+	}
 	for _, t := range transforms {
 		if err := t.Fn(root); err != nil {
 			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
