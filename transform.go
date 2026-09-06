@@ -3,6 +3,7 @@ package md2html
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -87,16 +88,20 @@ func TableScroll() Transform {
 	}}
 }
 
-// slugify converts heading text to a URL fragment.
+// slugify converts heading text to a URL fragment. Letters and digits from
+// any script are kept, so headings in Japanese, Cyrillic or Greek — and Latin
+// words carrying diacritics — get meaningful ids rather than being stripped to
+// nothing. HTML5 allows any id without whitespace, and a slug derived from the
+// text stays stable when headings move, which a positional scheme would not.
 func slugify(s string) string {
 	var b strings.Builder
 	prevDash := false
 	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case unicode.IsLetter(r), unicode.IsDigit(r):
 			b.WriteRune(r)
 			prevDash = false
-		case r == ' ' || r == '-' || r == '_':
+		case r == '-' || r == '_' || unicode.IsSpace(r):
 			if !prevDash && b.Len() > 0 {
 				b.WriteByte('-')
 				prevDash = true
@@ -131,12 +136,17 @@ func HeadingAnchors() Transform {
 				seen[id] = true
 			}
 		}
-		for _, h := range heads {
+		for i, h := range heads {
 			id, ok := attr(h, "id")
 			if !ok || id == "" {
 				base := slugify(textOf(h))
 				if base == "" {
-					continue
+					// Nothing to derive a slug from — a heading of only
+					// punctuation, or one holding just an image. Fall back to
+					// position so it is still linkable. Positional ids shift
+					// when headings are inserted above, so this stays a last
+					// resort rather than the general rule.
+					base = fmt.Sprintf("section-%d", i+1)
 				}
 				id = base
 				for n := 2; seen[id]; n++ {

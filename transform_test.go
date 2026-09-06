@@ -123,6 +123,52 @@ func TestHeadingAnchorsAvoidsSuffixCollision(t *testing.T) {
 	}
 }
 
+// Headings in scripts other than Latin must still get an id and an anchor.
+// Dropping every non-ASCII rune left CJK, Cyrillic and Greek headings with no
+// id at all, so nothing in a non-English document was deep-linkable.
+func TestSlugifyKeepsLettersFromAnyScript(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		// ASCII behavior must be exactly as before.
+		{"Hello World", "hello-world"},
+		{"Why Go / goldmark", "why-go-goldmark"},
+		{"Step 1: Init", "step-1-init"},
+		// Previously collapsed to "" and lost their anchors entirely.
+		{"日本語の見出し", "日本語の見出し"},
+		{"Привет мир", "привет-мир"},
+		{"Καλημέρα", "καλημέρα"},
+		{"Café Menu", "café-menu"},
+		// Punctuation is still dropped, letters either side still join.
+		{"Ünicode — Dashes!", "ünicode-dashes"},
+	} {
+		if got := slugify(c.in); got != c.want {
+			t.Errorf("slugify(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestHeadingAnchorsLinksNonASCIIHeadings(t *testing.T) {
+	got := apply(t, `<h2>日本語の見出し</h2>`, HeadingAnchors())
+	if !strings.Contains(got, `id="日本語の見出し"`) {
+		t.Errorf("non-ASCII heading got no id: %s", got)
+	}
+	if !strings.Contains(got, `href="#日本語の見出し"`) {
+		t.Errorf("non-ASCII heading got no anchor: %s", got)
+	}
+}
+
+// A heading with no letters or digits at all has nothing to slugify, so it
+// falls back to its position. Positional ids are unstable across edits, which
+// is why they are a last resort rather than the general rule.
+func TestHeadingAnchorsFallsBackForHeadingsWithNoLetters(t *testing.T) {
+	got := apply(t, `<h2>Real</h2><h2>+++</h2>`, HeadingAnchors())
+	if !strings.Contains(got, `id="real"`) {
+		t.Errorf("lost the normal slug: %s", got)
+	}
+	if !strings.Contains(got, `id="section-2"`) {
+		t.Errorf("symbol-only heading got no fallback id: %s", got)
+	}
+}
+
 func TestExternalLinksMarksOffSiteOnly(t *testing.T) {
 	in := `<a href="https://example.com">e</a><a href="./local.html">l</a><a href="#frag">f</a>`
 	got := apply(t, in, ExternalLinks())
