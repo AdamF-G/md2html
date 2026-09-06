@@ -27,12 +27,14 @@ const (
 type Link struct {
 	// Href is the value exactly as written in the source.
 	Href string
+	// Kind classifies the link target.
 	Kind LinkKind
 	// Abs is the resolved absolute path, for LinkDoc and LinkAsset only.
 	// Any #fragment has been stripped.
 	Abs string
-	// Node and Attr locate the link so a transform can rewrite it.
+	// Node is the element carrying the link, so a transform can rewrite it.
 	Node *html.Node
+	// Attr is the attribute on Node carrying the link ("href" or "src").
 	Attr string
 }
 
