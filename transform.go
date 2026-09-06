@@ -121,6 +121,16 @@ func HeadingAnchors() Transform {
 				heads = append(heads, n)
 			}
 		})
+		// Reserve every author-supplied id before assigning any generated
+		// one, or a slug could claim a string an explicit id further down
+		// the document is going to use, and the two would collide. An
+		// explicit id always wins and is never rewritten; two explicit ids
+		// that collide with each other are left exactly as written.
+		for _, h := range heads {
+			if id, ok := attr(h, "id"); ok && id != "" {
+				seen[id] = true
+			}
+		}
 		for _, h := range heads {
 			id, ok := attr(h, "id")
 			if !ok || id == "" {

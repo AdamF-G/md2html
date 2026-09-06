@@ -71,31 +71,55 @@ func TestHeadingAnchorsDeduplicatesSlugs(t *testing.T) {
 	}
 }
 
-// A later heading's natural slug can collide with an earlier heading's
-// disambiguated (suffixed) slug. The dedup bookkeeping must track final
-// assigned ids, not per-slug occurrence counts, so every id stays unique.
+// A generated slug and an explicit id can collide in either direction: a
+// later heading's natural slug can land on an earlier heading's suffixed
+// slug, and a generated suffix can land on an explicit id that appears
+// further down. Both must be disambiguated, and the explicit id must be
+// the one left as the author wrote it.
 func TestHeadingAnchorsAvoidsSuffixCollision(t *testing.T) {
-	got := apply(t, `<h2>Setup</h2><h2>Setup</h2><h2>Setup 2</h2>`, HeadingAnchors())
-	root, err := parseFragment([]byte(got))
-	if err != nil {
-		t.Fatalf("parseFragment: %v", err)
+	cases := []struct {
+		name  string
+		in    string
+		exact string // an id that must survive verbatim; "" for none
+	}{
+		{
+			name: "generated slug collides with an earlier suffix",
+			in:   `<h2>Setup</h2><h2>Setup</h2><h2>Setup 2</h2>`,
+		},
+		{
+			name:  "generated suffix collides with a later explicit id",
+			in:    `<h2>Setup</h2><h2>Setup</h2><h2 id="setup-2">Other</h2>`,
+			exact: "setup-2",
+		},
 	}
-	seen := map[string]bool{}
-	walk(root, func(n *html.Node) {
-		if n.Type != html.ElementNode || n.DataAtom != atom.H2 {
-			return
-		}
-		id, ok := attr(n, "id")
-		if !ok {
-			t.Fatalf("heading missing id\ngot: %s", got)
-		}
-		if seen[id] {
-			t.Errorf("duplicate id %q\ngot: %s", id, got)
-		}
-		seen[id] = true
-	})
-	if len(seen) != 3 {
-		t.Fatalf("expected 3 distinct ids, got %d\ngot: %s", len(seen), got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := apply(t, tc.in, HeadingAnchors())
+			root, err := parseFragment([]byte(got))
+			if err != nil {
+				t.Fatalf("parseFragment: %v", err)
+			}
+			seen := map[string]bool{}
+			walk(root, func(n *html.Node) {
+				if n.Type != html.ElementNode || n.DataAtom != atom.H2 {
+					return
+				}
+				id, ok := attr(n, "id")
+				if !ok {
+					t.Fatalf("heading missing id\ngot: %s", got)
+				}
+				if seen[id] {
+					t.Errorf("duplicate id %q\ngot: %s", id, got)
+				}
+				seen[id] = true
+			})
+			if len(seen) != 3 {
+				t.Fatalf("expected 3 distinct ids, got %d\ngot: %s", len(seen), got)
+			}
+			if tc.exact != "" && !seen[tc.exact] {
+				t.Errorf("explicit id %q was rewritten\ngot: %s", tc.exact, got)
+			}
+		})
 	}
 }
 

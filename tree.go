@@ -42,6 +42,14 @@ func renderTree(root *html.Node) ([]byte, error) {
 // walk visits n and every descendant in document order. It is safe against
 // fn removing or replacing the node it is given, because the next sibling
 // is captured before fn runs.
+//
+// A node fn inserts into the parent's child list during a pass is not
+// itself visited by that pass: each sibling link is read before fn runs, so
+// an insertion before the current node is already behind the cursor and one
+// after it is never picked up. TableScroll relies on this — it collects its
+// targets first, then wraps them, and the wrapper divs it inserts are never
+// re-examined. A node inserted *below* the current one is still visited,
+// since the descent into its children happens after fn returns.
 func walk(n *html.Node, fn func(*html.Node)) {
 	if n == nil {
 		return

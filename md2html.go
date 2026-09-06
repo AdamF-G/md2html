@@ -38,9 +38,21 @@ type Options struct {
 	// CSS replaces the embedded default stylesheet. Empty uses the default.
 	CSS string
 	// Transforms to run. Nil means Builtins().
+	//
+	// Transforms and LinkMap are two alternative routes to link rewriting,
+	// not complementary ones: either place LinkRewrite in Transforms
+	// yourself, or set LinkMap and let Convert do it. Doing both rewrites
+	// every href twice — see LinkMap.
 	Transforms []Transform
 	// LinkMap maps an href exactly as written in the source to its
 	// replacement. Populated by the crawler; nil for standalone conversion.
+	//
+	// Setting this makes Convert append LinkRewrite(LinkMap) to the
+	// transform list itself, so callers must not also put LinkRewrite in
+	// Transforms. Two passes over one map corrupt output whenever a
+	// replacement is itself a key: a document linking both ./a.md (mapped
+	// to a.html) and an existing ./a.html asset (mapped to the original
+	// file) would have the first rewrite turned into the second.
 	LinkMap map[string]string
 }
 
