@@ -96,6 +96,12 @@ unrelated tools that share the name is never claimed.
 | `--no-md-links` | do not rewrite `.md` links |
 | `--no-assets` | do not rewrite asset links |
 
+## Writing docs for it
+
+Callouts, diagrams, heading attributes, footnotes and definition lists all
+work, and two of them fail silently if you get the syntax wrong. See
+[docs/authoring.md](./docs/authoring.md).
+
 ## Library use
 
 ```go
