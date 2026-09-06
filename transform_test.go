@@ -3,6 +3,9 @@ package md2html
 import (
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 func apply(t *testing.T, in string, tr Transform) string {
@@ -65,6 +68,34 @@ func TestHeadingAnchorsDeduplicatesSlugs(t *testing.T) {
 	got := apply(t, `<h2>Setup</h2><h2>Setup</h2>`, HeadingAnchors())
 	if !strings.Contains(got, `id="setup"`) || !strings.Contains(got, `id="setup-2"`) {
 		t.Errorf("duplicate slugs not disambiguated\ngot: %s", got)
+	}
+}
+
+// A later heading's natural slug can collide with an earlier heading's
+// disambiguated (suffixed) slug. The dedup bookkeeping must track final
+// assigned ids, not per-slug occurrence counts, so every id stays unique.
+func TestHeadingAnchorsAvoidsSuffixCollision(t *testing.T) {
+	got := apply(t, `<h2>Setup</h2><h2>Setup</h2><h2>Setup 2</h2>`, HeadingAnchors())
+	root, err := parseFragment([]byte(got))
+	if err != nil {
+		t.Fatalf("parseFragment: %v", err)
+	}
+	seen := map[string]bool{}
+	walk(root, func(n *html.Node) {
+		if n.Type != html.ElementNode || n.DataAtom != atom.H2 {
+			return
+		}
+		id, ok := attr(n, "id")
+		if !ok {
+			t.Fatalf("heading missing id\ngot: %s", got)
+		}
+		if seen[id] {
+			t.Errorf("duplicate id %q\ngot: %s", id, got)
+		}
+		seen[id] = true
+	})
+	if len(seen) != 3 {
+		t.Fatalf("expected 3 distinct ids, got %d\ngot: %s", len(seen), got)
 	}
 }
 

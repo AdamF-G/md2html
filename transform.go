@@ -110,7 +110,7 @@ func slugify(s string) string {
 // An id already present — from a {#custom-id} attribute — is left alone.
 func HeadingAnchors() Transform {
 	return Transform{Name: "headingAnchors", Fn: func(root *html.Node) error {
-		seen := map[string]int{}
+		seen := map[string]bool{}
 		var heads []*html.Node
 		walk(root, func(n *html.Node) {
 			if n.Type != html.ElementNode {
@@ -124,18 +124,17 @@ func HeadingAnchors() Transform {
 		for _, h := range heads {
 			id, ok := attr(h, "id")
 			if !ok || id == "" {
-				id = slugify(textOf(h))
-				if id == "" {
+				base := slugify(textOf(h))
+				if base == "" {
 					continue
 				}
-				seen[id]++
-				if c := seen[id]; c > 1 {
-					id = fmt.Sprintf("%s-%d", id, c)
+				id = base
+				for n := 2; seen[id]; n++ {
+					id = fmt.Sprintf("%s-%d", base, n)
 				}
 				setAttr(h, "id", id)
-			} else {
-				seen[id]++
 			}
+			seen[id] = true
 			a := &html.Node{
 				Type: html.ElementNode, DataAtom: atom.A, Data: "a",
 				Attr: []html.Attribute{
