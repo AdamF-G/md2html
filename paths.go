@@ -44,7 +44,8 @@ func commonAncestor(paths []string) string {
 	return filepath.Clean(joined)
 }
 
-// isUnder reports whether path is base or lives beneath it. Both are
+// isUnder reports whether path is base or lives beneath it. Both must be
+// absolute paths; results are undefined for relative paths. Paths are
 // cleaned first, so a link written with ../ that resolves back inside base
 // is correctly recognized as contained.
 func isUnder(path, base string) bool {
@@ -61,6 +62,7 @@ func isUnder(path, base string) bool {
 }
 
 // outputPath maps a source document to its generated HTML location.
+// Both src and base must be absolute paths.
 // An empty outDir means in-place: the HTML sits beside its source.
 //
 // Note a.md and a.markdown in one directory both map to a.html. That is a
@@ -83,8 +85,18 @@ func outputPath(src, base, outDir string) string {
 		}
 	}
 	// Outside base: mirror the absolute path under _external.
+	// Sanitize by removing leading .. and . segments to prevent escaping outDir.
 	trimmed := strings.TrimPrefix(htmlName, string(filepath.Separator))
 	trimmed = strings.TrimPrefix(trimmed, filepath.VolumeName(htmlName))
 	trimmed = strings.TrimPrefix(trimmed, string(filepath.Separator))
+
+	// Drop leading .. and . path segments.
+	parts := strings.Split(trimmed, string(filepath.Separator))
+	i := 0
+	for i < len(parts) && (parts[i] == ".." || parts[i] == ".") {
+		i++
+	}
+	trimmed = strings.Join(parts[i:], string(filepath.Separator))
+
 	return filepath.Join(outDir, externalDir, trimmed)
 }

@@ -72,3 +72,30 @@ func TestOutputPathHandlesMarkdownExtension(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// Regression: relative paths with .. must not escape outDir.
+func TestOutputPathSanitizesRelativeWithDotDot(t *testing.T) {
+	got := outputPath("../../etc/passwd.md", "/docs", "/site")
+	outDir := "/site"
+	if !isUnder(got, outDir) {
+		t.Errorf("outputPath(\"../../etc/passwd.md\", \"/docs\", \"/site\") = %q, not under %q", got, outDir)
+	}
+}
+
+// Regression: deeper relative paths must not escape outDir.
+func TestOutputPathSanitizesDeepRelativePath(t *testing.T) {
+	got := outputPath("../../../var/log/app.md", "/docs", "/site")
+	outDir := "/site"
+	if !isUnder(got, outDir) {
+		t.Errorf("outputPath(\"../../../var/log/app.md\", \"/docs\", \"/site\") = %q, not under %q", got, outDir)
+	}
+}
+
+// Regression: relative paths without .. are also sanitized and contained.
+func TestOutputPathSanitizesRelativeWithoutDotDot(t *testing.T) {
+	got := outputPath("docs/readme.md", "/docs", "/site")
+	outDir := "/site"
+	if !isUnder(got, outDir) {
+		t.Errorf("outputPath(\"docs/readme.md\", \"/docs\", \"/site\") = %q, not under %q", got, outDir)
+	}
+}
