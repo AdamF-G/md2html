@@ -17,8 +17,10 @@ import (
 // Transform mutates a parsed HTML tree in place. Fn receives the synthetic
 // root node whose children are the document's top-level elements.
 type Transform struct {
+	// Name identifies the transform, e.g. for logging or diagnostics.
 	Name string
-	Fn   func(*html.Node) error
+	// Fn is the function applied to the parsed HTML tree.
+	Fn func(*html.Node) error
 }
 
 // Options controls a single document conversion.
