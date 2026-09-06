@@ -12,7 +12,9 @@ import (
 const externalDir = "_external"
 
 // commonAncestor returns the deepest directory containing every path. A
-// path naming a file contributes its directory.
+// path naming a Markdown document contributes its directory; every other
+// path is taken to be a directory already, since the entry points it is
+// given are either directories or Markdown files.
 func commonAncestor(paths []string) string {
 	if len(paths) == 0 {
 		return string(filepath.Separator)
@@ -65,10 +67,11 @@ func isUnder(path, base string) bool {
 // Both src and base must be absolute paths.
 // An empty outDir means in-place: the HTML sits beside its source.
 //
-// Note a.md and a.markdown in one directory both map to a.html. That is a
-// genuine collision and the parallel emit would race on it. It is rare
-// enough to leave unhandled for now; if it bites, add a duplicate-output
-// check in Crawl after the emit set is built and refuse the run.
+// Note a.md and a.markdown in one directory both map to a.html, as does a
+// real document under base/_external colliding with one pulled in from
+// outside base. Crawl checks the finished emit set for two documents
+// sharing an output path and refuses the run, so the parallel emit never
+// races on one.
 func outputPath(src, base, outDir string) string {
 	src = filepath.Clean(src)
 	htmlName := strings.TrimSuffix(src, filepath.Ext(src)) + ".html"

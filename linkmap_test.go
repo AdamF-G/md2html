@@ -1,6 +1,8 @@
 package md2html
 
 import (
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -144,5 +146,86 @@ func TestConvertAppliesLinkMapFromOptions(t *testing.T) {
 	}
 	if !strings.Contains(string(got), `href="guide.html"`) {
 		t.Errorf("Options.LinkMap not applied: %s", got)
+	}
+}
+
+// A rewritten href must be percent-encoded again: ExtractLinks decodes %XX
+// before touching the filesystem, so a replacement computed from filesystem
+// paths would otherwise emit a raw space (or #, ?, %) into the HTML and
+// resolve to nothing.
+func TestLinkMapPercentEncodesRewrittenHrefs(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "[d](<./my doc.md>)\n\n![i](<./img/my img.png>)",
+		"docs/my doc.md":      "# My Doc",
+		"docs/img/my img.png": "PNG",
+	})
+	site := filepath.Join(root, "site")
+	res := mustCrawl(t, CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		OutDir:  site,
+		Depth:   -1,
+	})
+	idx := docByBase(res.Docs, "index.md")
+	if idx == nil {
+		t.Fatal("index.md missing")
+	}
+	if got, want := idx.LinkMap["./my%20doc.md"], "my%20doc.html"; got != want {
+		t.Errorf("doc link: got %q, want %q", got, want)
+	}
+	if got, want := idx.LinkMap["./img/my%20img.png"], "../docs/img/my%20img.png"; got != want {
+		t.Errorf("asset link: got %q, want %q", got, want)
+	}
+
+	// Emit the whole set, then follow the href the way a browser would.
+	for _, d := range res.Docs {
+		src, err := os.ReadFile(d.Src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := Convert(src, Options{SourcePath: d.Src, LinkMap: d.LinkMap})
+		if err != nil {
+			t.Fatalf("Convert %s: %v", d.Src, err)
+		}
+		if _, err := SafeWrite(d.Out, out); err != nil {
+			t.Fatalf("SafeWrite %s: %v", d.Out, err)
+		}
+	}
+	page, err := os.ReadFile(idx.Out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `href="my%20doc.html"`) {
+		t.Fatalf("href not percent-encoded in the emitted page: %s", page)
+	}
+	target, err := url.PathUnescape("my%20doc.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(idx.Out), target)); err != nil {
+		t.Errorf("emitted href names a file that does not exist: %v", err)
+	}
+}
+
+func TestNoMdLinksFlagSuppressesDocRewriting(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":  "[a](./a.md)\n\n![f](./img/f.png)",
+		"docs/a.md":      "# A",
+		"docs/img/f.png": "PNG",
+	})
+	res := mustCrawl(t, CrawlOptions{
+		Entries:   []string{filepath.Join(root, "docs")},
+		OutDir:    filepath.Join(root, "site"),
+		Depth:     -1,
+		NoMdLinks: true,
+	})
+	if len(res.Docs) != 2 {
+		t.Fatalf("got %d docs, want 2 (NoMdLinks must not stop discovery)", len(res.Docs))
+	}
+	idx := docByBase(res.Docs, "index.md")
+	if got, ok := idx.LinkMap["./a.md"]; ok {
+		t.Errorf("doc link rewritten to %q despite NoMdLinks", got)
+	}
+	if _, ok := idx.LinkMap["./img/f.png"]; !ok {
+		t.Error("NoMdLinks suppressed asset rewriting too; the flags are independent")
 	}
 }

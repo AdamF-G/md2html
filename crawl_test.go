@@ -292,3 +292,99 @@ func TestCrawlErrorsOnMissingEntryPoint(t *testing.T) {
 		t.Error("expected an error for a missing entry point")
 	}
 }
+
+// Containment is a whole-system property, not a property of outputPath: a
+// document reaches the emit set through two paths — directory seeding and
+// link following — and both must apply the same rule. The tree here has a
+// symlinked .md pointing outside the entry directory, a ../ link that
+// resolves back inside base, and a deep subdirectory.
+func TestCrawlContainsOutputInBothModes(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":     "[deep](./a/b/deep.md) and [back](../docs/side.md)",
+		"docs/side.md":      "# Side",
+		"docs/a/b/deep.md":  "# Deep",
+		"outside/secret.md": "# Secret",
+	})
+	docs := filepath.Join(root, "docs")
+	if err := os.Symlink(filepath.Join(root, "outside", "secret.md"),
+		filepath.Join(docs, "alias.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	secret := filepath.Join(root, "outside", "secret.md")
+
+	// In place: nothing may be written outside the source tree, and the
+	// out-of-tree symlink must be refused with a warning.
+	res := mustCrawl(t, CrawlOptions{Entries: []string{docs}, Depth: -1})
+	for _, d := range res.Docs {
+		if !isUnder(d.Out, docs) {
+			t.Errorf("in place: %s writes outside the source tree: %s", d.Src, d.Out)
+		}
+		if d.Src == secret {
+			t.Errorf("in place: out-of-tree symlink target entered the emit set: %s", d.Out)
+		}
+	}
+	if got, want := srcNames(t, root, res.Docs),
+		[]string{"docs/a/b/deep.md", "docs/index.md", "docs/side.md"}; !eq(got, want) {
+		t.Errorf("in place: got %v, want %v", got, want)
+	}
+	var warned bool
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, "refusing to follow") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("in place: no refusal warning for the out-of-tree symlink; got %+v", res.Warnings)
+	}
+	if len(res.External) != 0 {
+		t.Errorf("in place: nothing may be recorded as external, got %v", res.External)
+	}
+
+	// With -o: everything lands under the output directory, the out-of-base
+	// target is contained beneath _external, and it is visible in the summary.
+	site := filepath.Join(root, "site")
+	res = mustCrawl(t, CrawlOptions{Entries: []string{docs}, OutDir: site, Depth: -1})
+	var external *Doc
+	for i := range res.Docs {
+		d := &res.Docs[i]
+		if !isUnder(d.Out, site) {
+			t.Errorf("-o: %s writes outside the output dir: %s", d.Src, d.Out)
+		}
+		if d.Src == secret {
+			external = d
+		}
+	}
+	if external == nil {
+		t.Fatalf("-o: out-of-base symlink target not followed; got %v", srcNames(t, root, res.Docs))
+	}
+	if !isUnder(external.Out, filepath.Join(site, externalDir)) {
+		t.Errorf("-o: out-of-base doc not emitted under %s: %s", externalDir, external.Out)
+	}
+	var listed bool
+	for _, e := range res.External {
+		if e == secret {
+			listed = true
+		}
+	}
+	if !listed {
+		t.Errorf("-o: out-of-base seed missing from res.External %v", res.External)
+	}
+}
+
+// a.md and a.markdown in one directory both map to a.html. The emit pass is
+// parallel, so the run must be refused rather than raced.
+func TestCrawlRefusesDuplicateOutputPaths(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/a.md":       "# A",
+		"docs/a.markdown": "# Also A",
+	})
+	_, err := Crawl(CrawlOptions{Entries: []string{filepath.Join(root, "docs")}, Depth: -1})
+	if err == nil {
+		t.Fatal("expected an error for two sources sharing one output path")
+	}
+	for _, want := range []string{"a.md", "a.markdown", "a.html"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
+	}
+}

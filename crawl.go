@@ -3,6 +3,7 @@ package md2html
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -162,18 +163,6 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		return nil, fmt.Errorf("no entry points given")
 	}
 
-	var seeds []string
-	for _, e := range opt.Entries {
-		s, err := seed(e, opt.Depth)
-		if err != nil {
-			return nil, err
-		}
-		seeds = append(seeds, s...)
-	}
-	if len(seeds) == 0 {
-		return nil, fmt.Errorf("no Markdown files found in entry points")
-	}
-
 	var entryAbs []string
 	for _, e := range opt.Entries {
 		p, err := resolve(e)
@@ -187,11 +176,44 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	res := &CrawlResult{Base: base}
 	visited := map[string]bool{}
 	var queue []string
-	for _, s := range seeds {
-		if !visited[s] {
-			visited[s] = true
-			queue = append(queue, s)
+
+	// admit is the single gate onto the queue. Both the seeding pass and
+	// the link-following pass go through it, so the containment policy has
+	// exactly one implementation and the two paths cannot drift apart: a
+	// symlinked seed pointing outside the tree is refused for the same
+	// reason, and recorded in External for the same reason, as a link is.
+	// src is the document or entry point the target was reached from and
+	// ref is how it was written there, both for diagnostics only.
+	admit := func(src, target, ref string) {
+		if !isUnder(target, base) {
+			if opt.OutDir == "" {
+				res.Warnings = append(res.Warnings, Warning{src,
+					fmt.Sprintf("refusing to follow %s outside %s (no -o given)", ref, base)})
+				return
+			}
+			res.External = append(res.External, target)
 		}
+		if !visited[target] {
+			visited[target] = true
+			queue = append(queue, target)
+		}
+	}
+
+	found := 0
+	for i, e := range opt.Entries {
+		s, err := seed(e, opt.Depth)
+		if err != nil {
+			return nil, err
+		}
+		found += len(s)
+		for _, p := range s {
+			// A seed can point outside the tree even though it was found
+			// inside it: a symlinked .md resolves wherever it points.
+			admit(entryAbs[i], p, p)
+		}
+	}
+	if found == 0 {
+		return nil, fmt.Errorf("no Markdown files found in entry points")
 	}
 
 	// linksBySrc caches the links extracted from each document during
@@ -240,24 +262,26 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 					fmt.Sprintf("link target does not exist: %s", l.Href)})
 				continue
 			}
-			if !isUnder(target, base) {
-				if opt.OutDir == "" {
-					res.Warnings = append(res.Warnings, Warning{cur,
-						fmt.Sprintf("refusing to follow %s outside %s (no -o given)", l.Href, base)})
-					continue
-				}
-				res.External = append(res.External, target)
-			}
-			if !visited[target] {
-				visited[target] = true
-				queue = append(queue, target)
-			}
+			admit(cur, target, l.Href)
 		}
 	}
 
 	sort.Strings(order)
 	for _, s := range order {
 		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir)})
+	}
+	// Two distinct sources can map to one output path: a.md and a.markdown
+	// in one directory, or a real document under base/_external colliding
+	// with a document pulled in from outside base. The emit pass is
+	// parallel, so that is a file-level race between two goroutines, not a
+	// benign last-writer-wins. Refuse the whole run instead.
+	srcByOut := make(map[string]string, len(res.Docs))
+	for _, d := range res.Docs {
+		if prev, dup := srcByOut[d.Out]; dup {
+			return nil, fmt.Errorf("output path collision: %s and %s both produce %s",
+				prev, d.Src, d.Out)
+		}
+		srcByOut[d.Out] = d.Src
 	}
 	sort.Strings(res.External)
 	res.External = dedupe(res.External)
@@ -302,7 +326,7 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 				if err != nil {
 					continue
 				}
-				d.LinkMap[l.Href] = filepath.ToSlash(rel) + fragmentOf(l.Href)
+				d.LinkMap[l.Href] = encodePath(filepath.ToSlash(rel)) + fragmentOf(l.Href)
 
 			case LinkAsset:
 				if opt.NoAssets || opt.OutDir == "" {
@@ -317,10 +341,24 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 				if err != nil {
 					continue
 				}
-				d.LinkMap[l.Href] = filepath.ToSlash(rel)
+				d.LinkMap[l.Href] = encodePath(filepath.ToSlash(rel))
 			}
 		}
 	}
+}
+
+// encodePath percent-encodes each segment of a slash-separated relative
+// path. ExtractLinks decodes %XX before touching the filesystem, so the
+// replacement — computed from filesystem paths — has to be re-encoded or a
+// name containing a space, '#', '?' or '%' would emit an href that resolves
+// to the wrong target or to nothing. Separators are left alone, as are the
+// "." and ".." segments, which url.PathEscape treats as unreserved.
+func encodePath(rel string) string {
+	parts := strings.Split(rel, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
 }
 
 // fragmentOf returns the #fragment portion of an href, or "".
