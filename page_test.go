@@ -69,6 +69,45 @@ func TestDefaultCSSDefinesBothThemes(t *testing.T) {
 	}
 }
 
+// A standalone page has to load mermaid itself or a ```mermaid fence renders
+// as inert preformatted text. Fragments must NOT: they are published as
+// Artifacts, which render mermaid natively, and a second copy would conflict.
+func TestMermaidRuntimeInjectedOnlyForPagesThatNeedIt(t *testing.T) {
+	const diagram = "```mermaid\ngraph TD; A-->B;\n```\n"
+	for _, c := range []struct {
+		name string
+		src  string
+		opt  Options
+		want bool
+	}{
+		{"page with a diagram", diagram, Options{}, true},
+		{"page without a diagram", "# Plain\n\ntext\n", Options{}, false},
+		{"fragment with a diagram", diagram, Options{Fragment: true}, false},
+	} {
+		got, err := Convert([]byte(c.src), c.opt)
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", c.name, err)
+		}
+		if has := strings.Contains(string(got), mermaidCDN); has != c.want {
+			t.Errorf("%s: mermaid runtime present = %v, want %v", c.name, has, c.want)
+		}
+	}
+}
+
+// The runtime must follow the same two theme signals the stylesheet uses, or
+// a dark page renders a glaring light diagram.
+func TestMermaidRuntimeIsThemeAware(t *testing.T) {
+	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	for _, want := range []string{"prefers-color-scheme: dark", "data-theme", "dark"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("mermaid runtime ignores %q", want)
+		}
+	}
+}
+
 // Long inline code must be able to wrap. Block code sits in a <pre> with its
 // own overflow-x, but inline code has no scroll container, so without this a
 // single long snippet widens the whole page — found by converting this repo's

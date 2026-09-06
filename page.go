@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"bytes"
 	"fmt"
 	"html"
 	"path/filepath"
@@ -51,6 +52,33 @@ func extractTitle(root *nethtml.Node, sourcePath string) string {
 }
 
 // renderPage wraps body in a complete HTML document.
+// mermaidCDN is the pinned MermaidJS build a standalone page loads to render
+// its diagrams. Pinned rather than floating so a page generated today renders
+// the same way next year.
+const mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs"
+
+// mermaidRuntime renders diagrams in a standalone page. The goldmark extension
+// runs with NoScript, so nothing else loads MermaidJS and a ```mermaid fence
+// would otherwise sit on the page as inert preformatted text.
+//
+// Fragments never get this: they are published as Artifacts, which render
+// mermaid natively. The theme test mirrors the stylesheet's two signals —
+// an explicit [data-theme] wins, otherwise the OS preference decides.
+const mermaidRuntime = `<script type="module">
+import mermaid from "` + mermaidCDN + `";
+const explicit = document.documentElement.dataset.theme;
+const dark = explicit === "dark" ||
+  (explicit !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default" });
+</script>
+`
+
+// hasMermaid reports whether the rendered body carries a mermaid diagram. The
+// goldmark extension emits <pre class="mermaid">, so the class is the marker.
+func hasMermaid(body []byte) bool {
+	return bytes.Contains(body, []byte(`class="mermaid"`))
+}
+
 func renderPage(body []byte, title, css string) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
@@ -62,7 +90,11 @@ func renderPage(body []byte, title, css string) []byte {
 	b.WriteString(css)
 	b.WriteString("\n</style>\n</head>\n<body>\n<main>\n")
 	b.Write(body)
-	b.WriteString("\n</main>\n</body>\n</html>\n")
+	b.WriteString("\n</main>\n")
+	if hasMermaid(body) {
+		b.WriteString(mermaidRuntime)
+	}
+	b.WriteString("</body>\n</html>\n")
 	return []byte(b.String())
 }
 

@@ -15,6 +15,11 @@ writes a browsable HTML tree. Tables get scroll containers, headings get
 anchors, `.md` links become `.html` links, and mermaid fences render as
 diagrams.
 
+The one thing a generated page fetches at view time is MermaidJS, and only
+a page that actually contains a diagram: it loads a pinned build from a CDN.
+Pages without diagrams reference nothing external, and `--fragment` output
+never loads it at all, because Artifacts render mermaid themselves.
+
 ## Usage
 
 ```
