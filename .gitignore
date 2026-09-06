@@ -1,0 +1,4 @@
+# Browser-automation artifacts from local verification runs.
+# Deliberately not "*.png": this is a docs tool, and real image assets
+# belong in the repo. Stray screenshots should stay visible in git status.
+.playwright-mcp/
