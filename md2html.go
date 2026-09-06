@@ -1,0 +1,69 @@
+// Package md2html converts Markdown documents to HTML with tree-level
+// transforms that reach hand-written raw HTML as well as generated markup.
+package md2html
+
+import (
+	"bytes"
+
+	fences "github.com/stefanfritsch/goldmark-fences"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	goldhtml "github.com/yuin/goldmark/renderer/html"
+	"go.abhg.dev/goldmark/mermaid"
+	"golang.org/x/net/html"
+)
+
+// Transform mutates a parsed HTML tree in place. Fn receives the synthetic
+// root node whose children are the document's top-level elements.
+type Transform struct {
+	Name string
+	Fn   func(*html.Node) error
+}
+
+// Options controls a single document conversion.
+type Options struct {
+	// Fragment emits Artifact shape (marker, title, style, body) instead of
+	// a full HTML document.
+	Fragment bool
+	// Title overrides the derived title. Empty means derive from the first
+	// <h1>, falling back to SourcePath's base name.
+	Title string
+	// SourcePath is the absolute path of the source document. Used for the
+	// title fallback and diagnostics.
+	SourcePath string
+	// CSS replaces the embedded default stylesheet. Empty uses the default.
+	CSS string
+	// Transforms to run. Nil means Builtins().
+	Transforms []Transform
+	// LinkMap maps an href exactly as written in the source to its
+	// replacement. Populated by the crawler; nil for standalone conversion.
+	LinkMap map[string]string
+}
+
+// newParser builds the goldmark instance. Every extension here is required
+// by the conformance fixture; see docs/specs.
+func newParser() goldmark.Markdown {
+	return goldmark.New(
+		goldmark.WithExtensions(
+			extension.GFM,
+			extension.DefinitionList,
+			extension.Footnote,
+			// NoScript: artifacts render mermaid natively, so the extension
+			// must not inject its own MermaidJS <script> tag.
+			&mermaid.Extender{RenderMode: mermaid.RenderModeClient, NoScript: true},
+			&fences.Extender{},
+		),
+		goldmark.WithParserOptions(parser.WithAttribute()),
+		goldmark.WithRendererOptions(goldhtml.WithUnsafe()),
+	)
+}
+
+// Convert renders Markdown to HTML.
+func Convert(src []byte, opt Options) ([]byte, error) {
+	var buf bytes.Buffer
+	if err := newParser().Convert(src, &buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
