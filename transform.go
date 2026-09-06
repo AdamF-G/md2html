@@ -1,0 +1,177 @@
+package md2html
+
+import (
+	"fmt"
+	"strings"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+// Builtins returns the transforms enabled by default.
+func Builtins() []Transform {
+	return []Transform{TableScroll(), HeadingAnchors(), ExternalLinks()}
+}
+
+// attr returns the value of the named attribute and whether it was present.
+func attr(n *html.Node, key string) (string, bool) {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val, true
+		}
+	}
+	return "", false
+}
+
+// setAttr sets or replaces an attribute.
+func setAttr(n *html.Node, key, val string) {
+	for i, a := range n.Attr {
+		if a.Key == key {
+			n.Attr[i].Val = val
+			return
+		}
+	}
+	n.Attr = append(n.Attr, html.Attribute{Key: key, Val: val})
+}
+
+// hasClass reports whether n carries the given class token.
+func hasClass(n *html.Node, want string) bool {
+	v, _ := attr(n, "class")
+	for _, f := range strings.Fields(v) {
+		if f == want {
+			return true
+		}
+	}
+	return false
+}
+
+// textOf returns the concatenated text content of n's subtree.
+func textOf(n *html.Node) string {
+	var b strings.Builder
+	walk(n, func(x *html.Node) {
+		if x.Type == html.TextNode {
+			b.WriteString(x.Data)
+		}
+	})
+	return b.String()
+}
+
+// TableScroll wraps every table in a horizontally scrollable container, so
+// wide tables never force the page body to scroll sideways. It reaches
+// hand-written tables in raw HTML as well as generated ones.
+func TableScroll() Transform {
+	return Transform{Name: "tableScroll", Fn: func(root *html.Node) error {
+		var targets []*html.Node
+		walk(root, func(n *html.Node) {
+			if n.Type == html.ElementNode && n.DataAtom == atom.Table {
+				if n.Parent != nil && hasClass(n.Parent, "table-scroll") {
+					return // already wrapped
+				}
+				targets = append(targets, n)
+			}
+		})
+		for _, t := range targets {
+			p := t.Parent
+			if p == nil {
+				continue
+			}
+			div := &html.Node{
+				Type: html.ElementNode, DataAtom: atom.Div, Data: "div",
+				Attr: []html.Attribute{{Key: "class", Val: "table-scroll"}},
+			}
+			p.InsertBefore(div, t)
+			p.RemoveChild(t)
+			div.AppendChild(t)
+		}
+		return nil
+	}}
+}
+
+// slugify converts heading text to a URL fragment.
+func slugify(s string) string {
+	var b strings.Builder
+	prevDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			prevDash = false
+		case r == ' ' || r == '-' || r == '_':
+			if !prevDash && b.Len() > 0 {
+				b.WriteByte('-')
+				prevDash = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// HeadingAnchors gives every heading a stable id and a linkable anchor.
+// An id already present — from a {#custom-id} attribute — is left alone.
+func HeadingAnchors() Transform {
+	return Transform{Name: "headingAnchors", Fn: func(root *html.Node) error {
+		seen := map[string]int{}
+		var heads []*html.Node
+		walk(root, func(n *html.Node) {
+			if n.Type != html.ElementNode {
+				return
+			}
+			switch n.DataAtom {
+			case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
+				heads = append(heads, n)
+			}
+		})
+		for _, h := range heads {
+			id, ok := attr(h, "id")
+			if !ok || id == "" {
+				id = slugify(textOf(h))
+				if id == "" {
+					continue
+				}
+				seen[id]++
+				if c := seen[id]; c > 1 {
+					id = fmt.Sprintf("%s-%d", id, c)
+				}
+				setAttr(h, "id", id)
+			} else {
+				seen[id]++
+			}
+			a := &html.Node{
+				Type: html.ElementNode, DataAtom: atom.A, Data: "a",
+				Attr: []html.Attribute{
+					{Key: "class", Val: "anchor"},
+					{Key: "href", Val: "#" + id},
+					{Key: "aria-hidden", Val: "true"},
+				},
+			}
+			a.AppendChild(&html.Node{Type: html.TextNode, Data: "#"})
+			h.AppendChild(a)
+		}
+		return nil
+	}}
+}
+
+// isExternal reports whether an href points off-site.
+func isExternal(href string) bool {
+	return strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") ||
+		strings.HasPrefix(href, "//")
+}
+
+// ExternalLinks marks off-site links so they open in a new tab without
+// leaking the referring window.
+func ExternalLinks() Transform {
+	return Transform{Name: "externalLinks", Fn: func(root *html.Node) error {
+		walk(root, func(n *html.Node) {
+			if n.Type != html.ElementNode || n.DataAtom != atom.A {
+				return
+			}
+			href, ok := attr(n, "href")
+			if !ok || !isExternal(href) {
+				return
+			}
+			setAttr(n, "target", "_blank")
+			setAttr(n, "rel", "noopener noreferrer")
+		})
+		return nil
+	}}
+}

@@ -72,7 +72,11 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, t := range opt.Transforms {
+	transforms := opt.Transforms
+	if transforms == nil {
+		transforms = Builtins()
+	}
+	for _, t := range transforms {
 		if err := t.Fn(root); err != nil {
 			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
 		}
