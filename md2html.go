@@ -72,6 +72,14 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Before transforms: HeadingAnchors would otherwise contribute its "#"
+	// anchor text to the derived title.
+	title := opt.Title
+	if title == "" {
+		title = extractTitle(root, opt.SourcePath)
+	}
+
 	transforms := opt.Transforms
 	if transforms == nil {
 		transforms = Builtins()
@@ -81,5 +89,17 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
 		}
 	}
-	return renderTree(root)
+
+	body, err := renderTree(root)
+	if err != nil {
+		return nil, err
+	}
+	css := opt.CSS
+	if css == "" {
+		css = defaultCSS
+	}
+	if opt.Fragment {
+		return renderFragment(body, title, css), nil
+	}
+	return renderPage(body, title, css), nil
 }

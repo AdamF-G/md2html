@@ -1,0 +1,108 @@
+:root {
+  --bg: #fbfaf8;
+  --fg: #23201d;
+  --muted: #6b645c;
+  --accent: #9a4f2c;
+  --rule: #e2ddd6;
+  --code-bg: #f2eee9;
+  --measure: 68ch;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171513;
+    --fg: #ece7e1;
+    --muted: #9d958b;
+    --accent: #e08a5c;
+    --rule: #322d28;
+    --code-bg: #221f1c;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #171513;
+  --fg: #ece7e1;
+  --muted: #9d958b;
+  --accent: #e08a5c;
+  --rule: #322d28;
+  --code-bg: #221f1c;
+}
+
+:root[data-theme="light"] {
+  --bg: #fbfaf8;
+  --fg: #23201d;
+  --muted: #6b645c;
+  --accent: #9a4f2c;
+  --rule: #e2ddd6;
+  --code-bg: #f2eee9;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 3rem 1.25rem 6rem;
+}
+
+main { max-width: var(--measure); margin: 0 auto; }
+
+h1, h2, h3, h4, h5, h6 { line-height: 1.2; text-wrap: balance; margin: 2.5rem 0 0.75rem; }
+h1 { font-size: 2rem; margin-top: 0; }
+h2 { font-size: 1.45rem; }
+h3 { font-size: 1.15rem; }
+
+a { color: var(--accent); }
+
+a.anchor {
+  margin-left: 0.4em;
+  opacity: 0;
+  text-decoration: none;
+  font-weight: 400;
+}
+h1:hover a.anchor, h2:hover a.anchor, h3:hover a.anchor,
+h4:hover a.anchor, h5:hover a.anchor, h6:hover a.anchor { opacity: 0.5; }
+a.anchor:focus { opacity: 1; }
+
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+}
+code { background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 3px; }
+pre {
+  background: var(--code-bg);
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+pre code { background: none; padding: 0; }
+
+.table-scroll { overflow-x: auto; margin: 1.5rem 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--rule); padding: 0.5rem 0.75rem; text-align: left; }
+th { font-weight: 600; }
+
+blockquote {
+  border-left: 3px solid var(--rule);
+  margin: 1.5rem 0;
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--muted);
+}
+
+dl dt { font-weight: 600; margin-top: 1rem; }
+dl dd { margin: 0.25rem 0 0 1.25rem; color: var(--muted); }
+
+img, svg, video { max-width: 100%; height: auto; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--code-bg);
+  padding: 1rem 1.25rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1.5rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
