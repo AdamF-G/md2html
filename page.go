@@ -120,6 +120,78 @@ func hasMermaid(body []byte) bool {
 	return bytes.Contains(body, []byte(`class="mermaid"`))
 }
 
+// mediaExpandRuntime is the click-to-expand counterpart of mermaidRuntime,
+// for plain <img> and hand-authored inline <svg>: both get squeezed to the
+// 68ch prose measure by the stylesheet's `max-width: 100%`, the same problem
+// mermaid diagrams had before they got a lightbox.
+//
+// Unlike a mermaid diagram, most images and SVGs are already shown at (or
+// above) their own size, so wiring every one of them up would put a zoom
+// cursor on icons and badges with nothing to zoom into. naturalSize is the
+// one place that reads an element's real size — naturalWidth/Height for an
+// <img>, viewBox for an <svg> — so an element only becomes expandable when
+// that size exceeds its rendered box, and the click handler reuses the same
+// value rather than re-deriving it per element type.
+//
+// An image already wrapped in a link is left alone: the author chose that
+// click behavior already. Mermaid's own SVG is also skipped — it lives
+// inside pre.mermaid and mermaidRuntime already wires it up; without this
+// exclusion a click would bubble into both handlers and open two dialogs.
+//
+// No CDN needed here, so — unlike mermaidRuntime — this loads on every page
+// that has a candidate element, whether or not mermaid is also present.
+const mediaExpandRuntime = `<script>
+const mediaLightbox = document.createElement("dialog");
+mediaLightbox.className = "media-lightbox";
+document.body.appendChild(mediaLightbox);
+mediaLightbox.addEventListener("click", (e) => {
+  if (e.target === mediaLightbox) mediaLightbox.close();
+});
+
+function naturalSize(el) {
+  if (el.tagName === "IMG") {
+    return el.naturalWidth && el.naturalHeight
+      ? { width: el.naturalWidth, height: el.naturalHeight }
+      : null;
+  }
+  const vb = el.viewBox && el.viewBox.baseVal;
+  return vb && vb.width && vb.height ? { width: vb.width, height: vb.height } : null;
+}
+
+function wireExpand(el) {
+  const size = naturalSize(el);
+  const box = el.getBoundingClientRect();
+  if (!size || size.width <= box.width) return;
+  el.classList.add("expandable");
+  el.addEventListener("click", () => {
+    const clone = el.cloneNode(true);
+    clone.removeAttribute("style");
+    clone.setAttribute("width", size.width);
+    clone.setAttribute("height", size.height);
+    mediaLightbox.replaceChildren(clone);
+    mediaLightbox.showModal();
+  });
+}
+
+document.querySelectorAll("img, svg").forEach((el) => {
+  if (el.closest("a") || el.closest("pre.mermaid")) return;
+  if (el.tagName === "IMG" && !el.complete) {
+    el.addEventListener("load", () => wireExpand(el));
+  } else {
+    wireExpand(el);
+  }
+});
+</script>
+`
+
+// hasExpandableMedia reports whether the rendered body carries a plain
+// <img> or a hand-authored inline <svg>. A mermaid diagram doesn't count:
+// at this point its <pre class="mermaid"> still holds raw diagram text —
+// MermaidJS only inserts an <svg> client-side, after this check has run.
+func hasExpandableMedia(body []byte) bool {
+	return bytes.Contains(body, []byte("<img")) || bytes.Contains(body, []byte("<svg"))
+}
+
 func renderPage(body []byte, title, css string) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
@@ -134,6 +206,9 @@ func renderPage(body []byte, title, css string) []byte {
 	b.WriteString("\n</main>\n")
 	if hasMermaid(body) {
 		b.WriteString(mermaidRuntime)
+	}
+	if hasExpandableMedia(body) {
+		b.WriteString(mediaExpandRuntime)
 	}
 	b.WriteString("</body>\n</html>\n")
 	return []byte(b.String())

@@ -121,6 +121,30 @@ dialog.mermaid-lightbox svg {
   cursor: zoom-out;
 }
 
+/* Images and inline SVG get the same treatment, but only once the runtime
+   script has confirmed one is actually scaled down from its own size — the
+   .expandable class is what it toggles to say so. */
+.expandable { cursor: zoom-in; }
+dialog.media-lightbox {
+  border: none;
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 95vw;
+  max-height: 95vh;
+  background: var(--bg);
+  color: var(--fg);
+}
+dialog.media-lightbox::backdrop { background: rgba(0, 0, 0, 0.6); }
+dialog.media-lightbox img,
+dialog.media-lightbox svg {
+  display: block;
+  max-width: 90vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  cursor: zoom-out;
+}
+
 .callout {
   border-left: 3px solid var(--accent);
   background: var(--code-bg);

@@ -199,6 +199,18 @@ is usually better as a mermaid fence, and a callout as a `:::` container.
 
 `~~strikethrough~~`, bare URLs as autolinks, and the rest of GFM.
 
+### Images and inline SVG click to expand
+
+A standalone page wires up the same click-to-expand a mermaid diagram gets:
+an `![alt](src)` image or a hand-authored inline `<svg>` that's actually
+being scaled down to fit the prose measure becomes clickable, opening a
+native `<dialog>` sized against the viewport instead. Nothing to opt into —
+it's automatic, and skips anything already at its own size (so icons and
+badges don't get a zoom cursor), anything already wrapped in a link, and
+mermaid's own SVG (which the other runtime already handles).
+
+With `--fragment` nothing is injected, matching the mermaid runtime.
+
 ## What the default theme styles
 
 Styled: headings and anchors, paragraphs, lists, tables, code and `<pre>`,

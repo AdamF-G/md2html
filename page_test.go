@@ -142,6 +142,70 @@ func TestMermaidClickToExpand(t *testing.T) {
 	}
 }
 
+// A standalone page has to supply its own click-to-expand script for images
+// and inline SVG, the same reason mermaid needs one: nothing else adds it.
+// Fragments must NOT get it — kept consistent with the mermaid runtime so
+// Artifact output stays script-minimal.
+func TestMediaExpandRuntimeInjectedOnlyForPagesThatNeedIt(t *testing.T) {
+	const img = "![alt](pic.png)\n"
+	const svg = "<svg viewBox=\"0 0 10 10\"><circle r=\"5\"/></svg>\n"
+	for _, c := range []struct {
+		name string
+		src  string
+		opt  Options
+		want bool
+	}{
+		{"page with an image", img, Options{}, true},
+		{"page with inline svg", svg, Options{}, true},
+		{"page with neither", "# Plain\n\ntext\n", Options{}, false},
+		{"fragment with an image", img, Options{Fragment: true}, false},
+	} {
+		got, err := Convert([]byte(c.src), c.opt)
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", c.name, err)
+		}
+		if has := strings.Contains(string(got), "naturalSize("); has != c.want {
+			t.Errorf("%s: media-expand runtime present = %v, want %v", c.name, has, c.want)
+		}
+	}
+}
+
+// An image or inline SVG must be clickable into a native <dialog>, and only
+// when it's actually being scaled down — an icon rendered at its own size
+// has nothing to zoom into. The click must skip elements already wrapped in
+// a link (the author chose that behavior already) and mermaid's own SVG
+// (that's the other runtime's job, and double-wiring it would open two
+// lightboxes on one click).
+func TestMediaClickToExpand(t *testing.T) {
+	const img = "![alt](pic.png)\n"
+	page, err := Convert([]byte(img), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	s := string(page)
+	for _, want := range []string{"media-lightbox", "showModal", `closest("a")`, `closest("pre.mermaid")`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("page missing %q for click-to-expand", want)
+		}
+	}
+	// The scaled-down check and the clone both need the element's real size:
+	// naturalWidth/Height for <img>, viewBox for inline <svg>, compared
+	// against its rendered box.
+	for _, want := range []string{"naturalWidth", "viewBox", "getBoundingClientRect"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("page missing %q; can't tell a scaled-down image from one at its own size", want)
+		}
+	}
+
+	frag, err := Convert([]byte(img), Options{Fragment: true})
+	if err != nil {
+		t.Fatalf("Convert fragment: %v", err)
+	}
+	if strings.Contains(string(frag), "naturalSize(") {
+		t.Error("fragment must not get the media-expand lightbox script")
+	}
+}
+
 // Long inline code must be able to wrap. Block code sits in a <pre> with its
 // own overflow-x, but inline code has no scroll container, so without this a
 // single long snippet widens the whole page — found by converting this repo's
@@ -155,6 +219,17 @@ func TestDefaultCSSWrapsInlineCode(t *testing.T) {
 	// Block code must keep scrolling rather than wrapping.
 	if !strings.Contains(defaultCSS, "overflow-x: auto") {
 		t.Error("default.css: pre lost its overflow-x")
+	}
+}
+
+// The zoom cursor is applied by the runtime script (only once it has decided
+// an element is actually scaled down), via a class the stylesheet must know
+// about — plus the dialog itself, styled the same way as mermaid's.
+func TestDefaultCSSStylesMediaLightbox(t *testing.T) {
+	for _, want := range []string{".expandable", "dialog.media-lightbox", "cursor: zoom-out"} {
+		if !strings.Contains(defaultCSS, want) {
+			t.Errorf("default.css missing %q", want)
+		}
 	}
 }
 
