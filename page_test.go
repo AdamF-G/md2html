@@ -108,6 +108,40 @@ func TestMermaidRuntimeIsThemeAware(t *testing.T) {
 	}
 }
 
+// A diagram must be clickable and the click must land on a <dialog>, not a
+// hand-rolled overlay — that's what buys Escape-to-close and a backdrop for
+// free. The fragment path must stay untouched: Artifacts render mermaid
+// natively and supply their own zoom, so a second copy would conflict.
+func TestMermaidClickToExpand(t *testing.T) {
+	const diagram = "```mermaid\ngraph TD; A-->B;\n```\n"
+	page, err := Convert([]byte(diagram), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	s := string(page)
+	for _, want := range []string{"mermaid-lightbox", "dialog", "showModal", `pre.mermaid`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("page missing %q for click-to-expand", want)
+		}
+	}
+	// The clone must get real width/height from the viewBox and drop the
+	// inline style Mermaid attaches, or it resolves width:100% against a
+	// fit-content <dialog> and renders as an empty box.
+	for _, want := range []string{"viewBox", `removeAttribute("style")`, `setAttribute("width"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("page missing %q; clone would collapse to zero size in the dialog", want)
+		}
+	}
+
+	frag, err := Convert([]byte(diagram), Options{Fragment: true})
+	if err != nil {
+		t.Fatalf("Convert fragment: %v", err)
+	}
+	if strings.Contains(string(frag), "showModal") {
+		t.Error("fragment must not get the lightbox script; Artifacts render mermaid natively")
+	}
+}
+
 // Long inline code must be able to wrap. Block code sits in a <pre> with its
 // own overflow-x, but inline code has no scroll container, so without this a
 // single long snippet widens the whole page — found by converting this repo's

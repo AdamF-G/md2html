@@ -98,6 +98,29 @@ dl dd { margin: 0.25rem 0 0 1.25rem; color: var(--muted); }
 img, svg, video { max-width: 100%; height: auto; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
 
+/* Mermaid diagrams render at prose width by default, which can leave dense
+   diagrams too small to read. Click expands into a native <dialog>, sized
+   against the viewport rather than the 68ch measure. */
+pre.mermaid { cursor: zoom-in; }
+dialog.mermaid-lightbox {
+  border: none;
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 95vw;
+  max-height: 95vh;
+  background: var(--bg);
+  color: var(--fg);
+}
+dialog.mermaid-lightbox::backdrop { background: rgba(0, 0, 0, 0.6); }
+dialog.mermaid-lightbox svg {
+  display: block;
+  max-width: 90vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  cursor: zoom-out;
+}
+
 .callout {
   border-left: 3px solid var(--accent);
   background: var(--code-bg);

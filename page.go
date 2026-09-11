@@ -64,12 +64,53 @@ const mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.es
 // Fragments never get this: they are published as Artifacts, which render
 // mermaid natively. The theme test mirrors the stylesheet's two signals —
 // an explicit [data-theme] wins, otherwise the OS preference decides.
+//
+// It also wires up click-to-expand: a diagram rendered at prose width can be
+// too small to read, so clicking one clones its SVG into a <dialog> sized
+// against the viewport instead of the 68ch measure. showModal() gives this
+// Escape-to-close and a backdrop for free; the click listener on the dialog
+// itself closes on a backdrop click too, since a click that lands on real
+// dialog content targets that content, not the dialog element.
+//
+// Mermaid's rendered SVG carries width="100%" plus an inline max-width style,
+// meant to scale it down inside a narrower container — it has no size of its
+// own to resolve "100%" against. A <dialog> defaults to width: fit-content,
+// so cloning the SVG as-is collapses both to nothing. The clone gets its
+// viewBox dimensions written back as explicit width/height, and the inline
+// style stripped, so it has real intrinsic size for the stylesheet's
+// max-width/max-height on dialog.mermaid-lightbox svg to scale down from.
 const mermaidRuntime = `<script type="module">
 import mermaid from "` + mermaidCDN + `";
 const explicit = document.documentElement.dataset.theme;
 const dark = explicit === "dark" ||
   (explicit !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
 mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default" });
+
+const lightbox = document.createElement("dialog");
+lightbox.className = "mermaid-lightbox";
+document.body.appendChild(lightbox);
+lightbox.addEventListener("click", (e) => {
+  if (e.target === lightbox) lightbox.close();
+});
+
+document.querySelectorAll("pre.mermaid").forEach((diagram) => {
+  diagram.addEventListener("click", () => {
+    const original = diagram.querySelector("svg");
+    if (!original) return;
+    const svg = original.cloneNode(true);
+    svg.removeAttribute("style");
+    const vb = original.viewBox && original.viewBox.baseVal;
+    if (vb && vb.width && vb.height) {
+      svg.setAttribute("width", vb.width);
+      svg.setAttribute("height", vb.height);
+    } else {
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+    }
+    lightbox.replaceChildren(svg);
+    lightbox.showModal();
+  });
+});
 </script>
 `
 
