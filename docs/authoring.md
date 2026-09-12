@@ -69,11 +69,13 @@ The consequence: the output tree is self-contained for *documents* but not for
 *assets*. Moving `site/` on its own breaks images. Moving `site/` and the
 source tree together keeps them working.
 
-**Following is unbounded.** Any `.md` you link to is pulled into the build,
-however far it is, including across directory boundaries. `--depth` bounds only
-how deep directory *seeding* goes — it never limits link following. One `../`
-link into a large repo pulls that repo's reachable docs in; the run prints a
-summary of everything it pulled in from outside.
+**Following is unbounded, by default.** Any `.md` you link to is pulled into
+the build, however far it is, including across directory boundaries. `--depth`
+bounds only how deep directory *seeding* goes — it never limits link
+following. `--link-depth` does, if set: it caps how many hops from a seed a
+link may travel, and left at its default (`0`) following stays unbounded. One
+`../` link into a large repo pulls that repo's reachable docs in; the run
+prints a summary of everything it pulled in from outside.
 
 **Links inside code fences are inert.** A fenced example containing
 `[a](./nope.md)` is not followed and produces no warning. You can document link
