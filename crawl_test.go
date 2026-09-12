@@ -782,11 +782,17 @@ func TestCrawlLinkDepthNegativeFollowsNothing(t *testing.T) {
 // all. The hop gate short-circuits before admit, so the out-of-budget link
 // produces no exclusion warning — nothing was followed either way.
 func TestCrawlExcludeAndLinkDepthCompose(t *testing.T) {
+	// index(0) -> a(1) -> {vendor/x(2), b(2)}, and b(2) -> vendor/y(3).
+	// With LinkDepth 2, a's links are still inside the budget and reach
+	// admit; b's are not, and the gate returns before admit ever sees them.
+	// Both vendor targets exist on disk, because the missing-target check
+	// runs ahead of the gate and would otherwise raise a different warning.
 	root := writeTree(t, map[string]string{
 		"docs/index.md":    "[a](./a.md)",
 		"docs/a.md":        "[v](./vendor/x.md)\n[b](./b.md)",
-		"docs/b.md":        "end",
+		"docs/b.md":        "[deep](./vendor/y.md)",
 		"docs/vendor/x.md": "owned elsewhere",
+		"docs/vendor/y.md": "also owned elsewhere",
 	})
 	res, err := Crawl(CrawlOptions{
 		Entries:   []string{filepath.Join(root, "docs/index.md")},
@@ -801,13 +807,22 @@ func TestCrawlExcludeAndLinkDepthCompose(t *testing.T) {
 	if got := srcNames(t, root, res.Docs); !eq(got, want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
-	var warned bool
+	var inBudget, outOfBudget bool
 	for _, w := range res.Warnings {
-		if strings.Contains(w.Message, "./vendor/x.md") && strings.Contains(w.Message, "excluded") {
-			warned = true
+		if !strings.Contains(w.Message, "excluded") {
+			continue
+		}
+		if strings.Contains(w.Message, "./vendor/x.md") {
+			inBudget = true
+		}
+		if strings.Contains(w.Message, "./vendor/y.md") {
+			outOfBudget = true
 		}
 	}
-	if !warned {
+	if !inBudget {
 		t.Errorf("no exclusion warning for the in-budget link, got %v", res.Warnings)
+	}
+	if outOfBudget {
+		t.Errorf("exclusion warning for a link past the hop budget, got %v", res.Warnings)
 	}
 }
