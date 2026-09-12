@@ -240,3 +240,31 @@ func TestBrowserSmallImageNotExpandable(t *testing.T) {
 		t.Error("a 10x10 image got .expandable; it's already at its own size")
 	}
 }
+
+// Clicking the backdrop (anywhere outside the dialog's own box, not its
+// content) must close it. chromedp.Click on a selector clicks that
+// element's center, which would land on the dialog's own content — a
+// coordinate click at the corner of the viewport is what actually lands
+// on the ::backdrop.
+func TestBrowserBackdropClickCloses(t *testing.T) {
+	page, err := Convert([]byte("![big](big.png)\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{
+		"index.html": page,
+		"big.png":    pngFixture(2000, 1500),
+	})
+
+	ctx := newBrowserCtx(t)
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Click(`img`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.WaitVisible(`dialog.media-lightbox[open]`, chromedp.ByQuery),
+		chromedp.MouseClickXY(2, 2),
+		chromedp.WaitNotPresent(`dialog.media-lightbox[open]`, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+}
