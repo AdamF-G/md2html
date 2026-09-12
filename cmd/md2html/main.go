@@ -63,15 +63,16 @@ Flags:
 	}
 
 	var (
-		outDir   = fs.String("o", "", "output directory (default: write beside each source)")
-		depth    = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
-		fragment = fs.Bool("fragment", false, "emit Artifact-shaped fragments instead of full pages")
-		cssPath  = fs.String("css", "", "replace the embedded stylesheet with this file")
-		noTable  = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
-		noAnchor = fs.Bool("no-anchors", false, "do not add heading anchors")
-		noExt    = fs.Bool("no-external-links", false, "do not mark external links")
-		noMd     = fs.Bool("no-md-links", false, "do not rewrite .md links")
-		noAssets = fs.Bool("no-assets", false, "do not rewrite asset links")
+		outDir    = fs.String("o", "", "output directory (default: write beside each source)")
+		depth     = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
+		linkDepth = fs.Int("link-depth", 0, "hops from a seed that link-following may travel (0 unlimited, -1 none)")
+		fragment  = fs.Bool("fragment", false, "emit Artifact-shaped fragments instead of full pages")
+		cssPath   = fs.String("css", "", "replace the embedded stylesheet with this file")
+		noTable   = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
+		noAnchor  = fs.Bool("no-anchors", false, "do not add heading anchors")
+		noExt     = fs.Bool("no-external-links", false, "do not mark external links")
+		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
+		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
 	)
 	var exclude stringList
 	fs.Var(&exclude, "exclude", "directory prefix never to enter or write to (repeatable, comma-separated)")
@@ -110,6 +111,7 @@ Flags:
 		OutDir:    *outDir,
 		Depth:     *depth,
 		Exclude:   exclude,
+		LinkDepth: *linkDepth,
 		NoMdLinks: *noMd,
 		NoAssets:  *noAssets,
 	})

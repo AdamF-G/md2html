@@ -593,3 +593,97 @@ func TestCrawlEmptyTreeWithUnrelatedExcludeReportsNoFiles(t *testing.T) {
 		t.Errorf("error %q blames exclusion for an empty tree", err)
 	}
 }
+
+// One hop pulls in what a seed links to, and stops there.
+func TestCrawlLinkDepthOneStopsAfterOneHop(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md": "[a](./a.md)",
+		"docs/a.md":     "[b](./b.md)",
+		"docs/b.md":     "[c](./c.md)",
+		"docs/c.md":     "end",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries:   []string{filepath.Join(root, "docs/index.md")},
+		Depth:     -1,
+		LinkDepth: 1,
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	want := []string{"docs/a.md", "docs/index.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// Depth is measured per seed, not from whichever document happened to be
+// dequeued first. Two seeds, each heading its own two-hop chain: depth 1
+// must admit hop 1 from both and hop 2 from neither.
+func TestCrawlLinkDepthMeasuredFromEachSeed(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/one.md": "[a](./a.md)",
+		"docs/a.md":   "[aa](./aa.md)",
+		"docs/aa.md":  "end",
+		"docs/two.md": "[b](./b.md)",
+		"docs/b.md":   "[bb](./bb.md)",
+		"docs/bb.md":  "end",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{
+			filepath.Join(root, "docs/one.md"),
+			filepath.Join(root, "docs/two.md"),
+		},
+		Depth:     -1,
+		LinkDepth: 1,
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	want := []string{"docs/a.md", "docs/b.md", "docs/one.md", "docs/two.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// The zero value must not change behavior: this is the same tree and the
+// same expectation as TestCrawlFollowsLinksAcrossDirectoriesUnbounded,
+// asserted through an explicit LinkDepth: 0.
+func TestCrawlLinkDepthZeroIsUnlimited(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":        "[a](./a/one.md)",
+		"docs/a/one.md":        "[b](../b/two.md)",
+		"docs/b/two.md":        "[c](./deep/three.md)",
+		"docs/b/deep/three.md": "end",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries:   []string{filepath.Join(root, "docs/index.md")},
+		Depth:     -1,
+		LinkDepth: 0,
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	want := []string{"docs/a/one.md", "docs/b/deep/three.md", "docs/b/two.md", "docs/index.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
+// A negative value follows nothing at all — seeds only.
+func TestCrawlLinkDepthNegativeFollowsNothing(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md": "[a](./a.md)",
+		"docs/a.md":     "end",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries:   []string{filepath.Join(root, "docs/index.md")},
+		Depth:     -1,
+		LinkDepth: -1,
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
+		t.Errorf("got %v, want [docs/index.md]", got)
+	}
+}

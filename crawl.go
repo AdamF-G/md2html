@@ -37,6 +37,18 @@ type CrawlOptions struct {
 	// archive. Without it the only way to keep the crawler out of one is to
 	// move it out of the source tree, which is rarely possible.
 	Exclude []string
+	// LinkDepth bounds how far link-following may travel from a seed,
+	// counted in hops: a document a seed links to is one hop, one it links
+	// to in turn is two.
+	//
+	// 0 — the zero value, and the CLI default — means unlimited, which is
+	// the opposite of Depth's convention above and is deliberate. Depth was
+	// introduced with the tool; LinkDepth is being added to callers who
+	// already exist, and a zero-valued CrawlOptions has always followed
+	// links without limit. Mirroring Depth's -1 would have turned every
+	// such caller's build into a seeds-only build without a line of their
+	// code changing. A negative value follows no links at all.
+	LinkDepth int
 }
 
 // Doc is one document in the emit set.
@@ -242,9 +254,18 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	base := commonAncestor(entryAbs)
 	excluded := resolveExcludes(opt.Exclude, base)
 
+	// queued pairs a document with its distance, in links, from the nearest
+	// seed. BFS dequeues in nondecreasing hop order, so the first time a
+	// document is admitted is always by its shortest path, and re-reaching
+	// it later by a longer one cannot matter.
+	type queued struct {
+		path string
+		hops int
+	}
+
 	res := &CrawlResult{Base: base}
 	visited := map[string]bool{}
-	var queue []string
+	var queue []queued
 
 	// admit is the single gate onto the queue. Both the seeding pass and
 	// the link-following pass go through it, so the containment policy has
@@ -256,7 +277,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	// is what decides whether a refusal is reported: a refused seed is the
 	// caller getting exactly what they asked for, while a refused link
 	// changes how an existing document renders and has to be surfaced.
-	admit := func(src, target, ref string, viaLink bool) {
+	admit := func(src, target, ref string, viaLink bool, hops int) {
 		// Exclusion is checked before containment: both are real
 		// constraints, and either one alone has to be able to stop a path.
 		if isExcluded(target, excluded) {
@@ -276,7 +297,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		}
 		if !visited[target] {
 			visited[target] = true
-			queue = append(queue, target)
+			queue = append(queue, queued{target, hops})
 		}
 	}
 
@@ -292,7 +313,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		for _, p := range s {
 			// A seed can point outside the tree even though it was found
 			// inside it: a symlinked .md resolves wherever it points.
-			admit(entryAbs[i], p, p, false)
+			admit(entryAbs[i], p, p, false, 0)
 		}
 	}
 	if found == 0 {
@@ -320,7 +341,8 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 
 	var order []string
 	for len(queue) > 0 {
-		cur := queue[0]
+		cur := queue[0].path
+		hops := queue[0].hops
 		queue = queue[1:]
 
 		src, err := os.ReadFile(cur)
@@ -359,7 +381,14 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 					fmt.Sprintf("link target does not exist: %s", l.Href)})
 				continue
 			}
-			admit(cur, target, l.Href, true)
+			// LinkDepth 0 is unlimited; a negative value follows nothing.
+			// The asset-existence warnings above stay unconditional —
+			// a missing image is worth reporting whether or not this
+			// document's links are being followed.
+			if opt.LinkDepth < 0 || (opt.LinkDepth > 0 && hops >= opt.LinkDepth) {
+				continue
+			}
+			admit(cur, target, l.Href, true, hops+1)
 		}
 	}
 

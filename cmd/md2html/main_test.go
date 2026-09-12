@@ -194,3 +194,21 @@ func TestRunExcludeWritesNothingIntoExcludedTree(t *testing.T) {
 		t.Errorf("no exclusion warning on stderr: %s", errb.String())
 	}
 }
+
+func TestRunLinkDepthBoundsFollowing(t *testing.T) {
+	root := tree(t, map[string]string{
+		"index.md": "[a](./a.md)\n",
+		"a.md":     "[b](./b.md)\n",
+		"b.md":     "# B\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--link-depth", "1", filepath.Join(root, "index.md")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "a.html")); err != nil {
+		t.Errorf("one hop not followed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "b.html")); !os.IsNotExist(err) {
+		t.Errorf("two hops followed despite --link-depth 1: %v", err)
+	}
+}
