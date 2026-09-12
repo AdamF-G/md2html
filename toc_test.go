@@ -122,3 +122,68 @@ func TestTOCPreservesTrailingHashInLabel(t *testing.T) {
 		t.Errorf("trailing # truncated from label\ngot: %s", got)
 	}
 }
+
+// A real link whose entire visible text happens to be "[[toc]]" must
+// survive untouched. Matching on flattened text (textOf) cannot tell this
+// apart from the bare marker; matching on the paragraph having a single
+// *text-node* child can, since here the paragraph's only child is an <a>
+// element, not text.
+func TestTOCLeavesRealLinkAlone(t *testing.T) {
+	got := toc(t, `<p><a href="http://example.com">[[toc]]</a></p><h2>A</h2>`)
+	if strings.Contains(got, "<nav") {
+		t.Errorf("ate a real link because its rendered text matched the marker\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<a href="http://example.com">[[toc]]</a>`) {
+		t.Errorf("link was altered or removed\ngot: %s", got)
+	}
+}
+
+// The single-text-node-child requirement also protects an inline code span
+// whose sole content is "[[toc]]": it documents the feature, it does not
+// invoke it.
+func TestTOCLeavesCodeSpanAlone(t *testing.T) {
+	got := toc(t, `<p><code>[[toc]]</code></p><h2>A</h2>`)
+	if strings.Contains(got, "<nav") {
+		t.Errorf("expanded a marker inside a code span\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<code>[[toc]]</code>`) {
+		t.Errorf("code span was altered or removed\ngot: %s", got)
+	}
+}
+
+// Two markers in one document each get their own nav — the second is not
+// left behind as a stray marker once the first has been expanded.
+func TestTOCExpandsEveryMarker(t *testing.T) {
+	got := toc(t, `<p>[[toc]]</p><h2>A</h2><p>[[toc]]</p><h2>B</h2>`)
+	if strings.Count(got, `<nav class="toc">`) != 2 {
+		t.Errorf("want two navs, one per marker\ngot: %s", got)
+	}
+	if strings.Contains(got, "[[toc]]") {
+		t.Errorf("a marker was left behind\ngot: %s", got)
+	}
+}
+
+// Headings can be present without ids — the --no-anchors shape, or simply
+// HeadingAnchors not having run — which is a different case from no
+// headings at all. TOC must still degrade to the literal marker rather
+// than link to headings with nothing to link to.
+func TestTOCWithHeadingsButNoIDsLeavesTheMarker(t *testing.T) {
+	root, err := parseFragment([]byte(`<p>[[toc]]</p><h2>A</h2>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := TOC().Fn(root); err != nil {
+		t.Fatal(err)
+	}
+	out, err := renderTree(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "<nav") {
+		t.Errorf("emitted a nav despite no heading having an id\ngot: %s", got)
+	}
+	if !strings.Contains(got, "[[toc]]") {
+		t.Errorf("marker was removed even though no heading had an id\ngot: %s", got)
+	}
+}

@@ -23,7 +23,7 @@ const tocMarker = "[[toc]]"
 //
 // This is a table of contents for one page and nothing more. Cross-document
 // navigation, a sidebar and a site index stay out of scope — see
-// docs/specs/2026-09-05-md2html-design.md.
+// docs/specs/2026-09-11-extended-content-model.md, item 6.
 func TOC() Transform {
 	return Transform{Name: "toc", Fn: func(root *html.Node) error {
 		var markers []*html.Node
@@ -32,11 +32,20 @@ func TOC() Transform {
 				return
 			}
 			// Alone on its own line: the marker must be the paragraph's
-			// entire content. A marker inside a sentence is prose, and one
-			// inside a fence is this feature's own documentation — the
-			// fence is a <pre>, never a <p>, so it is excluded by
-			// construction.
-			if strings.TrimSpace(textOf(n)) == tocMarker {
+			// entire content, structurally as well as textually. Matching
+			// on flattened text (textOf) would also match a real link or
+			// code span whose visible text happens to be "[[toc]]" —
+			// e.g. "[[[toc]]](http://example.com)" — and eat it along
+			// with its href. Requiring the paragraph's one and only child
+			// to be a text node rules that out: an <a> or <code> wrapping
+			// the marker is an element child, not a text child, so it is
+			// left as prose. A marker inside a sentence is likewise
+			// excluded (extra text-node siblings), and one inside a fence
+			// is this feature's own documentation — the fence is a <pre>,
+			// never a <p>, so it is excluded by construction.
+			if n.FirstChild != nil && n.FirstChild == n.LastChild &&
+				n.FirstChild.Type == html.TextNode &&
+				strings.TrimSpace(n.FirstChild.Data) == tocMarker {
 				markers = append(markers, n)
 			}
 		})
