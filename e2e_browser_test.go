@@ -1,5 +1,15 @@
 //go:build e2e_browser
 
+// Package-level note for whoever appends the next test (Tasks 4-8): every
+// selector passed to chromedp (Click, WaitVisible, AttributeValue, etc.)
+// needs the chromedp.ByQuery option. Without it, chromedp's default lookup
+// is BySearch (DOM.performSearch), a fuzzy text/CSS/XPath search over the
+// whole document — and it also matches selector text like "body" or "img"
+// sitting inside this page's inlined <style> block, which silently hangs
+// every wait until the context deadline. See the comment on
+// TestBrowserLargeImageExpandsOnClick's chromedp.Run call for the full
+// story.
+
 package md2html
 
 import (
@@ -9,6 +19,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -22,11 +33,16 @@ import (
 // newBrowserCtx returns a context driving a headless, sandboxless Chrome
 // instance, torn down automatically at the end of the test. no-sandbox is
 // required in most CI containers, which run as root.
+//
+// It also installs filterChromedpNoise as chromedp's error sink, to drop
+// one specific chromedp-internal log line that would otherwise print on
+// every dialog.showModal() call in these tests — see that function's doc
+// comment for why, and why it's narrowly scoped rather than a blanket mute.
 func newBrowserCtx(t *testing.T) context.Context {
 	t.Helper()
 	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("no-sandbox", true))
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	ctx, cancel := chromedp.NewContext(allocCtx)
+	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(filterChromedpNoise))
 	ctx, timeoutCancel := context.WithTimeout(ctx, 15*time.Second)
 	t.Cleanup(func() {
 		timeoutCancel()
@@ -34,6 +50,32 @@ func newBrowserCtx(t *testing.T) context.Context {
 		allocCancel()
 	})
 	return ctx
+}
+
+// filterChromedpNoise is chromedp's errf sink (wired in by newBrowserCtx),
+// with exactly one message dropped: the literal format string
+// "unhandled node event %T", logged by chromedp@v0.16.0/target.go:422 for
+// any DOM event its node-event dispatcher has no case for. Every dialog
+// (mermaid or media) in these tests calls showModal(), which fires exactly
+// that CDP event, and chromedp's own cdproto dependency already decodes it
+// — chromedp's dispatcher just hasn't grown a case for it yet, so this is
+// version skew rather than a real problem. Everything else is forwarded,
+// unmodified, to log.Printf: chromedp's own default sink, and safe to call
+// from the arbitrary goroutines this callback fires on (unlike t.Logf,
+// which would panic with "Log in goroutine after Test has completed" if a
+// message arrived after the test function returned). Matching happens on
+// the format string, not the rendered message, so this only ever silences
+// this one dispatcher gap and nothing else (verified in the Task 3 fix-round
+// report: a distinct chromedp-internal message still reaches log.Printf).
+//
+// When bumping chromedp, check whether target.go still logs this: if a
+// newer release added a case for the event, this filter becomes dead code
+// and should be removed rather than carried forward as cargo cult.
+func filterChromedpNoise(format string, args ...any) {
+	if format == "unhandled node event %T" {
+		return
+	}
+	log.Printf(format, args...)
 }
 
 // statusRecordingWriter wraps an http.ResponseWriter to capture the status
