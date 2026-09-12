@@ -514,3 +514,82 @@ func TestCrawlExcludeEverythingIsAnError(t *testing.T) {
 		t.Errorf("error %q does not mention exclusion", err)
 	}
 }
+
+// Exclusion must prune the directory walk, not just filter its results:
+// an unreadable directory inside an excluded subtree must never be
+// entered, so it cannot contribute anything at all.
+func TestSeedSkipsExcludedDirectories(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":         "x",
+		"docs/vendor/a.md":      "y",
+		"docs/vendor/deep/b.md": "z",
+		"docs/keep/c.md":        "w",
+	})
+	got, _, err := seed(filepath.Join(root, "docs"), -1,
+		[]string{filepath.Join(root, "docs/vendor")})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	var rel []string
+	for _, p := range got {
+		r, relErr := filepath.Rel(root, p)
+		if relErr != nil {
+			t.Fatal(relErr)
+		}
+		rel = append(rel, r)
+	}
+	sort.Strings(rel)
+	want := []string{"docs/index.md", "docs/keep/c.md"}
+	if !eq(rel, want) {
+		t.Errorf("got %v, want %v", rel, want)
+	}
+}
+
+// An excluded entry point that is itself a single file contributes
+// nothing, rather than being seeded because it is not a directory.
+func TestSeedSkipsExcludedFileEntry(t *testing.T) {
+	root := writeTree(t, map[string]string{"docs/vendor/a.md": "y"})
+	got, _, err := seed(filepath.Join(root, "docs/vendor/a.md"), -1,
+		[]string{filepath.Join(root, "docs/vendor")})
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want none", got)
+	}
+}
+
+// A tree whose only Markdown lives in an excluded subtree must say so.
+// Without the skipped count this reports "no Markdown files found in entry
+// points", which points the reader at the wrong cause entirely.
+func TestCrawlAllExcludedReportsExclusion(t *testing.T) {
+	root := writeTree(t, map[string]string{"docs/vendor/a.md": "x"})
+	_, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"vendor"},
+	})
+	if err == nil {
+		t.Fatal("want an error when every candidate path is excluded")
+	}
+	if !strings.Contains(err.Error(), "excluded") {
+		t.Errorf("error %q does not mention exclusion", err)
+	}
+}
+
+// An empty tree is not an exclusion problem, and must not be reported as
+// one just because an unrelated --exclude was set.
+func TestCrawlEmptyTreeWithUnrelatedExcludeReportsNoFiles(t *testing.T) {
+	root := writeTree(t, map[string]string{"docs/notes.txt": "x"})
+	_, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"vendor"},
+	})
+	if err == nil {
+		t.Fatal("want an error when the tree has no Markdown")
+	}
+	if strings.Contains(err.Error(), "excluded") {
+		t.Errorf("error %q blames exclusion for an empty tree", err)
+	}
+}

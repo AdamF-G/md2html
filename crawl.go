@@ -96,33 +96,53 @@ func resolve(p string) (string, error) {
 	return real, nil
 }
 
-// seed returns the Markdown files a single entry point contributes.
-func seed(entry string, depth int) ([]string, error) {
+// seed returns the Markdown files a single entry point contributes, plus
+// how many candidate paths exclusion caused it to drop. Paths at or
+// beneath an excluded prefix contribute nothing, and an excluded directory
+// is never descended into — admit would reject every file inside one
+// anyway, but walking a vendored or archived subtree only to throw the
+// whole result away is work nobody asked for.
+//
+// skipped counts each excluded Markdown file and each excluded directory
+// declined at the walk (once per directory, not per file inside it, since
+// SkipDir is precisely what avoids looking inside). Crawl needs this to
+// tell "nothing here was ever Markdown" apart from "everything here was
+// excluded" once pruning means the latter no longer shows up as files
+// admit had to refuse.
+func seed(entry string, depth int, excluded []string) (files []string, skipped int, err error) {
 	info, err := os.Stat(entry)
 	if err != nil {
-		return nil, fmt.Errorf("entry point %s: %w", entry, err)
+		return nil, 0, fmt.Errorf("entry point %s: %w", entry, err)
 	}
 	if !info.IsDir() {
 		if !IsMarkdownPath(entry) {
-			return nil, fmt.Errorf("entry point %s is not a Markdown file", entry)
+			return nil, 0, fmt.Errorf("entry point %s is not a Markdown file", entry)
 		}
 		p, err := resolve(entry)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
-		return []string{p}, nil
+		if isExcluded(p, excluded) {
+			return nil, 1, nil
+		}
+		return []string{p}, 0, nil
 	}
 
 	rootAbs, err := resolve(entry)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var out []string
+	skippedCount := 0
 	err = filepath.WalkDir(rootAbs, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // unreadable subtree: skip, do not abort
 		}
 		if d.IsDir() {
+			if isExcluded(p, excluded) {
+				skippedCount++
+				return filepath.SkipDir
+			}
 			if depth < 0 || p == rootAbs {
 				return nil
 			}
@@ -145,11 +165,17 @@ func seed(entry string, depth int) ([]string, error) {
 			if rerr != nil {
 				rp = p
 			}
+			// Resolution can land a file inside an excluded subtree even
+			// though the walk reached it outside one, via a symlink.
+			if isExcluded(rp, excluded) {
+				skippedCount++
+				return nil
+			}
 			out = append(out, rp)
 		}
 		return nil
 	})
-	return out, err
+	return out, skippedCount, err
 }
 
 // pathDepth counts separators in a cleaned relative path: "a" is 1,
@@ -255,12 +281,14 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	}
 
 	found := 0
+	skipped := 0
 	for i, e := range opt.Entries {
-		s, err := seed(e, opt.Depth)
+		s, n, err := seed(e, opt.Depth, excluded)
 		if err != nil {
 			return nil, err
 		}
 		found += len(s)
+		skipped += n
 		for _, p := range s {
 			// A seed can point outside the tree even though it was found
 			// inside it: a symlinked .md resolves wherever it points.
@@ -268,6 +296,13 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		}
 	}
 	if found == 0 {
+		// Pruning excluded directories means an all-excluded tree no longer
+		// reaches the empty-queue guard below with a non-zero found: seed
+		// never walked far enough to count its files. skipped is the only
+		// way left to tell that apart from a tree with no Markdown at all.
+		if skipped > 0 {
+			return nil, fmt.Errorf("no Markdown files found in entry points: every candidate path was excluded")
+		}
 		return nil, fmt.Errorf("no Markdown files found in entry points")
 	}
 	// found counts what the entry points contain, before exclusion. A run
