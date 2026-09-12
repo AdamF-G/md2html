@@ -35,15 +35,22 @@ md2html ./docs/index.md ./guides -o ./site   # mixed entries
 md2html ./docs                               # in place, beside each source
 md2html ./docs -o ./site --fragment          # Artifact-shaped output
 md2html README.md                            # one file, HTML beside it
+
+# The maintained set, plus one scratch directory for this run only,
+# with a vendored subtree another tool owns left strictly alone.
+md2html -o ./site ./docs ./scratch/notes --exclude vendor
 ```
 
 ### Two kinds of reach
 
-Links between documents are **always followed**, without limit, across
-directories. `--depth` is unrelated: it bounds how deep into a directory
-md2html looks for *unlinked* files to seed from. `--depth 0` seeds only the
-Markdown sitting directly in the directory — and still follows every link
-out of it.
+Links between documents are followed across directories, unbounded by
+default. `--depth` and `--link-depth` bound two different things: `--depth`
+limits how deep into a directory md2html looks for *unlinked* files to seed
+from; `--link-depth` limits how many hops from a seed link-following may
+travel (seeds are hop zero, `0` means unlimited, `-1` follows no links at
+all). `--depth 0` seeds only the Markdown sitting directly in the
+directory — and, with `--link-depth` left at its default, still follows
+every link out of it, however far that leads.
 
 ### Where output goes
 
@@ -88,6 +95,7 @@ unrelated tools that share the name is never claimed.
 |---|---|
 | `-o DIR` | output directory; default writes beside each source |
 | `--depth N` | directory levels to seed from a directory entry; `-1` unlimited |
+| `--link-depth N` | hops from a seed that link-following may travel; `0` (default) is unlimited, `-1` follows none |
 | `--fragment` | emit Artifact-shaped fragments instead of full pages |
 | `--css FILE` | replace the embedded stylesheet |
 | `--no-table-scroll` | do not wrap tables |
@@ -95,6 +103,7 @@ unrelated tools that share the name is never claimed.
 | `--no-external-links` | do not mark external links |
 | `--no-md-links` | do not rewrite `.md` links |
 | `--no-assets` | do not rewrite asset links |
+| `--exclude DIR` | never enter, seed, follow into, or write to `DIR` (relative to the base, or absolute); repeatable, or comma-separated |
 
 ## Writing docs for it
 

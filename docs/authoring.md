@@ -238,9 +238,17 @@ Supply `--css mine.css` to replace the stylesheet entirely.
   Markdown image syntax for anything that must be rewritten.
 - **Query strings on document links** are dropped: `./b.md?v=2` becomes
   `b.html`. Fragments are preserved; query strings are not.
+- **A link into an `--exclude`d directory keeps its href as written.** The
+  target is never converted, so the link resolves to whatever that subtree's
+  own tool produced — which is the point — but nothing checks that it did.
+  The run warns once per such link.
 - **No navigation is generated.** There is no sidebar, index, or table of
   contents. Write your own contents list with anchor links — the heading ids
   are stable and predictable, so this is reliable.
+- **Several entry points build as one set.** `md2html -o ./site ./docs
+  ./notes` emits both trees into one output root, with links between them
+  rewritten. Nothing has to be added to a standing entry list to include a
+  directory for a single run.
 - **Existing HTML is never overwritten.** A file without the tool's provenance
   marker is refused and the run exits non-zero. There is no override flag.
 
