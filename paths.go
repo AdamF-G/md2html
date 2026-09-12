@@ -63,6 +63,21 @@ func isUnder(path, base string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// isExcluded reports whether path is at or beneath any of the excluded
+// directory prefixes. Both path and every prefix must be absolute.
+//
+// This reuses isUnder rather than comparing strings, so "/tree/vendored"
+// is not treated as living under "/tree/vendor" — a string-prefix check
+// would exclude a sibling directory whose name merely starts the same way.
+func isExcluded(path string, excluded []string) bool {
+	for _, e := range excluded {
+		if isUnder(path, e) {
+			return true
+		}
+	}
+	return false
+}
+
 // outputPath maps a source document to its generated HTML location.
 // Both src and base must be absolute paths.
 // An empty outDir means in-place: the HTML sits beside its source.

@@ -99,3 +99,35 @@ func TestOutputPathSanitizesRelativeWithoutDotDot(t *testing.T) {
 		t.Errorf("outputPath(\"docs/readme.md\", \"/docs\", \"/site\") = %q, not under %q", got, outDir)
 	}
 }
+
+func TestIsExcluded(t *testing.T) {
+	ex := []string{"/tree/vendor", "/tree/archive/2019"}
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/tree/vendor", true},                 // the prefix itself
+		{"/tree/vendor/lib/doc.md", true},      // beneath it
+		{"/tree/vendored/doc.md", false},       // prefix of the string, not of the path
+		{"/tree/archive/2020/doc.md", false},   // sibling of an excluded dir
+		{"/tree/archive/2019/q1/doc.md", true}, // beneath a deeper prefix
+		{"/tree/doc.md", false},                // unrelated
+		{"/tree/vendor/../doc.md", false},      // climbs back out before matching
+	}
+	for _, c := range cases {
+		if got := isExcluded(c.path, ex); got != c.want {
+			t.Errorf("isExcluded(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
+// No exclusions must never exclude anything — the default path through
+// every call site.
+func TestIsExcludedEmptyExcludesNothing(t *testing.T) {
+	if isExcluded("/tree/doc.md", nil) {
+		t.Error("nil exclusions excluded a path")
+	}
+	if isExcluded("/tree/doc.md", []string{}) {
+		t.Error("empty exclusions excluded a path")
+	}
+}
