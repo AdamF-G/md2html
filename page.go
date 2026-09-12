@@ -54,8 +54,10 @@ func extractTitle(root *nethtml.Node, sourcePath string) string {
 // renderPage wraps body in a complete HTML document.
 // mermaidCDN is the pinned MermaidJS build a standalone page loads to render
 // its diagrams. Pinned rather than floating so a page generated today renders
-// the same way next year.
-const mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs"
+// the same way next year. It is a var, not a const, so e2e_browser_test.go can
+// redirect it at a local, vendored copy of the same pinned version instead of
+// the live CDN. Production code never reassigns it.
+var mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs"
 
 // mermaidRuntime renders diagrams in a standalone page. The goldmark extension
 // runs with NoScript, so nothing else loads MermaidJS and a ```mermaid fence
@@ -79,7 +81,12 @@ const mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.es
 // viewBox dimensions written back as explicit width/height, and the inline
 // style stripped, so it has real intrinsic size for the stylesheet's
 // max-width/max-height on dialog.mermaid-lightbox svg to scale down from.
-const mermaidRuntime = `<script type="module">
+//
+// It is a func, not a const, because it embeds mermaidCDN's current value —
+// which e2e_browser_test.go reassigns before calling Convert. Production
+// callers see identical output to before this change.
+func mermaidRuntime() string {
+	return `<script type="module">
 import mermaid from "` + mermaidCDN + `";
 const explicit = document.documentElement.dataset.theme;
 const dark = explicit === "dark" ||
@@ -113,6 +120,7 @@ document.querySelectorAll("pre.mermaid").forEach((diagram) => {
 });
 </script>
 `
+}
 
 // hasMermaid reports whether the rendered body carries a mermaid diagram. The
 // goldmark extension emits <pre class="mermaid">, so the class is the marker.
@@ -205,7 +213,7 @@ func renderPage(body []byte, title, css string) []byte {
 	b.Write(body)
 	b.WriteString("\n</main>\n")
 	if hasMermaid(body) {
-		b.WriteString(mermaidRuntime)
+		b.WriteString(mermaidRuntime())
 	}
 	if hasExpandableMedia(body) {
 		b.WriteString(mediaExpandRuntime)

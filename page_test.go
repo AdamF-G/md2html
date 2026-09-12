@@ -286,3 +286,25 @@ func TestVendoredMermaidVersionMatchesPinned(t *testing.T) {
 		t.Errorf("vendored file %q (version %q) does not match pinned mermaidCDN %q", found, version, mermaidCDN)
 	}
 }
+
+// mermaidCDN must be reassignable so a test can redirect the runtime's
+// import at a local, vendored copy instead of the live CDN. This is the
+// one production-code change the e2e browser suite depends on — proven
+// here without needing a browser at all.
+func TestMermaidCDNIsOverridable(t *testing.T) {
+	original := mermaidCDN
+	mermaidCDN = "http://example.test/mermaid.mjs"
+	t.Cleanup(func() { mermaidCDN = original })
+
+	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	s := string(got)
+	if !strings.Contains(s, "http://example.test/mermaid.mjs") {
+		t.Error("mermaidRuntime did not pick up the overridden mermaidCDN")
+	}
+	if strings.Contains(s, "cdn.jsdelivr.net") {
+		t.Error("mermaidRuntime still embedded the real CDN URL after override")
+	}
+}
