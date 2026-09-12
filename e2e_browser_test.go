@@ -214,3 +214,29 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 		t.Errorf("cloned image size = %sx%s, want 2000x1500", width, height)
 	}
 }
+
+// A 10x10 image renders at its own size (nothing shrinks it), so it must
+// never get .expandable — there'd be nothing to zoom into.
+func TestBrowserSmallImageNotExpandable(t *testing.T) {
+	page, err := Convert([]byte("![small](small.png)\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{
+		"index.html": page,
+		"small.png":  pngFixture(10, 10),
+	})
+
+	ctx := newBrowserCtx(t)
+	var expandable bool
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	if expandable {
+		t.Error("a 10x10 image got .expandable; it's already at its own size")
+	}
+}
