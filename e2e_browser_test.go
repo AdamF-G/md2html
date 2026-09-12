@@ -95,6 +95,27 @@ func (w *statusRecordingWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
+// newGuardedHandler wraps fileServer so any unexpected 404 fails the test
+// immediately, by name, rather than surfacing indirectly much later (see
+// serveDir's doc comment for the motivating scenario). Shared by serveDir
+// and serveDirDelayed so the guard logic — including the /favicon.ico
+// exemption and the t.Errorf-not-t.Fatalf rule — exists in exactly one
+// place.
+func newGuardedHandler(t *testing.T, fileServer http.Handler) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := &statusRecordingWriter{ResponseWriter: w}
+		fileServer.ServeHTTP(rec, r)
+		if rec.status == http.StatusNotFound && r.URL.Path != "/favicon.ico" {
+			// Must be Errorf, not Fatalf: this handler runs on the
+			// server's own goroutine, and t.Fatalf from a non-test
+			// goroutine is invalid — it would only stop that
+			// goroutine, silently losing the failure.
+			t.Errorf("serveDir: unexpected 404 for %s", r.URL.Path)
+		}
+	})
+}
+
 // serveDir starts an HTTP server over a fresh temp directory and returns
 // both, so callers needing to know baseURL before every file exists
 // (TestBrowserMermaidDiagramExpandsOnClick, which must set mermaidCDN to a
@@ -109,25 +130,39 @@ func (w *statusRecordingWriter) WriteHeader(status int) {
 // therefore request a chunk that was never written to disk. Left
 // unguarded, that failure mode surfaces as a WaitVisible timeout fifteen
 // seconds later with no indication of what went wrong, so this wraps the
-// file server to fail the test immediately, by name, on any unexpected
-// 404 — except /favicon.ico, which Chrome requests unprompted on every
-// navigation and which will never exist.
+// file server (via newGuardedHandler) to fail the test immediately, by
+// name, on any unexpected 404 — except /favicon.ico, which Chrome requests
+// unprompted on every navigation and which will never exist.
 func serveDir(t *testing.T) (dir, baseURL string) {
 	t.Helper()
 	dir = t.TempDir()
 	fileServer := http.FileServer(http.Dir(dir))
-	guarded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rec := &statusRecordingWriter{ResponseWriter: w}
-		fileServer.ServeHTTP(rec, r)
-		if rec.status == http.StatusNotFound && r.URL.Path != "/favicon.ico" {
-			// Must be Errorf, not Fatalf: this handler runs on the
-			// server's own goroutine, and t.Fatalf from a non-test
-			// goroutine is invalid — it would only stop that
-			// goroutine, silently losing the failure.
-			t.Errorf("serveDir: unexpected 404 for %s", r.URL.Path)
+	srv := httptest.NewServer(newGuardedHandler(t, fileServer))
+	t.Cleanup(srv.Close)
+	return dir, srv.URL
+}
+
+// serveDirDelayed is serveDir's sibling for a test that needs one specific
+// path to still be genuinely in flight when the page's end-of-body script
+// runs (TestBrowserSlowImageExpandsAfterDeferredLoad). It exists as a
+// separate entry point, rather than an extra parameter on serveDir, so the
+// five other callers of serveDir keep an unchanged signature.
+//
+// Only requests for slowPath are delayed; every other request — including
+// the page itself — is served at ordinary http.FileServer speed, so the
+// artificial delay affects exactly the one resource the caller is trying to
+// keep in flight.
+func serveDirDelayed(t *testing.T, slowPath string, delay time.Duration) (dir, baseURL string) {
+	t.Helper()
+	dir = t.TempDir()
+	fileServer := http.FileServer(http.Dir(dir))
+	delayed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == slowPath {
+			time.Sleep(delay)
 		}
+		fileServer.ServeHTTP(w, r)
 	})
-	srv := httptest.NewServer(guarded)
+	srv := httptest.NewServer(newGuardedHandler(t, delayed))
 	t.Cleanup(srv.Close)
 	return dir, srv.URL
 }
@@ -221,6 +256,136 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 	}
 }
 
+// mediaExpandRuntime's dispatch loop defers wiring an <img> that isn't yet
+// .complete: `el.addEventListener("load", () => wireExpand(el))` instead of
+// calling wireExpand(el) directly. That branch has no coverage anywhere
+// else in this suite — every other fixture's image is a tiny local PNG
+// that's already .complete by the time the inline end-of-body <script>
+// runs, so those tests only ever take the synchronous else branch. This
+// test forces the deferred branch for real, by making the image response
+// arrive after the script has already started running.
+//
+// chromedp.Navigate blocks on page.EventLoadEventFired, which by definition
+// fires only once every in-flight resource — including this image — has
+// finished. So by the time Navigate returns, the image has already loaded
+// and, if the deferred branch is still there, its "load" listener has
+// already fired wireExpand. That's what lets this test observe the
+// deferred path's effect without an explicit wait of its own.
+//
+// The one thing that can't be waved away with "it passed": whether the
+// image was still genuinely in flight — not yet .complete — at the moment
+// the inline script's dispatch loop ran. If the artificial delay below were
+// ever too short, or the image cached, it would already be .complete by
+// then, the script would take the *synchronous* wireExpand(el) branch
+// instead, and this test would keep passing while covering nothing — which
+// is exactly what happened, repeatedly, while designing this test: a bare
+// `wireExpand(el);` in place of the whole if/else left every test in this
+// file green. An inline <script> at the end of <body> runs strictly before
+// DOMContentLoaded, so proving the image's network response finished after
+// domContentLoadedEventEnd is a deterministic proof — not a timing
+// assumption — that the deferred branch, not the synchronous one, is what
+// wired this element up.
+func TestBrowserSlowImageExpandsAfterDeferredLoad(t *testing.T) {
+	page, err := Convert([]byte("![slow](slow.png)\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	// This is fixture latency, not the kind of fixed sleep-instead-of-
+	// waiting-on-DOM-state this suite otherwise forbids: every wait this
+	// test performs is still on real load/DOM state (chromedp.Navigate
+	// blocking on the page's load event, then reading Performance API
+	// entries afterward) — the delay only exists inside the HTTP handler,
+	// to guarantee that wait actually straddles the moment
+	// mediaExpandRuntime's dispatch loop runs. 300ms has a wide margin over
+	// this document's parse time (a few hundred bytes of HTML/CSS/JS —
+	// sub-millisecond to parse on any machine this runs on), so there's
+	// slack to spare. Do not "simplify" this into a bare fast response: that
+	// would silently delete the only coverage of the deferred branch (see
+	// the doc comment above).
+	const slowImageDelay = 300 * time.Millisecond
+	dir, baseURL := serveDirDelayed(t, "/slow.png", slowImageDelay)
+	writeFiles(t, dir, map[string][]byte{
+		"index.html": page,
+		"slow.png":   pngFixture(2000, 1500),
+	})
+
+	ctx := newBrowserCtx(t)
+	var perf struct {
+		NavOK                    bool    `json:"navOK"`
+		ResOK                    bool    `json:"resOK"`
+		DomContentLoadedEventEnd float64 `json:"domContentLoadedEventEnd"`
+		ResponseEnd              float64 `json:"responseEnd"`
+	}
+	var expandable bool
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`(() => {
+			const nav = performance.getEntriesByType("navigation")[0];
+			const res = performance.getEntriesByType("resource").find((e) => e.name.endsWith("/slow.png"));
+			return {
+				navOK: !!(nav && nav.domContentLoadedEventEnd),
+				resOK: !!res,
+				domContentLoadedEventEnd: nav ? nav.domContentLoadedEventEnd : 0,
+				responseEnd: res ? res.responseEnd : 0,
+			};
+		})()`, &perf),
+		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// Verified rather than assumed: if either Performance entry came back
+	// empty, the margin computed below would be meaningless, and the
+	// failure needs to say that plainly rather than report a bogus margin.
+	if !perf.NavOK || !perf.ResOK {
+		t.Fatalf("Performance API entries missing (navOK=%v resOK=%v) — cannot verify slow.png was still in flight when mediaExpandRuntime ran", perf.NavOK, perf.ResOK)
+	}
+	// This is the load-bearing check in this test: an inline end-of-body
+	// <script> runs before DOMContentLoaded, so a positive margin here is a
+	// deterministic proof that slow.png's response arrived strictly after
+	// the dispatch loop had already run — i.e. that the deferred branch
+	// (the "load" listener), not the synchronous else branch, is what made
+	// this image expandable below. A future reader whose machine makes the
+	// artificial delay too short — or a regression that removes it — should
+	// see this failure and this message, not a confusing pass or an
+	// unrelated timeout.
+	margin := perf.ResponseEnd - perf.DomContentLoadedEventEnd
+	if margin <= 0 {
+		t.Fatalf("fixture failed to defer: slow.png's responseEnd (%.2fms) did not finish after domContentLoadedEventEnd (%.2fms) — the image was already .complete when mediaExpandRuntime's inline script ran, so this test exercised the synchronous branch, not the deferred one, and proves nothing about the deferred branch; increase slowImageDelay", perf.ResponseEnd, perf.DomContentLoadedEventEnd)
+	}
+	t.Logf("deferred-load margin (responseEnd - domContentLoadedEventEnd) = %.2fms", margin)
+
+	// Checked, and failed on, before clicking: if the deferred branch is
+	// gone (or broken), the image never gets .expandable and therefore
+	// never gets a click listener at all, so clicking it below would just
+	// hang waiting for a dialog that never opens — a context-deadline
+	// timeout that looks nothing like the real problem and, worse, would
+	// stop this test from being able to tell "the deferred branch broke"
+	// apart from "chromedp/Chrome timed out for an unrelated reason".
+	// Fatal-ing here instead makes that regression fail on this assertion.
+	if !expandable {
+		t.Fatal("a 2000x1500 image that was still loading when mediaExpandRuntime ran never got .expandable")
+	}
+
+	var width, height string
+	var widthOK, heightOK bool
+	err = chromedp.Run(ctx,
+		chromedp.Click(`img`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.WaitVisible(`dialog.media-lightbox[open]`, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.media-lightbox img`, "width", &width, &widthOK, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.media-lightbox img`, "height", &height, &heightOK, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	if !widthOK || !heightOK {
+		t.Fatal("cloned <img> in the dialog has no width/height attribute")
+	}
+	if width != "2000" || height != "1500" {
+		t.Errorf("cloned image size = %sx%s, want 2000x1500", width, height)
+	}
+}
+
 // A 10x10 image renders at its own size (nothing shrinks it), so it must
 // never get .expandable — there'd be nothing to zoom into.
 func TestBrowserSmallImageNotExpandable(t *testing.T) {
@@ -235,14 +400,12 @@ func TestBrowserSmallImageNotExpandable(t *testing.T) {
 
 	ctx := newBrowserCtx(t)
 	var runtimeRan bool
-	var imgComplete bool
-	var naturalWidth int
+	var boxWidth float64
 	var expandable bool
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(baseURL+"/index.html"),
 		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox") !== null`, &runtimeRan),
-		chromedp.Evaluate(`document.querySelector("img").complete`, &imgComplete),
-		chromedp.Evaluate(`document.querySelector("img").naturalWidth`, &naturalWidth),
+		chromedp.Evaluate(`document.querySelector("img").getBoundingClientRect().width`, &boxWidth),
 		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
 	)
 	if err != nil {
@@ -256,13 +419,24 @@ func TestBrowserSmallImageNotExpandable(t *testing.T) {
 	if !runtimeRan {
 		t.Fatal("mediaExpandRuntime never ran, so the absence assertion below proves nothing")
 	}
-	// The gate must have seen the image's real natural size, not a null
-	// naturalSize from an image that hadn't loaded yet when the gate ran —
-	// that would also report not-expandable, but for the wrong reason, and
-	// wouldn't distinguish a correctly-rejected 10<=10 comparison from a
-	// broken load-deferral path.
-	if !imgComplete || naturalWidth != 10 {
-		t.Fatalf("img.complete=%v naturalWidth=%d; want complete=true naturalWidth=10 — gate never saw real dimensions", imgComplete, naturalWidth)
+	// Pin the actual boundary wireExpand's gate sits on: a 10x10 image
+	// renders at a 10px-wide box (nothing in this page's CSS shrinks it),
+	// so naturalWidth (10) equals box.width (10) exactly, and the gate's
+	// `size.width <= box.width` must treat that equality as "not
+	// expandable" — the real reason this image is rejected, not merely
+	// that some assertion elsewhere happens to read false.
+	//
+	// This does not, by itself, distinguish that correct equality-rejection
+	// from a broken load-deferral path that left size.width read as 0
+	// before the image loaded: chromedp.Navigate already blocks until the
+	// page's load event fires, so within this single test the image is
+	// unconditionally .complete by the time any Evaluate above runs, and
+	// there is no way to force the deferred branch's failure mode here.
+	// TestBrowserSlowImageExpandsAfterDeferredLoad above covers that
+	// scenario directly, by forcing the image to genuinely still be in
+	// flight when mediaExpandRuntime's dispatch loop executes.
+	if boxWidth != 10 {
+		t.Fatalf("img rendered box width = %v, want 10 — expected a 10x10 image to render at its own natural size with nothing shrinking it", boxWidth)
 	}
 	if expandable {
 		t.Error("a 10x10 image got .expandable; it's already at its own size")
