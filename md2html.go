@@ -54,6 +54,20 @@ type Options struct {
 	// to a.html) and an existing ./a.html asset (mapped to the original
 	// file) would have the first rewrite turned into the second.
 	LinkMap map[string]string
+	// Warn, when non-nil, receives one message per non-fatal problem found
+	// while converting this document — a container naming a kind that does
+	// not exist, so far.
+	//
+	// Convert never writes to stderr itself: it is a library, and the CLI
+	// emits every document's output in parallel, so a transform printing
+	// directly would interleave with other documents' lines. The callback
+	// is invoked synchronously on the calling goroutine, so a caller may
+	// append to an unsynchronized per-document slice.
+	//
+	// It reaches transforms only through the default list. A caller who
+	// supplies Transforms builds that list themselves and is responsible
+	// for passing the sink to the constructors that take one.
+	Warn func(string)
 }
 
 // newParser builds the goldmark instance. Every extension here is required
@@ -94,7 +108,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 
 	transforms := opt.Transforms
 	if transforms == nil {
-		transforms = Builtins()
+		transforms = builtins(opt.Warn)
 	}
 	if opt.LinkMap != nil {
 		// Full-slice expression: never append into the caller's array.

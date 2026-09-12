@@ -121,9 +121,10 @@ Flags:
 	}
 
 	type outcome struct {
-		src string
-		res md2html.WriteResult
-		err error
+		src      string
+		res      md2html.WriteResult
+		err      error
+		warnings []string
 	}
 	results := make([]outcome, len(res.Docs))
 
@@ -139,23 +140,36 @@ Flags:
 			d := res.Docs[i]
 			src, err := os.ReadFile(d.Src)
 			if err != nil {
-				results[i] = outcome{d.Src, md2html.WriteRefused, err}
+				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err}
 				return
 			}
-			out, err := md2html.Convert(src, buildOptions(d, *fragment, css,
-				*noTable, *noAnchor, *noExt))
+			// One slice per document, written only by this goroutine, so
+			// the sink needs no locking and lines from two documents can
+			// never interleave.
+			var warnings []string
+			opts := buildOptions(d, *fragment, css, *noTable, *noAnchor, *noExt,
+				func(m string) { warnings = append(warnings, m) })
+			out, err := md2html.Convert(src, opts)
 			if err != nil {
-				results[i] = outcome{d.Src, md2html.WriteRefused, err}
+				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err, warnings: warnings}
 				return
 			}
 			wr, err := md2html.SafeWrite(d.Out, out)
-			results[i] = outcome{d.Src, wr, err}
+			results[i] = outcome{src: d.Src, res: wr, err: err, warnings: warnings}
 		}(i)
 	}
 	wg.Wait()
 
-	written, refused, failed := 0, 0, 0
+	// Per-document conversion warnings are printed here, inside this loop,
+	// as each result is visited — ahead of the crawler's own warnings
+	// below, which come from a separate pass over res.Warnings and are
+	// unrelated to any one document's conversion.
+	written, refused, failed, warned := 0, 0, 0, 0
 	for i, o := range results {
+		for _, w := range o.warnings {
+			warned++
+			fmt.Fprintf(stderr, "md2html: %s: %s\n", o.src, w)
+		}
 		switch {
 		case o.err != nil:
 			failed++
@@ -179,7 +193,7 @@ Flags:
 		}
 	}
 	fmt.Fprintf(stderr, "md2html: %d written, %d refused, %d failed, %d warning(s)\n",
-		written, refused, failed, len(res.Warnings))
+		written, refused, failed, len(res.Warnings)+warned)
 
 	if refused > 0 || failed > 0 {
 		return 1
@@ -189,7 +203,7 @@ Flags:
 
 // buildOptions assembles per-document conversion options from the flags.
 func buildOptions(d md2html.Doc, fragment bool, css string,
-	noTable, noAnchor, noExt bool) md2html.Options {
+	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
 	var ts []md2html.Transform
 	if !noTable {
@@ -208,5 +222,6 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 		CSS:        css,
 		Transforms: ts,
 		LinkMap:    d.LinkMap,
+		Warn:       warn,
 	}
 }

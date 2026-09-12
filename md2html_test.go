@@ -61,3 +61,49 @@ func TestConformance(t *testing.T) {
 		})
 	}
 }
+
+// The sink exists so a transform can report a problem without aborting the
+// document. Nothing warns yet — Task 2 is the first caller — so this
+// asserts only that a plain document stays silent and that Convert accepts
+// and threads the callback.
+func TestConvertWarnSinkSilentOnCleanInput(t *testing.T) {
+	var got []string
+	out, err := Convert([]byte("# Title\n\ntext\n"), Options{
+		Fragment: true,
+		Warn:     func(m string) { got = append(got, m) },
+	})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("warned on clean input: %v", got)
+	}
+	if !strings.Contains(string(out), "<h1") {
+		t.Errorf("no heading in output: %s", out)
+	}
+}
+
+// A nil sink must be safe: every existing caller passes one.
+func TestConvertNilWarnSinkIsSafe(t *testing.T) {
+	if _, err := Convert([]byte("# T\n"), Options{Fragment: true}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+}
+
+// Builtins keeps its documented no-argument signature — README shows it —
+// and the transform order it returns is a correctness constraint, not an
+// incidental one, so pin both the signature and the exact ordered names.
+func TestBuiltinsSignatureUnchanged(t *testing.T) {
+	var _ func() []Transform = Builtins
+
+	got := Builtins()
+	want := []string{"tableScroll", "headingAnchors", "externalLinks"}
+	if len(got) != len(want) {
+		t.Fatalf("Builtins() returned %d transforms, want %d: %v", len(got), len(want), got)
+	}
+	for i, name := range want {
+		if got[i].Name != name {
+			t.Errorf("Builtins()[%d].Name = %q, want %q", i, got[i].Name, name)
+		}
+	}
+}

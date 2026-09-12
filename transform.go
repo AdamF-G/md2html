@@ -10,8 +10,31 @@ import (
 )
 
 // Builtins returns the transforms enabled by default.
+//
+// It takes no arguments and reports nothing: it is the documented public
+// door for callers assembling their own transform list (see README), and
+// changing its signature would break them. Convert calls builtins directly
+// so that a caller who sets Options.Warn gets diagnostics.
 func Builtins() []Transform {
-	return []Transform{TableScroll(), HeadingAnchors(), ExternalLinks()}
+	return builtins(nil)
+}
+
+// builtins is the ordered default list. Nothing among these three
+// transforms depends on running before or after another today, but the
+// list's order is a correctness constraint, not a style choice: later
+// tasks insert their transforms at specific positions in it (a container
+// restructuring transform before anything else inspects the tree, a chip
+// transform before heading slugs are computed, id-resolving transforms
+// after anchors are assigned), so new entries belong at their documented
+// position, not appended to the end. warn is threaded through so a future
+// transform can report a non-fatal problem; none of the three below use it
+// yet.
+func builtins(warn func(string)) []Transform {
+	return []Transform{
+		TableScroll(),
+		HeadingAnchors(),
+		ExternalLinks(),
+	}
 }
 
 // attr returns the value of the named attribute and whether it was present.
