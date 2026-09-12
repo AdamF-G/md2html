@@ -87,3 +87,44 @@ func TestStripChipTokensPreservesUnrelatedWhitespace(t *testing.T) {
 		t.Errorf("stripChipTokens(%q) = %q, want %q", "A  B [proven]", got, "A  B")
 	}
 }
+
+// The seam merge must be capped at exactly one space on the side following
+// the token: a run of spaces there is untouched apart from the one flanking
+// space that pairs off with the single space before the token.
+func TestStripChipTokensCapsTrailingSpaceSeam(t *testing.T) {
+	if got := stripChipTokens("A [proven]  B"); got != "A  B" {
+		t.Errorf("stripChipTokens(%q) = %q, want %q", "A [proven]  B", got, "A  B")
+	}
+}
+
+// Mirror of the trailing case: a multi-space run before the token is left
+// alone, and only its single space touching the token merges with the
+// single space that follows.
+func TestStripChipTokensPreservesLeadingSpaceRun(t *testing.T) {
+	if got := stripChipTokens("A  [proven] B"); got != "A  B" {
+		t.Errorf("stripChipTokens(%q) = %q, want %q", "A  [proven] B", got, "A  B")
+	}
+}
+
+// A token at the very start of the string has nothing before it to merge
+// with; the leading space it leaves behind is removed by the final trim,
+// not by the seam logic.
+func TestStripChipTokensAtStringStart(t *testing.T) {
+	if got := stripChipTokens("[proven] B"); got != "B" {
+		t.Errorf("stripChipTokens(%q) = %q, want %q", "[proven] B", got, "B")
+	}
+}
+
+// Two tokens back to back, with and without a separating space, must not
+// leave a doubled or tripled gap behind either.
+func TestStripChipTokensAdjacentTokens(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"word [proven][draft] word2", "word word2"},
+		{"word [proven] [draft] word2", "word word2"},
+	}
+	for _, c := range cases {
+		if got := stripChipTokens(c.in); got != c.want {
+			t.Errorf("stripChipTokens(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

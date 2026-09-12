@@ -75,9 +75,13 @@ func Chips() Transform {
 // in the string, not just the one a removed token left behind — turning
 // "A  B [proven]" into "A B" instead of "A  B". So only the exact gap where
 // a token sat is touched: when a space preceded the token and a space
-// followed it, one of the two is dropped so the pair doesn't turn into a
-// double space; a run of whitespace anywhere else in the string, including
-// one the author typed on purpose, is left completely alone.
+// followed it, exactly one of the two is dropped so the pair doesn't turn
+// into a double space. That drop is capped at a single space either way —
+// eating every trailing space would itself violate the same rule it exists
+// to enforce, turning "A [proven]  B" (one space before, two after) into
+// "A B" and destroying a run of spaces the token never touched. A run of
+// whitespace anywhere else in the string, including one the author typed on
+// purpose, is left completely alone.
 func stripChipTokens(s string) string {
 	if !strings.ContainsRune(s, '[') {
 		return s
@@ -91,10 +95,8 @@ func stripChipTokens(s string) string {
 	for _, loc := range locs {
 		b.WriteString(s[last:loc[0]])
 		last = loc[1]
-		if strings.HasSuffix(b.String(), " ") {
-			for last < len(s) && s[last] == ' ' {
-				last++
-			}
+		if strings.HasSuffix(b.String(), " ") && last < len(s) && s[last] == ' ' {
+			last++ // merge the flanking single-space pair into one
 		}
 	}
 	b.WriteString(s[last:])
