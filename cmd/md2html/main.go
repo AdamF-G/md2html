@@ -202,23 +202,35 @@ Flags:
 }
 
 // buildOptions assembles per-document conversion options from the flags.
+//
+// The transform list is built by filtering md2html.Builtins() rather than
+// listing constructors by hand, so the CLI's order can never drift from the
+// library's — the order is a correctness constraint (Chips before
+// HeadingAnchors for slug stability; SectionLinks and TOC after it), and
+// md2html_test.go's TestBuiltinsSignatureUnchanged already pins the
+// library's copy. main_test.go's TestBuildOptionsMatchesBuiltinsOrder pins
+// this one against it directly.
 func buildOptions(d md2html.Doc, fragment bool, css string,
 	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
+	skip := map[string]bool{
+		"tableScroll":    noTable,
+		"headingAnchors": noAnchor,
+		"externalLinks":  noExt,
+	}
 	var ts []md2html.Transform
-	// Not covered by any --no-* flag: brace-free containers are core syntax,
-	// not an optional pass a caller would disable.
-	ts = append(ts, md2html.Containers(warn))
-	if !noTable {
-		ts = append(ts, md2html.TableScroll())
-	}
-	ts = append(ts, md2html.Chips())
-	if !noAnchor {
-		ts = append(ts, md2html.HeadingAnchors())
-	}
-	ts = append(ts, md2html.SectionLinks(), md2html.TOC())
-	if !noExt {
-		ts = append(ts, md2html.ExternalLinks())
+	for _, t := range md2html.Builtins() {
+		if skip[t.Name] {
+			continue
+		}
+		if t.Name == "containers" {
+			// Builtins() built this entry with a nil sink; swap in one
+			// wired to this document's own warning slice. Not covered by
+			// any --no-* flag: brace-free containers are core syntax, not
+			// an optional pass a caller would disable.
+			t = md2html.Containers(warn)
+		}
+		ts = append(ts, t)
 	}
 
 	return md2html.Options{

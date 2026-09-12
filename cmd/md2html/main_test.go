@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/AdamF-G/md2html"
 )
 
 func tree(t *testing.T, files map[string]string) string {
@@ -210,5 +212,69 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "b.html")); !os.IsNotExist(err) {
 		t.Errorf("two hops followed despite --link-depth 1: %v", err)
+	}
+}
+
+// The transform order is a correctness constraint pinned for the library at
+// md2html_test.go's TestBuiltinsSignatureUnchanged. buildOptions rebuilds
+// this same list from md2html.Builtins() precisely so it cannot drift from
+// that pinned order; this test is what makes the constraint enforceable on
+// the CLI side too — without it, a reordering here would ship green while
+// the library stayed correct.
+func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", false, false, false, nil)
+	want := md2html.Builtins()
+	if len(opts.Transforms) != len(want) {
+		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
+	}
+	for i, tr := range want {
+		if opts.Transforms[i].Name != tr.Name {
+			t.Errorf("Transforms[%d].Name = %q, want %q", i, opts.Transforms[i].Name, tr.Name)
+		}
+	}
+}
+
+// Each --no-* flag must drop exactly its own transform and nothing else,
+// leaving every other name in its Builtins() position.
+func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", true, true, true, nil)
+	want := []string{"containers", "chips", "sectionLinks", "toc"}
+	var got []string
+	for _, tr := range opts.Transforms {
+		got = append(got, tr.Name)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Transforms = %v, want %v", got, want)
+	}
+}
+
+// End to end through the CLI: a chip, a heading, a "[[toc]]" marker and a
+// "§" cross-reference must all resolve exactly as the library does on its
+// own, so a future reordering in buildOptions shows up here too, not only
+// in the unit-level name check above.
+func TestRunResolvesChipsSectionLinksAndTOC(t *testing.T) {
+	root := tree(t, map[string]string{
+		"doc.md": "# Intro\n\n[[toc]]\n\n## 1 Setup [proven]\n\nSee §1 for details.\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{filepath.Join(root, "doc.md")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	b, err := os.ReadFile(filepath.Join(root, "doc.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(b)
+	if !strings.Contains(got, `<span class="chip chip-proven">proven</span>`) {
+		t.Errorf("chip not rendered\ngot: %s", got)
+	}
+	if !strings.Contains(got, `id="1-setup"`) {
+		t.Errorf("chip leaked into heading slug\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<nav class="toc">`) {
+		t.Errorf("toc marker not replaced\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<a class="xref" href="#1-setup">§1</a>`) {
+		t.Errorf("section reference not resolved\ngot: %s", got)
 	}
 }
