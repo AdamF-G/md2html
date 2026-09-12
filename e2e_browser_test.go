@@ -1,7 +1,7 @@
 //go:build e2e_browser
 
-// Package-level note for whoever appends the next test (Tasks 4-8): every
-// selector passed to chromedp (Click, WaitVisible, AttributeValue, etc.)
+// Package-level note for whoever appends the next test: every selector
+// passed to chromedp (Click, WaitVisible, AttributeValue, etc.)
 // needs the chromedp.ByQuery option. Without it, chromedp's default lookup
 // is BySearch (DOM.performSearch), a fuzzy text/CSS/XPath search over the
 // whole document — and it also matches selector text like "body" or "img"
@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,8 +69,8 @@ func newBrowserCtx(t *testing.T) context.Context {
 // which would panic with "Log in goroutine after Test has completed" if a
 // message arrived after the test function returned). Matching happens on
 // the format string, not the rendered message, so this only ever silences
-// this one dispatcher gap and nothing else (verified in the Task 3 fix-round
-// report: a distinct chromedp-internal message still reaches log.Printf).
+// this one dispatcher gap and nothing else — a distinct chromedp-internal
+// message still reaches log.Printf, confirmed separately.
 //
 // When bumping chromedp, check whether target.go still logs this: if a
 // newer release added a case for the event, this filter becomes dead code
@@ -95,12 +96,14 @@ func (w *statusRecordingWriter) WriteHeader(status int) {
 }
 
 // serveDir starts an HTTP server over a fresh temp directory and returns
-// both, so callers needing to know baseURL before every file exists (Task
-// 8, which must set mermaidCDN to a URL under baseURL before calling
-// Convert) can write files in after the server is already serving.
+// both, so callers needing to know baseURL before every file exists
+// (TestBrowserMermaidDiagramExpandsOnClick, which must set mermaidCDN to a
+// URL under baseURL before calling Convert) can write files in after the
+// server is already serving.
 //
-// The plain files served here include a vendored mermaid build (Task 8)
-// that lazily imports per-diagram chunks at runtime: only the chunks one
+// The plain files served here include a vendored mermaid build
+// (TestBrowserMermaidDiagramExpandsOnClick) that lazily imports
+// per-diagram chunks at runtime: only the chunks one
 // particular diagram needs are vendored, on purpose, to keep the module
 // zip small. A future library bump or a differently-shaped diagram will
 // therefore request a chunk that was never written to disk. Left
@@ -231,13 +234,35 @@ func TestBrowserSmallImageNotExpandable(t *testing.T) {
 	})
 
 	ctx := newBrowserCtx(t)
+	var runtimeRan bool
+	var imgComplete bool
+	var naturalWidth int
 	var expandable bool
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox") !== null`, &runtimeRan),
+		chromedp.Evaluate(`document.querySelector("img").complete`, &imgComplete),
+		chromedp.Evaluate(`document.querySelector("img").naturalWidth`, &naturalWidth),
 		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
 	)
 	if err != nil {
 		t.Fatalf("chromedp: %v", err)
+	}
+	// mediaExpandRuntime appends dialog.media-lightbox to the body
+	// unconditionally when it runs, so its presence is a free liveness
+	// probe: without it, the absence assertion below would go green just
+	// as happily if the runtime never ran at all (a JS syntax error, or
+	// hasExpandableMedia regressing to false).
+	if !runtimeRan {
+		t.Fatal("mediaExpandRuntime never ran, so the absence assertion below proves nothing")
+	}
+	// The gate must have seen the image's real natural size, not a null
+	// naturalSize from an image that hadn't loaded yet when the gate ran —
+	// that would also report not-expandable, but for the wrong reason, and
+	// wouldn't distinguish a correctly-rejected 10<=10 comparison from a
+	// broken load-deferral path.
+	if !imgComplete || naturalWidth != 10 {
+		t.Fatalf("img.complete=%v naturalWidth=%d; want complete=true naturalWidth=10 — gate never saw real dimensions", imgComplete, naturalWidth)
 	}
 	if expandable {
 		t.Error("a 10x10 image got .expandable; it's already at its own size")
@@ -286,13 +311,21 @@ func TestBrowserLinkedImageNotWired(t *testing.T) {
 	})
 
 	ctx := newBrowserCtx(t)
+	var runtimeRan bool
 	var expandable bool
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox") !== null`, &runtimeRan),
 		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
 	)
 	if err != nil {
 		t.Fatalf("chromedp: %v", err)
+	}
+	// See TestBrowserSmallImageNotExpandable's identical probe: without
+	// confirming the runtime actually ran, the absence assertion below
+	// would be satisfied just as well by the runtime never running at all.
+	if !runtimeRan {
+		t.Fatal("mediaExpandRuntime never ran, so the absence assertion below proves nothing")
 	}
 	if expandable {
 		t.Error("an image wrapped in <a> got .expandable; it should be left to the link")
@@ -328,6 +361,14 @@ func TestBrowserLinkedImageNotWired(t *testing.T) {
 // candidate for .expandable regardless of the mermaid exclusion, and the
 // falsifiability check below would be a silent no-op.
 func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
+	// mermaidCDN is shared package state, restored via t.Cleanup below. That
+	// makes t.Parallel() unsafe on this test and on
+	// TestBrowserMermaidDiagramExpandsOnClick, which does the same
+	// reassignment: a concurrent run would race the two overrides against
+	// each other. Six Chrome-spawning tests are a natural future candidate
+	// for parallelism, so if that's added later, these two must stay
+	// serial (or gain their own isolation) even though nothing enforces it
+	// today — there is no t.Parallel() anywhere in this repo yet.
 	original := mermaidCDN
 	dir, baseURL := serveDir(t)
 	writeFiles(t, dir, map[string][]byte{
@@ -347,11 +388,15 @@ func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
 	ctx := newBrowserCtx(t)
 	var viewBox string
 	var viewBoxOK bool
+	var mediaRuntimeRan bool
+	var mermaidRuntimeRan bool
 	var expandable bool
 	var mediaDialogOpen bool
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(baseURL+"/index.html"),
 		chromedp.AttributeValue(`pre.mermaid svg`, "viewBox", &viewBox, &viewBoxOK, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox") !== null`, &mediaRuntimeRan),
+		chromedp.Evaluate(`document.querySelector("dialog.mermaid-lightbox") !== null`, &mermaidRuntimeRan),
 		chromedp.Evaluate(`document.querySelector("pre.mermaid svg").classList.contains("expandable")`, &expandable),
 		chromedp.Click(`pre.mermaid svg`, chromedp.ByQuery, chromedp.NodeVisible),
 		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox[open]") !== null`, &mediaDialogOpen),
@@ -365,6 +410,20 @@ func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
 	if !viewBoxOK || viewBox != "0 0 10 10" {
 		t.Fatalf("pre.mermaid svg viewBox = %q, ok=%v; want %q — fixture svg missing or replaced", viewBox, viewBoxOK, "0 0 10 10")
 	}
+	// Both runtimes append their own lightbox to the body unconditionally
+	// when they run, so their presence is a free liveness probe for each —
+	// without it, the absence assertions below would go green just as
+	// happily if a runtime never ran at all. mermaidRuntimeRan doubles as
+	// the proof that the local stub import above actually succeeded, which
+	// is what makes this doc comment's claim that "mermaidRuntime's own
+	// lightbox-wiring code still runs for real" true by construction
+	// rather than assumed.
+	if !mediaRuntimeRan {
+		t.Fatal("mediaExpandRuntime never ran, so the absence assertions below prove nothing")
+	}
+	if !mermaidRuntimeRan {
+		t.Fatal("mermaidRuntime never ran (stub import failed?), so its lightbox-wiring claim above is unverified")
+	}
 	if expandable {
 		t.Error("an svg inside pre.mermaid got .expandable; that's mermaidRuntime's element")
 	}
@@ -373,12 +432,78 @@ func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
 	}
 }
 
+// A hand-authored inline <svg> — not inside pre.mermaid — is the other half
+// of mediaExpandRuntime's advertised scope (see its doc comment in page.go:
+// "for plain <img> and hand-authored inline <svg>"), and unlike the <img>
+// path covered by TestBrowserLargeImageExpandsOnClick, nothing else in this
+// suite exercises the SVG branch of naturalSize positively.
+// TestBrowserSvgInsideMermaidPreExcluded only proves an svg does NOT get
+// wired up inside pre.mermaid; that's satisfied just as well by the SVG
+// branch being entirely absent, so it can't stand in for this test.
+//
+// This fixture uses the same technique TestBrowserSvgInsideMermaidPreExcluded
+// does, deliberately: an inline width/height style shrinks the rendered box
+// (100x75) below the svg's own viewBox (800x600), which is what opens the
+// size gate in wireExpand — a plain <svg> with no such style renders at its
+// viewBox size, which would never exceed its own rendered box and would
+// never become a candidate for .expandable regardless of whether the SVG
+// branch of naturalSize works at all.
+func TestBrowserSvgInsideExpandsOnClick(t *testing.T) {
+	const src = `<svg viewBox="0 0 800 600" style="width:100px;height:75px"><rect x="0" y="0" width="800" height="600" fill="red"/></svg>
+`
+	page, err := Convert([]byte(src), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"index.html": page})
+
+	ctx := newBrowserCtx(t)
+	var expandable bool
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`document.querySelector("svg").classList.contains("expandable")`, &expandable),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// Checked, and failed on, before the click: if naturalSize's svg branch
+	// regresses to always-null, the svg never gets a click listener at all,
+	// and clicking it below would just hang waiting for a dialog that never
+	// opens — a context-deadline timeout that looks nothing like the real
+	// problem. Fatal-ing here instead makes that regression fail on this
+	// assertion, not a timeout.
+	if !expandable {
+		t.Fatal("an inline svg rendered below its viewBox size never got .expandable")
+	}
+
+	var widthOK, heightOK bool
+	var width, height string
+	err = chromedp.Run(ctx,
+		chromedp.Click(`svg`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.WaitVisible(`dialog.media-lightbox[open]`, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.media-lightbox svg`, "width", &width, &widthOK, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.media-lightbox svg`, "height", &height, &heightOK, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	if !widthOK || !heightOK {
+		t.Fatal("cloned <svg> in the dialog has no width/height attribute")
+	}
+	// The clone must carry the viewBox-derived natural size (800x600), not
+	// the 100x75 box it was displayed at — that distinction (natural size,
+	// not rendered size) is the whole point of naturalSize's svg branch.
+	if width != "800" || height != "600" {
+		t.Errorf("cloned svg size = %sx%s, want 800x600 (the viewBox size, not the 100x75 displayed size)", width, height)
+	}
+}
+
 // A real ```mermaid fence, rendered by the actual vendored library (not the
 // hand-authored fixture TestBrowserSvgInsideMermaidPreExcluded uses above),
-// must become expandable and open dialog.mermaid-lightbox on click, with the
-// clone carrying its real viewBox-derived size — proving mermaidRuntime's
-// clone-sizing logic (see its doc comment in page.go) against genuine
-// mermaid output rather than a fixture shaped by hand to match it.
+// must open dialog.mermaid-lightbox on click, with the clone carrying its
+// real viewBox-derived size — proving mermaidRuntime's clone-sizing logic
+// (see its doc comment in page.go) against genuine mermaid output rather
+// than a fixture shaped by hand to match it.
 //
 // mermaid.esm.min.mjs is not a self-contained bundle: it's a ~30KB loader
 // that lazily imports per-diagram chunks from ./chunks/mermaid.esm.min/ at
@@ -416,7 +541,14 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if rel == "mermaid-11.17.2.esm.min.mjs" {
+		// Matched structurally rather than against the literal versioned
+		// filename, so this doesn't become a fourth copy of the version pin
+		// (alongside mermaidCDN and the vendored file itself) that goes
+		// stale on a re-vendor. Only the top-level entrypoint
+		// (testdata/vendor/mermaid-<version>.esm.min.mjs) matches: chunk
+		// files live under chunks/ and their rel path starts with that
+		// directory name, not "mermaid-".
+		if strings.HasPrefix(rel, "mermaid-") && strings.HasSuffix(rel, ".esm.min.mjs") {
 			rel = "mermaid.esm.min.mjs"
 		}
 		content, err := os.ReadFile(path)
@@ -460,7 +592,15 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 		// Mermaid inserts the <svg> before it finishes writing this
 		// attribute onto it, so waiting on the bare svg selector races the
 		// attribute write; waiting on the attribute-selector variant instead
-		// blocks until it's actually there.
+		// blocks until it's actually there. This isn't just an empirically
+		// observed race: the vendored flowchart's draw() (chunk-CLS4B6BI.mjs)
+		// ends with a synchronous setupViewPortForSVG call that writes
+		// viewBox, and the top-level render then sets aria-roledescription
+		// with no intervening await — so on JS's single-threaded runtime, any
+		// observer that has seen the attribute has necessarily already seen
+		// the viewBox. A future "simpler" wait on the bare svg selector would
+		// silently reintroduce a race against the viewBox the width/height
+		// assertions below depend on.
 		chromedp.WaitVisible(`pre.mermaid svg[aria-roledescription]`, chromedp.ByQuery),
 		chromedp.AttributeValue(`pre.mermaid svg`, "aria-roledescription", &roleDescription, &roleOK, chromedp.ByQuery),
 		chromedp.Click(`pre.mermaid`, chromedp.ByQuery, chromedp.NodeVisible),

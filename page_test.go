@@ -274,17 +274,29 @@ func TestVendoredMermaidVersionMatchesPinned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read testdata/vendor: %v", err)
 	}
-	var found string
+	var matches []string
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "mermaid-") {
-			found = e.Name()
+			matches = append(matches, e.Name())
 		}
 	}
-	if found == "" {
+	if len(matches) == 0 {
 		t.Fatal("no vendored mermaid build found in testdata/vendor")
 	}
+	// More than one match means a re-vendor added a new version's entrypoint
+	// without deleting the old one — a stale build would still ship in the
+	// module zip even though this check, looking only at the newest match,
+	// would otherwise pass.
+	if len(matches) > 1 {
+		t.Fatalf("testdata/vendor has %d mermaid-* entrypoints (%v); want exactly one — delete the stale one", len(matches), matches)
+	}
+	found := matches[0]
 	version := strings.TrimSuffix(strings.TrimPrefix(found, "mermaid-"), ".esm.min.mjs")
-	if !strings.Contains(mermaidCDN, version) {
+	// "@" + version + "/" rather than a bare Contains: mermaidCDN pins a
+	// specific patch (e.g. "mermaid@11.17.2/"), and a loose substring match
+	// would let version "11.17.2" match a CDN URL actually pinned at
+	// "mermaid@11.17.20/".
+	if !strings.Contains(mermaidCDN, "@"+version+"/") {
 		t.Errorf("vendored file %q (version %q) does not match pinned mermaidCDN %q", found, version, mermaidCDN)
 	}
 }
@@ -321,6 +333,17 @@ func TestMermaidCDNIsOverridable(t *testing.T) {
 // design; a test that required them would fail by design and hide a real
 // breakage. Static imports, by contrast, are what the module needs merely to
 // load, and every one must be present.
+//
+// This intentionally does NOT skip bare-module specifiers (an import path
+// with no leading "./" or "../") before resolving them as filesystem paths,
+// even though a bare specifier will never resolve relative to mjsFile's
+// directory and will always land in missingFiles. That's correct, not a
+// false positive: a browser loading an ES module with a bare specifier and
+// no import map fails outright, so if a future mermaid build ever leaves
+// one unbundled, this guard firing here — loudly, by name, with no browser
+// needed — is exactly the right outcome. Adding a skip for bare specifiers
+// would suppress that genuine failure and just push it downstream into the
+// browser suite, where it resurfaces as a much less legible timeout.
 func TestVendoredMermaidImportsResolveOnDisk(t *testing.T) {
 	vendorRoot := filepath.Join("testdata", "vendor")
 
