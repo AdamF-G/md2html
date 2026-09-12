@@ -2,6 +2,7 @@ package md2html
 
 import (
 	"bytes"
+	"strings"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
@@ -65,11 +66,12 @@ func walk(n *html.Node, fn func(*html.Node)) {
 // headingNodes returns every h1–h6 element under root, in document order.
 //
 // Three transforms need this same set — HeadingAnchors to assign ids,
-// SectionLinks (Task 6) to index numbered headings, and a later task to
-// come — so it lives here rather than being re-typed as a switch on
-// n.DataAtom in each one. HeadingAnchors' own copy predates this helper and
-// is left untouched: rewriting it risks the byte-identical-slug guarantee
-// for no benefit.
+// SectionLinks to index numbered headings, and TOC to list them — so it
+// lives here rather than being re-typed as a switch on n.DataAtom in each
+// one. HeadingAnchors calls this directly rather than keeping its own copy:
+// its former walk was character-for-character the same predicate, so the
+// duplication bought no margin on the byte-identical-slug guarantee, only a
+// second place for the two to quietly drift apart.
 func headingNodes(root *html.Node) []*html.Node {
 	var heads []*html.Node
 	walk(root, func(n *html.Node) {
@@ -82,4 +84,30 @@ func headingNodes(root *html.Node) []*html.Node {
 		}
 	})
 	return heads
+}
+
+// headingText returns a heading's text with status chips and the anchor
+// link left out, so a relabeled marker cannot change an anchor other
+// documents link to, and the trailing "#" HeadingAnchors appends never
+// shows up as part of the heading's own text (SectionLinks and TOC both
+// build on this, and would otherwise have to hand-strip a trailing "#" —
+// silently truncating a heading whose visible text legitimately ends in
+// one).
+func headingText(n *html.Node) string {
+	var b strings.Builder
+	var visit func(*html.Node)
+	visit = func(x *html.Node) {
+		if x.Type == html.TextNode {
+			b.WriteString(x.Data)
+			return
+		}
+		if x.Type == html.ElementNode && (hasClass(x, "chip") || (x.DataAtom == atom.A && hasClass(x, "anchor"))) {
+			return
+		}
+		for c := x.FirstChild; c != nil; c = c.NextSibling {
+			visit(c)
+		}
+	}
+	visit(n)
+	return b.String()
 }

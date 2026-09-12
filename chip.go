@@ -102,28 +102,3 @@ func stripChipTokens(s string) string {
 	b.WriteString(s[last:])
 	return strings.TrimSpace(b.String())
 }
-
-// headingText returns a heading's text with status chips and the anchor
-// link left out, so a relabeled marker cannot change an anchor other
-// documents link to, and the trailing "#" HeadingAnchors appends never
-// shows up as part of the heading's own text (Tasks 6 and 7 both build on
-// this, and would otherwise have to hand-strip a trailing "#" — silently
-// truncating a heading whose visible text legitimately ends in one).
-func headingText(n *html.Node) string {
-	var b strings.Builder
-	var visit func(*html.Node)
-	visit = func(x *html.Node) {
-		if x.Type == html.TextNode {
-			b.WriteString(x.Data)
-			return
-		}
-		if x.Type == html.ElementNode && (hasClass(x, "chip") || (x.DataAtom == atom.A && hasClass(x, "anchor"))) {
-			return
-		}
-		for c := x.FirstChild; c != nil; c = c.NextSibling {
-			visit(c)
-		}
-	}
-	visit(n)
-	return b.String()
-}

@@ -152,16 +152,7 @@ func slugify(s string) string {
 func HeadingAnchors() Transform {
 	return Transform{Name: "headingAnchors", Fn: func(root *html.Node) error {
 		seen := map[string]bool{}
-		var heads []*html.Node
-		walk(root, func(n *html.Node) {
-			if n.Type != html.ElementNode {
-				return
-			}
-			switch n.DataAtom {
-			case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
-				heads = append(heads, n)
-			}
-		})
+		heads := headingNodes(root)
 		// Reserve every author-supplied id before assigning any generated
 		// one, or a slug could claim a string an explicit id further down
 		// the document is going to use, and the two would collide. An
