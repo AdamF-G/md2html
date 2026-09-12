@@ -10,7 +10,9 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	goldhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
 	"go.abhg.dev/goldmark/mermaid"
 	"golang.org/x/net/html"
 )
@@ -84,7 +86,13 @@ func newParser() goldmark.Markdown {
 			&fences.Extender{},
 		),
 		goldmark.WithParserOptions(parser.WithAttribute()),
-		goldmark.WithRendererOptions(goldhtml.WithUnsafe()),
+		goldmark.WithRendererOptions(
+			goldhtml.WithUnsafe(),
+			// Priority below goldmark's own (1000) so this wins for
+			// fenced code blocks; every other node keeps the default
+			// renderer.
+			renderer.WithNodeRenderers(util.Prioritized(newCodeFenceRenderer(), 100)),
+		),
 	)
 }
 

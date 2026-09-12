@@ -243,3 +243,20 @@ p.docdate {
   font-size: 0.9em;
   margin: 0 0 2.5rem;
 }
+
+/* A caption bar that reads as part of the block, not as a floating line of
+   prose above it — which is the whole distinction the feature exists for. */
+figure.code-figure { margin: 1.5rem 0; }
+figure.code-figure > figcaption {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8em;
+  color: var(--muted);
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.4rem 1rem;
+  border-radius: 6px 6px 0 0;
+}
+figure.code-figure > pre {
+  margin-top: 0;
+  border-radius: 0 0 6px 6px;
+}

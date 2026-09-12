@@ -1,0 +1,143 @@
+package md2html
+
+import (
+	gohtml "html"
+	"strings"
+
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/renderer"
+	goldhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
+)
+
+// splitFenceInfo separates a fence info string into its language and an
+// optional caption:
+//
+//	```go caption="cmd/md2html/main.go"
+//
+// The caption is one more space-separated attribute alongside the language,
+// not a new fence syntax — info strings already carry attributes, and
+// anything this tool does not recognize keeps being ignored exactly as
+// goldmark ignores it today. A quoted value may contain spaces.
+//
+// The caption is stripped out first, and the language is taken from the
+// first token that remains — not from token index 0 — so that
+// `caption="x.go" go` still yields the language: a caption may precede the
+// language in the info string, and the language must not be lost just
+// because it wasn't first.
+func splitFenceInfo(info string) (lang, caption string) {
+	for _, tok := range fenceTokens(info) {
+		if v, ok := strings.CutPrefix(tok, "caption="); ok {
+			caption = strings.Trim(v, `"'`)
+			continue
+		}
+		if lang == "" {
+			lang = tok
+		}
+	}
+	return lang, caption
+}
+
+// fenceTokens splits an info string on whitespace, keeping a quoted run
+// together so a caption may contain spaces.
+func fenceTokens(s string) []string {
+	var out []string
+	var cur strings.Builder
+	var quote byte
+	flush := func() {
+		if cur.Len() > 0 {
+			out = append(out, cur.String())
+			cur.Reset()
+		}
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case quote != 0:
+			cur.WriteByte(c)
+			if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'':
+			quote = c
+			cur.WriteByte(c)
+		case c == ' ' || c == '\t':
+			flush()
+		default:
+			cur.WriteByte(c)
+		}
+	}
+	flush()
+	return out
+}
+
+// codeFenceRenderer replaces goldmark's fenced-code-block rendering so a
+// caption in the info string becomes a visible bar above the block.
+//
+// This has to happen at the renderer rather than as a tree transform:
+// goldmark takes the first word of the info string as the language and
+// discards the rest without a word, so by the time an HTML tree exists the
+// caption is gone. That also means today's failure is silent — a fence
+// written with a caption renders byte-for-byte like one without.
+//
+// Mermaid is unaffected: its extension rewrites its fences into its own AST
+// node during parsing and registers a renderer for that node, so a mermaid
+// fence never reaches this function.
+//
+// A trailing {...} attribute (e.g. `go {.wide}`) is left exactly as
+// unhandled as it is in goldmark's own fenced-code-block renderer: that
+// renderer never calls n.Attributes() either (CodeAttributeFilter is wired
+// up for inline code spans, not fenced blocks), so there is no existing
+// behavior here to preserve beyond "still does nothing with it".
+type codeFenceRenderer struct{}
+
+func newCodeFenceRenderer() renderer.NodeRenderer { return &codeFenceRenderer{} }
+
+func (r *codeFenceRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(ast.KindFencedCodeBlock, r.render)
+}
+
+func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Node,
+	entering bool) (ast.WalkStatus, error) {
+
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+	n := node.(*ast.FencedCodeBlock)
+
+	var info string
+	if n.Info != nil {
+		info = string(n.Info.Segment.Value(source))
+	}
+	lang, caption := splitFenceInfo(info)
+
+	if caption != "" {
+		w.WriteString(`<figure class="code-figure"><figcaption>`)
+		// The caption is author text, and it is being written into markup
+		// this function builds by hand rather than through goldmark's
+		// escaping writer.
+		w.WriteString(gohtml.EscapeString(caption))
+		w.WriteString("</figcaption>")
+	}
+	w.WriteString("<pre><code")
+	if lang != "" {
+		w.WriteString(` class="language-`)
+		w.Write(util.EscapeHTML([]byte(lang)))
+		w.WriteString(`"`)
+	}
+	w.WriteByte('>')
+	lines := n.Lines()
+	for i := 0; i < lines.Len(); i++ {
+		line := lines.At(i)
+		goldhtml.DefaultWriter.RawWrite(w, line.Value(source))
+	}
+	w.WriteString("</code></pre>")
+	if caption != "" {
+		w.WriteString("</figure>")
+	}
+	w.WriteByte('\n')
+
+	// A fenced code block's content is raw lines, not child nodes; skipping
+	// children matches what goldmark's own renderer does with it.
+	return ast.WalkSkipChildren, nil
+}
