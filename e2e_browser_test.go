@@ -15,6 +15,7 @@ package md2html
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -802,5 +803,246 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 	heightNum, herr := strconv.ParseFloat(height, 64)
 	if werr != nil || herr != nil || widthNum <= 10 || heightNum <= 10 {
 		t.Errorf("cloned svg size = %sx%s, want real dimensions from the viewBox", width, height)
+	}
+}
+
+// A collapsible container hides its body, but not the way "hidden" is
+// usually spelled: Chrome implements a closed <details> with
+// `content-visibility: hidden` on the implicit ::details-content slot,
+// which skips painting and find-in-page while still laying the subtree
+// out. An element in there keeps a real, correct
+// getBoundingClientRect() — its width is the width it would render at if
+// the container were open, not zero.
+//
+// That is load-bearing for mediaExpandRuntime, which decides whether an
+// element is worth wiring by comparing its natural size against exactly
+// that rendered box (`size.width <= box.width` in wireExpand). Inside a
+// closed container the comparison still gets a truthful answer, so a
+// small image is correctly left alone and a large one is correctly wired
+// — the same verdicts TestBrowserSmallImageNotExpandable and
+// TestBrowserLargeImageExpandsOnClick pin at the top level.
+//
+// If the stylesheet ever hid container bodies with `display: none`
+// instead, or if a future Chrome stopped laying the subtree out, every
+// box in there would measure 0 wide, every icon and badge inside a closed
+// container would satisfy the gate, and the page would sprout zoom
+// cursors on things with nothing to zoom into. No Go-level test can see
+// that: it is a fact about layout, not about markup, and the markup is
+// byte-for-byte identical either way. Hence this test.
+func TestBrowserMediaExpandInsideCollapsedContainer(t *testing.T) {
+	md := "::: aside Collapsed\n\n![small](small.png)\n\n![big](big.png)\n\n:::\n"
+	page, err := Convert([]byte(md), Options{Transforms: Builtins()})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	// Transforms had to be passed explicitly above: Convert with a zero
+	// Options runs none, and without Containers the fence would never
+	// become a <details> at all — leaving two plainly visible images and a
+	// test that proves nothing about collapsed containers.
+	if !bytes.Contains(page, []byte(`<details class="container aside">`)) {
+		t.Fatalf("fixture did not become a collapsible container: %s", page)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{
+		"index.html": page,
+		"small.png":  pngFixture(60, 40),
+		"big.png":    pngFixture(2000, 1500),
+	})
+
+	ctx := newBrowserCtx(t)
+	var runtimeRan, containerClosed bool
+	var smallHidden, bigHidden bool
+	var smallBox, bigBox float64
+	var smallExpandable, bigExpandable bool
+	// checkVisibility({contentVisibilityAuto: true}) is the only DOM API
+	// that reports a content-visibility-skipped element as invisible;
+	// offsetParent, display and getBoundingClientRect all report it as an
+	// ordinary laid-out box, which is precisely the distinction this test
+	// exists to pin.
+	const hiddenJS = `document.querySelector(%q).checkVisibility({contentVisibilityAuto: true, visibilityProperty: true}) === false`
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox") !== null`, &runtimeRan),
+		chromedp.Evaluate(`!document.querySelector("details.container").open`, &containerClosed),
+		chromedp.Evaluate(fmt.Sprintf(hiddenJS, `img[src="small.png"]`), &smallHidden),
+		chromedp.Evaluate(fmt.Sprintf(hiddenJS, `img[src="big.png"]`), &bigHidden),
+		chromedp.Evaluate(`document.querySelector('img[src="small.png"]').getBoundingClientRect().width`, &smallBox),
+		chromedp.Evaluate(`document.querySelector('img[src="big.png"]').getBoundingClientRect().width`, &bigBox),
+		chromedp.Evaluate(`document.querySelector('img[src="small.png"]').classList.contains("expandable")`, &smallExpandable),
+		chromedp.Evaluate(`document.querySelector('img[src="big.png"]').classList.contains("expandable")`, &bigExpandable),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// Same liveness probe as TestBrowserSmallImageNotExpandable: the
+	// negative assertion below would be satisfied just as well by the
+	// runtime never having run.
+	if !runtimeRan {
+		t.Fatal("mediaExpandRuntime never ran, so the absence assertion below proves nothing")
+	}
+	// Both halves of the premise, asserted rather than assumed. Without
+	// the first, the container might have rendered open and this would be
+	// a duplicate of the top-level tests; without the second, "laid out"
+	// and "hidden" would not both be established and the whole point of
+	// the test would be unproven.
+	if !containerClosed {
+		t.Fatal("details.container rendered open; this test only says anything while it is closed")
+	}
+	if !smallHidden || !bigHidden {
+		t.Fatalf("images inside the closed container report as visible (small=%v big=%v); the container is not actually hiding its body", !smallHidden, !bigHidden)
+	}
+	// The load-bearing measurement: a hidden-but-laid-out subtree still
+	// reports true widths. 60 exactly, because nothing in this page's CSS
+	// shrinks a 60px image below the prose measure — the same boundary
+	// TestBrowserSmallImageNotExpandable pins at the top level.
+	if smallBox != 60 {
+		t.Fatalf("small img box width inside a closed container = %v, want 60 — a closed <details> is no longer laying its content out, and wireExpand's size gate is now comparing against a phantom", smallBox)
+	}
+	if bigBox <= 60 {
+		t.Fatalf("big img box width inside a closed container = %v, want the prose measure — expected the 2000px image to be shrunk to fit, not left unlaid-out", bigBox)
+	}
+	if smallExpandable {
+		t.Error("a 60x40 image inside a closed container got .expandable; it is already at its own size, and being inside a collapsed container must not change that verdict")
+	}
+	if !bigExpandable {
+		t.Error("a 2000x1500 image inside a closed container did not get .expandable; being inside a collapsed container must not suppress the verdict either")
+	}
+
+	// And the verdict has to survive contact with the reader: open the
+	// container and click the image that was wired while hidden. Wiring
+	// happened against the closed-state box, so this is the assertion that
+	// the listener attached back then still opens the dialog, at the
+	// image's real natural size rather than the size it was measured at.
+	var dialogWidth string
+	var widthOK bool
+	err = chromedp.Run(ctx,
+		chromedp.Evaluate(`document.querySelector("details.container").open = true`, nil),
+		chromedp.Click(`img[src="big.png"]`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.WaitVisible(`dialog.media-lightbox[open]`, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.media-lightbox img`, "width", &dialogWidth, &widthOK, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp (after opening the container): %v", err)
+	}
+	if !widthOK || dialogWidth != "2000" {
+		t.Errorf("lightbox clone width = %q, ok=%v; want \"2000\" — the clone should carry the image's natural size, not the box it was measured at while collapsed", dialogWidth, widthOK)
+	}
+}
+
+// The collapsible container kinds are a <details>, on purpose: default.css
+// says so in as many words ("<details> gives open/closed state, keyboard
+// access and find-in-page expansion natively; a scripted accordion would
+// give up all three"), and containerKinds encodes it as tag: "details".
+// Nothing asserted any of it — a container that silently stopped
+// disclosing, or a summary that stopped being reachable by keyboard, would
+// leave every Go-level test green, because the markup those tests inspect
+// is not where the behavior lives.
+//
+// The three claims are checked in the order a reader meets them: closed by
+// default, opens on a pointer click, and toggles from the keyboard alone.
+// Find-in-page expansion is the fourth claim and is not checked here —
+// CDP has no find-in-page command to drive it with — but it is the one
+// behavior that follows automatically from the others being native rather
+// than scripted, which is itself what this test pins.
+func TestBrowserCollapsibleContainerDiscloses(t *testing.T) {
+	md := "::: aside Why this matters\n\nAside body.\n\n:::\n\n" +
+		"::: example Two\n\nExample body.\n\n:::\n"
+	page, err := Convert([]byte(md), Options{Transforms: Builtins()})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	// Checked in the markup before the browser is involved, for the same
+	// reason serveDir guards against unexpected 404s: if the kinds stopped
+	// becoming <details> at all, the WaitReady below would simply never
+	// find its selector and the test would die fifteen seconds later on a
+	// bare "context deadline exceeded" naming nothing. Verified by
+	// deliberately flipping containerKinds' tag to "div" — this is the
+	// line that then reports it.
+	if n := bytes.Count(page, []byte(`<details class="container `)); n != 2 {
+		t.Fatalf("fixture produced %d collapsible containers, want 2: %s", n, page)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"index.html": page})
+
+	// bodyState reports, for each container on the page, whether it is
+	// open and whether its body paragraph is actually visible to a reader.
+	// The two are read together and compared against each other below: a
+	// container whose open property and whose rendered body disagree is
+	// exactly the regression this test is looking for, and reading only
+	// the property would miss a stylesheet that forced the body hidden (or
+	// visible) regardless of state.
+	const bodyState = `[...document.querySelectorAll("details.container")].map(d => ({
+	  open: d.open,
+	  bodyVisible: d.querySelector("p").checkVisibility({contentVisibilityAuto: true, visibilityProperty: true}),
+	}))`
+	type state struct {
+		Open        bool `json:"open"`
+		BodyVisible bool `json:"bodyVisible"`
+	}
+	var initial, afterClick, afterKey []state
+	var summaryTabIndex int
+	var summaryCursor string
+	ctx := newBrowserCtx(t)
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.WaitReady(`details.container > summary`, chromedp.ByQuery),
+		chromedp.Evaluate(bodyState, &initial),
+
+		// Pointer disclosure. The click lands on the summary, which is the
+		// only part of a closed <details> a reader can see or hit.
+		chromedp.Click(`details.container > summary`, chromedp.ByQuery),
+		chromedp.Evaluate(bodyState, &afterClick),
+
+		// Keyboard disclosure. Enter on the focused summary is the native
+		// toggle; sending it without first focusing would dispatch to the
+		// body and prove nothing. chromedp.Focus and KeyEvent are enough
+		// here because CDP dispatches to the renderer's focused element
+		// directly — note that a :focus-dependent *style* assertion would
+		// additionally need emulation.SetFocusEmulationEnabled(true),
+		// since a headless page has no window focus and :focus therefore
+		// never matches. Nothing below depends on a focus style, so that
+		// is deliberately not turned on.
+		chromedp.Focus(`details.container > summary`, chromedp.ByQuery),
+		chromedp.KeyEvent("\r"),
+		chromedp.Evaluate(bodyState, &afterKey),
+
+		chromedp.Evaluate(`document.querySelector("details.container > summary").tabIndex`, &summaryTabIndex),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector("details.container > summary")).cursor`, &summaryCursor),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+
+	if len(initial) != 2 {
+		t.Fatalf("got %d collapsible containers, want 2 — the aside/example fixture did not render as <details>", len(initial))
+	}
+	for i, s := range initial {
+		if s.Open || s.BodyVisible {
+			t.Errorf("container %d starts open=%v bodyVisible=%v; both must be false — a collapsible container that ships open discloses nothing", i, s.Open, s.BodyVisible)
+		}
+	}
+	// Only the clicked container moves. Asserted because a scripted
+	// accordion — the thing default.css's comment rejects — is exactly
+	// what would couple them, and because it confirms the click did
+	// something specific rather than the page re-rendering wholesale.
+	if !afterClick[0].Open || !afterClick[0].BodyVisible {
+		t.Errorf("after clicking its summary, container 0 is open=%v bodyVisible=%v; want both true", afterClick[0].Open, afterClick[0].BodyVisible)
+	}
+	if afterClick[1].Open || afterClick[1].BodyVisible {
+		t.Errorf("clicking container 0's summary also disclosed container 1 (open=%v bodyVisible=%v); the kinds must disclose independently", afterClick[1].Open, afterClick[1].BodyVisible)
+	}
+	// Enter re-collapses the one the click opened. Checking the toggle
+	// back — rather than opening a fresh container with the keyboard —
+	// proves the key reached the summary and not merely that something
+	// somewhere ended up open.
+	if afterKey[0].Open || afterKey[0].BodyVisible {
+		t.Errorf("after Enter on the focused summary, container 0 is open=%v bodyVisible=%v; want both false — the keyboard toggle did not reach it", afterKey[0].Open, afterKey[0].BodyVisible)
+	}
+	// The affordances the stylesheet promises the reader, alongside the
+	// behavior itself: a summary that works but looks inert is a
+	// regression a behavioral assertion alone would miss.
+	if summaryTabIndex != 0 {
+		t.Errorf("summary tabIndex = %d, want 0 — a collapsible container's handle must be reachable by keyboard", summaryTabIndex)
+	}
+	if summaryCursor != "pointer" {
+		t.Errorf("summary cursor = %q, want %q", summaryCursor, "pointer")
 	}
 }
