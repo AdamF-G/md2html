@@ -1,7 +1,9 @@
 # Extended content model — feature backlog
 
 **Date:** 2026-09-11
-**Status:** Proposal — none of this is scheduled or accepted
+**Status:** Items 2-9 shipped. Item 1 (structured diagram fence) is the
+only one still outstanding, and remains a proposal — it is scoped as its
+own design, not part of this backlog's acceptance.
 
 ## Purpose
 
