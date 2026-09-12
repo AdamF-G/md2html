@@ -1,0 +1,99 @@
+package md2html
+
+import (
+	"strings"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+// tocMarker is the token a document uses to ask for a contents list. It has
+// to be inert to every other Markdown renderer, so that a source file
+// carrying one still reads correctly unprocessed — double brackets are not
+// link syntax in CommonMark, so this renders as literal text elsewhere.
+const tocMarker = "[[toc]]"
+
+// TOC replaces a marker paragraph with a flat list of the current
+// document's own headings.
+//
+// Flat, not nested by heading level: a document that jumps h2 to h4 would
+// otherwise produce either invalid list nesting or a silently wrong tree.
+// Level travels as a class on the list item, so the stylesheet can indent
+// without the markup having to be a hierarchy.
+//
+// This is a table of contents for one page and nothing more. Cross-document
+// navigation, a sidebar and a site index stay out of scope — see
+// docs/specs/2026-09-05-md2html-design.md.
+func TOC() Transform {
+	return Transform{Name: "toc", Fn: func(root *html.Node) error {
+		var markers []*html.Node
+		walk(root, func(n *html.Node) {
+			if n.Type != html.ElementNode || n.DataAtom != atom.P {
+				return
+			}
+			// Alone on its own line: the marker must be the paragraph's
+			// entire content. A marker inside a sentence is prose, and one
+			// inside a fence is this feature's own documentation — the
+			// fence is a <pre>, never a <p>, so it is excluded by
+			// construction.
+			if strings.TrimSpace(textOf(n)) == tocMarker {
+				markers = append(markers, n)
+			}
+		})
+		if len(markers) == 0 {
+			return nil
+		}
+		heads := headingNodes(root)
+		for _, m := range markers {
+			nav := buildTOC(heads)
+			if nav == nil {
+				// Nothing to list. Leave the marker as literal text rather
+				// than remove it: the spec's own degradation for this
+				// feature is "ugly, but not misleading" — deleting the
+				// marker would erase the reader's only clue that the
+				// document has no linkable headings.
+				continue
+			}
+			m.Parent.InsertBefore(nav, m)
+			m.Parent.RemoveChild(m)
+		}
+		return nil
+	}}
+}
+
+// buildTOC renders the nav, or nil when there is nothing to list — a
+// document whose marker has no headings with an id (none present, or
+// --no-anchors suppressed every one) to point at.
+func buildTOC(heads []*html.Node) *html.Node {
+	list := &html.Node{Type: html.ElementNode, DataAtom: atom.Ol, Data: "ol"}
+	n := 0
+	for _, h := range heads {
+		id, ok := attr(h, "id")
+		if !ok || id == "" {
+			continue // --no-anchors: nothing to link to
+		}
+		// headingText already excludes both the chip spans and the anchor
+		// link HeadingAnchors appends (see chip.go), so there is no
+		// trailing "#" to strip here — and no risk of truncating a heading
+		// whose visible text genuinely ends in one, like "Sharp C#".
+		label := strings.TrimSpace(headingText(h))
+		if label == "" {
+			continue
+		}
+		li := &html.Node{Type: html.ElementNode, DataAtom: atom.Li, Data: "li",
+			Attr: []html.Attribute{{Key: "class", Val: "toc-" + h.Data}}}
+		a := &html.Node{Type: html.ElementNode, DataAtom: atom.A, Data: "a",
+			Attr: []html.Attribute{{Key: "href", Val: "#" + id}}}
+		a.AppendChild(&html.Node{Type: html.TextNode, Data: label})
+		li.AppendChild(a)
+		list.AppendChild(li)
+		n++
+	}
+	if n == 0 {
+		return nil
+	}
+	nav := &html.Node{Type: html.ElementNode, DataAtom: atom.Nav, Data: "nav",
+		Attr: []html.Attribute{{Key: "class", Val: "toc"}}}
+	nav.AppendChild(list)
+	return nav
+}

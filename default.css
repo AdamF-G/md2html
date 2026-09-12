@@ -219,3 +219,12 @@ details.container.example { border-left: 3px solid var(--accent); }
 /* A cross-reference is a link, but a quieter one than a prose link: it
    points inside the page the reader is already on. */
 a.xref { text-decoration: underline dotted; text-underline-offset: 0.2em; }
+
+/* Flat by construction: indentation comes from the level class, so an
+   h2→h4 jump indents without the markup pretending to be a hierarchy. */
+nav.toc { margin: 2rem 0; }
+nav.toc ol { list-style: none; margin: 0; padding-left: 0; }
+nav.toc li { margin: 0.15rem 0; }
+nav.toc .toc-h3 { padding-left: 1.25rem; }
+nav.toc .toc-h4 { padding-left: 2.5rem; }
+nav.toc .toc-h5, nav.toc .toc-h6 { padding-left: 3.75rem; }

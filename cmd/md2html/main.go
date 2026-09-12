@@ -216,7 +216,7 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 	if !noAnchor {
 		ts = append(ts, md2html.HeadingAnchors())
 	}
-	ts = append(ts, md2html.SectionLinks())
+	ts = append(ts, md2html.SectionLinks(), md2html.TOC())
 	if !noExt {
 		ts = append(ts, md2html.ExternalLinks())
 	}
