@@ -40,6 +40,14 @@ func splitFenceInfo(info string) (lang, caption string) {
 
 // fenceTokens splits an info string on whitespace, keeping a quoted run
 // together so a caption may contain spaces.
+//
+// There is no backslash-escape for a quote embedded inside a quoted run
+// (`caption="a \"b\" c"`): the backslash and the inner quote just end up
+// as literal characters in the token, and strings.Trim in splitFenceInfo
+// only trims a leading/trailing quote, so the embedded one survives into
+// the caption text. That degrades to literal, HTML-escaped source text
+// rather than broken markup or a truncated caption, which is an acceptable
+// fallback for a syntax this narrow — not worth a real escaping grammar.
 func fenceTokens(s string) []string {
 	var out []string
 	var cur strings.Builder
