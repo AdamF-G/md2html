@@ -358,7 +358,13 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 			continue
 		}
 		order = append(order, cur)
-		root, err := parseDoc(src)
+		// Strip front matter before parsing, matching what Convert sees: a
+		// Markdown link or image sitting inside a "title:" value is source
+		// text, not a document reference, and must not be followed or
+		// checked for existence just because it was still in the tree the
+		// unstripped bytes would have produced.
+		_, body, _ := splitFrontMatter(src)
+		root, err := parseDoc(body)
 		if err != nil {
 			res.Warnings = append(res.Warnings, Warning{cur, "parse failed: " + err.Error()})
 			continue

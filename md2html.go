@@ -39,7 +39,9 @@ type Options struct {
 	SourcePath string
 	// CSS replaces the embedded default stylesheet. Empty uses the default.
 	CSS string
-	// Transforms to run. Nil means Builtins().
+	// Transforms to run. Nil means the default list, built with Warn wired
+	// in — Builtins() itself always builds it with a nil sink instead, so
+	// the two are not quite the same list (see Warn below).
 	//
 	// Transforms and LinkMap are two alternative routes to link rewriting,
 	// not complementary ones: either place LinkRewrite in Transforms
@@ -108,7 +110,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// key itself is silently dropped: there is nowhere in the page for it
 	// to go yet, and warning about a key the format doesn't forbid would
 	// be noise, not a diagnostic.
-	meta, src := splitFrontMatter(src)
+	meta, src, malformed := splitFrontMatter(src)
+	if malformed && opt.Warn != nil {
+		opt.Warn("front matter block is not flat key: value; rendering it as body text")
+	}
 
 	var buf bytes.Buffer
 	if err := newParser().Convert(src, &buf); err != nil {

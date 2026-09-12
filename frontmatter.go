@@ -9,7 +9,15 @@ import (
 
 // splitFrontMatter peels a leading "---"-delimited block of flat
 // "key: value" lines off the source, returning the keys and the remaining
-// body. It returns (nil, src) unchanged when there is no such block.
+// body. It returns (nil, src, false) unchanged when there is no such block.
+//
+// The third return reports specifically a block that opened with "---" and
+// closed with a matching "---"/"..." but was not flat key/value inside —
+// a nested value, a line with no colon, an empty key. It is false for a
+// document with no front matter at all, and also false for an unterminated
+// "---" block: that shape is indistinguishable from a plain horizontal
+// rule or a setext heading underline, so calling it malformed would warn on
+// every document that legitimately opens with one.
 //
 // It is deliberately not YAML. The three keys the page can use are all flat
 // strings, and taking on a YAML parser to read them would be the tool's
@@ -17,7 +25,7 @@ import (
 // key/value — a list, a nested map — is refused whole and rendered as it is
 // today: an <hr> followed by a setext heading holding the lines, which is
 // noisy above a title and therefore self-reporting.
-func splitFrontMatter(src []byte) (map[string]string, []byte) {
+func splitFrontMatter(src []byte) (map[string]string, []byte, bool) {
 	s := string(src)
 	// A leading UTF-8 BOM makes this prefix check fail, so a document
 	// saved with one simply never has its front matter detected — the
@@ -25,12 +33,13 @@ func splitFrontMatter(src []byte) (map[string]string, []byte) {
 	// prior behavior rather than corrupting anything, so it is left alone
 	// rather than stripped here.
 	if !strings.HasPrefix(s, "---\n") && !strings.HasPrefix(s, "---\r\n") {
-		return nil, src
+		return nil, src, false
 	}
 	rest := s[strings.IndexByte(s, '\n')+1:]
 	end := -1
 	lines := strings.Split(rest, "\n")
 	meta := map[string]string{}
+	malformed := false
 	for i, line := range lines {
 		trimmed := strings.TrimRight(line, "\r")
 		if trimmed == "---" || trimmed == "..." {
@@ -40,18 +49,29 @@ func splitFrontMatter(src []byte) (map[string]string, []byte) {
 		if strings.TrimSpace(trimmed) == "" {
 			continue
 		}
+		if malformed {
+			// Already known not flat key/value; keep scanning only to
+			// find where the block closes (or confirm it never does).
+			continue
+		}
 		// Flat only: an indented line is a nested structure, and a line
-		// with no colon is not a key at all.
+		// with no colon is not a key at all. Recorded rather than
+		// returned immediately — whether this counts as malformed still
+		// depends on whether the block goes on to close (see below), so
+		// the scan has to keep going to find that out.
 		if trimmed != strings.TrimLeft(trimmed, " \t") {
-			return nil, src
+			malformed = true
+			continue
 		}
 		k, v, ok := strings.Cut(trimmed, ":")
 		if !ok {
-			return nil, src
+			malformed = true
+			continue
 		}
 		key := strings.TrimSpace(k)
 		if key == "" {
-			return nil, src
+			malformed = true
+			continue
 		}
 		// A repeated key overwrites rather than erroring: last-wins is the
 		// same rule a Go map assignment gives for free, and treating a
@@ -60,11 +80,18 @@ func splitFrontMatter(src []byte) (map[string]string, []byte) {
 		meta[strings.ToLower(key)] = strings.TrimSpace(v)
 	}
 	if end < 0 {
-		// No closing delimiter: this was an <hr>, not front matter.
-		return nil, src
+		// No closing delimiter: this was an <hr>, not front matter, so it
+		// is not reported malformed either — see the doc comment above.
+		// Whatever non-flat lines were seen along the way don't matter:
+		// there was never a front-matter block for them to be malformed
+		// inside of.
+		return nil, src, false
+	}
+	if malformed {
+		return nil, src, true
 	}
 	body := strings.Join(lines[end+1:], "\n")
-	return meta, []byte(strings.TrimLeft(body, "\n"))
+	return meta, []byte(strings.TrimLeft(body, "\n")), false
 }
 
 // firstHeading returns the document's first <h1>, or nil.

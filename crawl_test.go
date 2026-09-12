@@ -826,3 +826,34 @@ func TestCrawlExcludeAndLinkDepthCompose(t *testing.T) {
 		t.Errorf("exclusion warning for a link past the hop budget, got %v", res.Warnings)
 	}
 }
+
+// Reviewer-reported bug: Convert strips front matter before parsing
+// (md2html.go), but the crawler parsed the raw, unstripped bytes, so a
+// Markdown link sitting inside a "title:" value was followed and its
+// target pulled into the emit set even though it never appears in any
+// rendered output.
+func TestCrawlIgnoresLinkInsideFrontMatter(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"index.md": "---\ntitle: See [other](./other.md)\n---\n\n# Index\n",
+		"other.md": "# Other\n",
+	})
+	res := mustCrawl(t, CrawlOptions{Entries: []string{filepath.Join(root, "index.md")}, Depth: -1})
+	if got := srcNames(t, root, res.Docs); !eq(got, []string{"index.md"}) {
+		t.Errorf("front-matter link followed: got %v, want [index.md]", got)
+	}
+}
+
+// Same bug, the image/asset-warning half: an image referenced only inside a
+// front-matter value must not be checked for existence or reported missing,
+// since it appears in no rendered document.
+func TestCrawlIgnoresImageInsideFrontMatter(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"index.md": "---\ntitle: See ![i](./missing.png)\n---\n\n# Index\n",
+	})
+	res := mustCrawl(t, CrawlOptions{Entries: []string{filepath.Join(root, "index.md")}, Depth: -1})
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, "missing.png") {
+			t.Errorf("warned about an asset referenced only in front matter: %v", w)
+		}
+	}
+}

@@ -6,7 +6,7 @@ import (
 )
 
 func TestSplitFrontMatterExtractsFlatKeys(t *testing.T) {
-	meta, body := splitFrontMatter([]byte("---\ntitle: Rollback\nsubtitle: how it works\ndate: 2026-09-11\n---\n\n# H\n"))
+	meta, body, _ := splitFrontMatter([]byte("---\ntitle: Rollback\nsubtitle: how it works\ndate: 2026-09-11\n---\n\n# H\n"))
 	if meta["title"] != "Rollback" || meta["subtitle"] != "how it works" || meta["date"] != "2026-09-11" {
 		t.Errorf("meta = %v", meta)
 	}
@@ -20,40 +20,50 @@ func TestSplitFrontMatterExtractsFlatKeys(t *testing.T) {
 
 // A value containing a colon must not be truncated at the first one.
 func TestSplitFrontMatterKeepsColonsInValues(t *testing.T) {
-	meta, _ := splitFrontMatter([]byte("---\ntitle: A: B\n---\nx\n"))
+	meta, _, _ := splitFrontMatter([]byte("---\ntitle: A: B\n---\nx\n"))
 	if meta["title"] != "A: B" {
 		t.Errorf("title = %q", meta["title"])
 	}
 }
 
 // Anything that is not flat key/value is left alone and rendered, which is
-// today's behavior and an obvious signal that something needs fixing.
+// today's behavior and an obvious signal that something needs fixing. It
+// must also be reported malformed: the block opened as front matter, so
+// this is the shape Convert's new warning exists for.
 func TestSplitFrontMatterRejectsNonFlatBlock(t *testing.T) {
 	src := []byte("---\ntags:\n  - a\n---\nx\n")
-	meta, body := splitFrontMatter(src)
+	meta, body, malformed := splitFrontMatter(src)
 	if meta != nil {
 		t.Errorf("parsed a nested block: %v", meta)
 	}
 	if string(body) != string(src) {
 		t.Errorf("body altered: %q", body)
 	}
+	if !malformed {
+		t.Error("nested block not reported malformed")
+	}
 }
 
-// A horizontal rule at the top of a document is not front matter.
+// A horizontal rule at the top of a document is not front matter, and must
+// not be reported malformed either: that would warn on every document that
+// legitimately opens with a plain "---" rule.
 func TestSplitFrontMatterIgnoresPlainRule(t *testing.T) {
 	src := []byte("---\n\nsome prose\n")
-	meta, body := splitFrontMatter(src)
+	meta, body, malformed := splitFrontMatter(src)
 	if meta != nil {
 		t.Errorf("parsed a plain rule as front matter: %v", meta)
 	}
 	if string(body) != string(src) {
 		t.Errorf("body altered: %q", body)
 	}
+	if malformed {
+		t.Error("plain rule reported malformed")
+	}
 }
 
 func TestSplitFrontMatterIgnoresBlockNotAtStart(t *testing.T) {
 	src := []byte("# H\n\n---\ntitle: X\n---\n")
-	meta, _ := splitFrontMatter(src)
+	meta, _, _ := splitFrontMatter(src)
 	if meta != nil {
 		t.Errorf("parsed a mid-document block: %v", meta)
 	}
@@ -61,15 +71,19 @@ func TestSplitFrontMatterIgnoresBlockNotAtStart(t *testing.T) {
 
 // A "---" with no closing delimiter is a setext heading underline or an
 // unterminated block, not front matter, and must degrade to rendering the
-// source as-is rather than swallowing the rest of the document.
+// source as-is rather than swallowing the rest of the document. Not
+// malformed either, for the same ambiguity-with-a-rule reason as above.
 func TestSplitFrontMatterIgnoresUnterminatedBlock(t *testing.T) {
 	src := []byte("---\ntitle: X\n\nno closing delimiter here\n")
-	meta, body := splitFrontMatter(src)
+	meta, body, malformed := splitFrontMatter(src)
 	if meta != nil {
 		t.Errorf("parsed an unterminated block: %v", meta)
 	}
 	if string(body) != string(src) {
 		t.Errorf("body altered: %q", body)
+	}
+	if malformed {
+		t.Error("unterminated block reported malformed")
 	}
 }
 
@@ -78,7 +92,7 @@ func TestSplitFrontMatterIgnoresUnterminatedBlock(t *testing.T) {
 // block must still be recognized and stripped rather than treated as an
 // unterminated one.
 func TestSplitFrontMatterAcceptsEmptyBlock(t *testing.T) {
-	meta, body := splitFrontMatter([]byte("---\n---\n\n# H\n"))
+	meta, body, _ := splitFrontMatter([]byte("---\n---\n\n# H\n"))
 	if meta == nil {
 		t.Errorf("empty block not recognized as front matter")
 	}
@@ -93,7 +107,7 @@ func TestSplitFrontMatterAcceptsEmptyBlock(t *testing.T) {
 // A repeated key overwrites rather than erroring — last-wins, the same
 // rule a plain map assignment gives for free.
 func TestSplitFrontMatterDuplicateKeyLastWins(t *testing.T) {
-	meta, _ := splitFrontMatter([]byte("---\ntitle: First\ntitle: Second\n---\nx\n"))
+	meta, _, _ := splitFrontMatter([]byte("---\ntitle: First\ntitle: Second\n---\nx\n"))
 	if meta["title"] != "Second" {
 		t.Errorf("title = %q, want %q", meta["title"], "Second")
 	}
@@ -103,7 +117,7 @@ func TestSplitFrontMatterDuplicateKeyLastWins(t *testing.T) {
 // still stripped from the body — but is not one of the three keys Convert
 // reads, so it is silently dropped rather than rendered or warned about.
 func TestSplitFrontMatterKeepsUnrecognizedKeyOutOfBodyOnly(t *testing.T) {
-	meta, body := splitFrontMatter([]byte("---\nauthor: Jane\ntitle: T\n---\n\n# H\n"))
+	meta, body, _ := splitFrontMatter([]byte("---\nauthor: Jane\ntitle: T\n---\n\n# H\n"))
 	if meta["author"] != "Jane" {
 		t.Errorf("author = %q, want %q", meta["author"], "Jane")
 	}
@@ -277,5 +291,35 @@ func TestConvertFrontMatterSubtitleAndDateOrderWithoutHeading(t *testing.T) {
 	dateIdx := strings.Index(got, `class="docdate"`)
 	if subIdx < 0 || dateIdx < 0 || dateIdx < subIdx {
 		t.Errorf("date must come after subtitle even with no leading h1\ngot: %s", got)
+	}
+}
+
+// Malformed front matter degrades to rendering (an <hr> plus a setext
+// heading) with no warning today, which is the one new failure mode not
+// reaching Options.Warn. Convert must report it.
+func TestConvertWarnsOnMalformedFrontMatter(t *testing.T) {
+	var msgs []string
+	got := convert(t, "---\ntags:\n  - a\n---\n\n# H\n",
+		func(m string) { msgs = append(msgs, m) })
+	var found bool
+	for _, m := range msgs {
+		if strings.Contains(m, "flat") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no warning for malformed front matter, got %v", msgs)
+	}
+	// Still degrades to rendering the block as body text, exactly as today.
+	if !strings.Contains(got, "<hr") {
+		t.Errorf("malformed block did not degrade to rendered markup\ngot: %s", got)
+	}
+}
+
+// A nil sink must stay safe for the front-matter warning too, same as every
+// other Warn call site.
+func TestConvertMalformedFrontMatterNilWarnSinkIsSafe(t *testing.T) {
+	if _, err := Convert([]byte("---\ntags:\n  - a\n---\n\n# H\n"), Options{Fragment: true}); err != nil {
+		t.Fatalf("Convert: %v", err)
 	}
 }
