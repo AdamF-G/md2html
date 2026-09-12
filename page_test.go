@@ -1,8 +1,10 @@
 package md2html
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -306,5 +308,95 @@ func TestMermaidCDNIsOverridable(t *testing.T) {
 	}
 	if strings.Contains(s, "cdn.jsdelivr.net") {
 		t.Error("mermaidRuntime still embedded the real CDN URL after override")
+	}
+}
+
+// The vendored mermaid bundle is not a standalone file: every .mjs is a chunk
+// that imports other chunks statically (e.g., from"./chunk-X.mjs"). Those
+// static imports must all resolve on disk, or a browser loading the bundle
+// hangs waiting for 404s.
+//
+// Dynamic imports (parenthesized: import("./x.mjs")) are intentionally
+// skipped — these are per-diagram-type lazy loads that are not vendored by
+// design; a test that required them would fail by design and hide a real
+// breakage. Static imports, by contrast, are what the module needs merely to
+// load, and every one must be present.
+func TestVendoredMermaidImportsResolveOnDisk(t *testing.T) {
+	vendorRoot := filepath.Join("testdata", "vendor")
+
+	// Walk all .mjs files in testdata/vendor and its subdirectories.
+	var mjsFiles []string
+	err := filepath.Walk(vendorRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, ".mjs") {
+			mjsFiles = append(mjsFiles, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk testdata/vendor: %v", err)
+	}
+	if len(mjsFiles) == 0 {
+		t.Fatal("no .mjs files found in testdata/vendor; nothing to check")
+	}
+
+	// Patterns for static imports in ES6 modules. Real mermaid is minified with no
+	// whitespace, so imports are unambiguous:
+	// - `}from"path"` - import with destructuring (the `}` is from the import list)
+	// - `;import"path"` - side-effect imports (the `;` separates statements)
+	//
+	// These patterns can't occur in strings, so they safely identify real imports.
+	// Dynamic imports import("...") are NOT matched because they have `(` instead of `;`.
+	patternRe := regexp.MustCompile(`}from"([^"]+)"|;import"([^"]+)"`)
+
+	var staticImportCount int
+	var missingFiles []string
+
+	for _, mjsFile := range mjsFiles {
+		content, err := os.ReadFile(mjsFile)
+		if err != nil {
+			t.Fatalf("read %s: %v", mjsFile, err)
+		}
+		contentStr := string(content)
+
+		// Track which imports we've already seen to avoid duplicates
+		seen := make(map[string]bool)
+
+		matches := patternRe.FindAllStringSubmatchIndex(contentStr, -1)
+		for _, match := range matches {
+			// Groups: (2,3) for }from"..." pattern, (4,5) for ;import"..." pattern
+			var importPath string
+			if match[2] != -1 {
+				// }from"..." matched (group 1)
+				importPath = contentStr[match[2]:match[3]]
+			} else if match[4] != -1 {
+				// ;import"..." matched (group 2)
+				importPath = contentStr[match[4]:match[5]]
+			}
+
+			if importPath == "" || seen[importPath] {
+				continue
+			}
+
+			seen[importPath] = true
+			staticImportCount++
+
+			importedFile := filepath.Join(filepath.Dir(mjsFile), importPath)
+			importedFile = filepath.Clean(importedFile)
+
+			if _, err := os.Stat(importedFile); err != nil {
+				missingFiles = append(missingFiles, fmt.Sprintf("%s imports %q, resolved to %s (missing)", mjsFile, importPath, importedFile))
+			}
+		}
+	}
+
+	if staticImportCount == 0 {
+		t.Fatal("no static imports found in vendored .mjs files; extraction regex may be broken")
+	}
+
+	if len(missingFiles) > 0 {
+		t.Errorf("vendored mermaid has %d missing dependencies:\n  %s", len(missingFiles), strings.Join(missingFiles, "\n  "))
 	}
 }
