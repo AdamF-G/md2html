@@ -36,7 +36,7 @@ func extractTitle(root *nethtml.Node, sourcePath string) string {
 			return
 		}
 		if n.Type == nethtml.ElementNode && n.DataAtom == atom.H1 {
-			if t := strings.TrimSpace(textOf(n)); t != "" {
+			if t := strings.TrimSpace(stripChipTokens(textOf(n))); t != "" {
 				found = t
 			}
 		}

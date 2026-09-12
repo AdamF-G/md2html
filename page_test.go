@@ -423,3 +423,15 @@ func TestVendoredMermaidImportsResolveOnDisk(t *testing.T) {
 		t.Errorf("vendored mermaid has %d missing dependencies:\n  %s", len(missingFiles), strings.Join(missingFiles, "\n  "))
 	}
 }
+
+// The derived <title> must not carry a status marker either. extractTitle
+// runs before transforms, so it sees the raw bracketed text.
+func TestExtractTitleStripsChipTokens(t *testing.T) {
+	root, err := parseFragment([]byte(`<h1>Rollback [proven]</h1>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := extractTitle(root, ""); got != "Rollback" {
+		t.Errorf("got %q, want %q", got, "Rollback")
+	}
+}

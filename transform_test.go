@@ -179,3 +179,21 @@ func TestExternalLinksMarksOffSiteOnly(t *testing.T) {
 		t.Errorf("marked a non-external link\ngot: %s", got)
 	}
 }
+
+// A status marker must not reach the slug: relabeling it later would
+// otherwise rot every anchor link pointing at that heading.
+func TestHeadingAnchorsExcludeChipsFromSlug(t *testing.T) {
+	got := apply(t, `<h2>Rollback <span class="chip chip-proven">proven</span></h2>`, HeadingAnchors())
+	if !strings.Contains(got, `id="rollback"`) {
+		t.Errorf("chip text leaked into the slug\ngot: %s", got)
+	}
+}
+
+// A chip-free heading's slug must be byte-identical to what it was before
+// chips existed — docs/authoring.md promises stable, predictable ids.
+func TestHeadingAnchorsSlugUnchangedWithoutChips(t *testing.T) {
+	got := apply(t, `<h2>Hello World</h2>`, HeadingAnchors())
+	if !strings.Contains(got, `id="hello-world"`) {
+		t.Errorf("slug changed\ngot: %s", got)
+	}
+}

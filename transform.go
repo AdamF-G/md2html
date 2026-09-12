@@ -21,17 +21,20 @@ func Builtins() []Transform {
 
 // builtins is the ordered default list. Containers must run first because
 // it restructures fenced containers before anything else inspects the tree;
-// nothing among the rest depends on running before or after another today,
-// but the list's order is a correctness constraint, not a style choice:
-// later tasks insert their transforms at specific positions in it (a chip
-// transform before heading slugs are computed, id-resolving transforms
-// after anchors are assigned), so new entries belong at their documented
-// position, not appended to the end. warn is threaded through so a
-// transform can report a non-fatal problem; only Containers uses it so far.
+// Chips must run before HeadingAnchors so a status marker is already a
+// <span class="chip"> — and therefore excluded by headingText — by the time
+// slugs are computed; nothing else among the rest depends on running before
+// or after another today, but the list's order is a correctness constraint,
+// not a style choice: later tasks insert their transforms at specific
+// positions in it (id-resolving transforms after anchors are assigned), so
+// new entries belong at their documented position, not appended to the end.
+// warn is threaded through so a transform can report a non-fatal problem;
+// only Containers uses it so far.
 func builtins(warn func(string)) []Transform {
 	return []Transform{
 		Containers(warn),
 		TableScroll(),
+		Chips(),
 		HeadingAnchors(),
 		ExternalLinks(),
 	}
@@ -136,6 +139,10 @@ func slugify(s string) string {
 
 // HeadingAnchors gives every heading a stable id and a linkable anchor.
 // An id already present — from a {#custom-id} attribute — is left alone.
+//
+// Status chips are excluded from the slug: a marker is metadata about the
+// section, not part of its name, and relabeling one later must not rot an
+// anchor other documents already link to.
 func HeadingAnchors() Transform {
 	return Transform{Name: "headingAnchors", Fn: func(root *html.Node) error {
 		seen := map[string]bool{}
@@ -162,7 +169,7 @@ func HeadingAnchors() Transform {
 		for i, h := range heads {
 			id, ok := attr(h, "id")
 			if !ok || id == "" {
-				base := slugify(textOf(h))
+				base := slugify(headingText(h))
 				if base == "" {
 					// Nothing to derive a slug from — a heading of only
 					// punctuation, or one holding just an image. Fall back to

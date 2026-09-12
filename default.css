@@ -194,6 +194,24 @@ details.container.example { border-left: 3px solid var(--accent); }
 
 .container-title { font-weight: 600; margin: 0 0 0.5rem; }
 
+/* Status chips: a short marker attached to a claim or a heading. Sized in
+   em so one sitting in an h2 scales with it instead of shrinking to noise. */
+.chip {
+  display: inline-block;
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 0 0.55em;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--code-bg);
+  color: var(--muted);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.chip-proven, .chip-verified { color: var(--ok); border-color: var(--ok); }
+.chip-deprecated { color: var(--warn); border-color: var(--warn); }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }

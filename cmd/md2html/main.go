@@ -212,6 +212,7 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 	if !noTable {
 		ts = append(ts, md2html.TableScroll())
 	}
+	ts = append(ts, md2html.Chips())
 	if !noAnchor {
 		ts = append(ts, md2html.HeadingAnchors())
 	}
