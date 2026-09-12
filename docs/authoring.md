@@ -194,13 +194,20 @@ text, not a badge — and a bracketed word outside the vocabulary, like
 ### Section cross-references
 
 `§4.2` autolinks to whichever heading's visible text begins with the number
-`4.2`:
+`4.2` — followed by a space, or by the end of the heading:
 
 ```markdown
 ## 4.2 Rollback
 
 See §4.2 for details.   ->   <a class="xref" href="#42-rollback">§4.2</a>
 ```
+
+**That separator is part of the rule, and a trailing dot breaks it.** A
+heading written `## 4.2. Rollback` claims no number at all, because what
+follows `4.2` is a `.` rather than a space — so `§4.2` in prose stays plain
+text, silently. Number headings `4.2`, not `4.2.`. A heading that is
+*only* a number (`## 4.2.1`) is fine: the end of the heading is the
+separator.
 
 No heading claims that number: left as plain text. Two things opt out even
 when a number does match:

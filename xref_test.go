@@ -78,7 +78,7 @@ func TestSectionLinksHonorsExplicitHeadingID(t *testing.T) {
 // the rule is purely syntactic (digits followed by whitespace or end of
 // text), and nothing will write "§2026" unless it does mean that heading.
 func TestSectionNumbersRequiresSeparator(t *testing.T) {
-	root, err := parseFragment([]byte(`<h2 id="a">4.2 Rollback</h2><h3 id="b">2026 in review</h3><h4 id="c">4.2.1</h4>`))
+	root, err := parseFragment([]byte(`<h2 id="a">4.2 Rollback</h2><h3 id="b">2026 in review</h3><h4 id="c">4.2.1</h4><h2 id="d">4.3. Rollout</h2>`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +92,18 @@ func TestSectionNumbersRequiresSeparator(t *testing.T) {
 	// A heading that is only a number still counts: nothing follows it.
 	if m["4.2.1"] != "c" {
 		t.Errorf(`m["4.2.1"] = %q, want "c"`, m["4.2.1"])
+	}
+	// The separator rule cuts the other way too, and this is the case an
+	// author is most likely to hit by accident: "4.3." is a number
+	// followed by a dot, not by whitespace or end-of-heading, so the
+	// heading claims no number and a "§4.3" in prose stays literal text.
+	// headingNumRe cannot simply allow a trailing dot — "4.3." and "4.3"
+	// would then be the same reference, and a document that numbers both
+	// would resolve one of them to the wrong heading. Pinned here because
+	// the failure is silent at authoring time; docs/authoring.md says so
+	// out loud for the same reason.
+	if id, ok := m["4.3"]; ok {
+		t.Errorf(`m["4.3"] = %q, want absent — a trailing dot is not a separator`, id)
 	}
 }
 
