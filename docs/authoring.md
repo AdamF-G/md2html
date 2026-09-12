@@ -299,6 +299,18 @@ There is no escaping for a quote embedded in the caption's value —
 `caption="has \"quote\""` does not produce a caption containing a literal
 `"`. Write a caption without one instead.
 
+The caption's text runs through the same inline rewriters as any other
+prose: a status chip or a `§` cross-reference inside a caption renders as a
+badge or a link, exactly as it would in a paragraph, not as literal text.
+
+````markdown
+```go caption="[proven] auth handler"
+func handleAuth() {}
+```
+````
+
+renders a `<span class="chip chip-proven">` inside the `<figcaption>`.
+
 ### Heading ids and classes
 
 Headings get slugs automatically. Override when you want a stable anchor that

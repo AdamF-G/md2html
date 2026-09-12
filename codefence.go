@@ -121,9 +121,14 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 
 	if caption != "" {
 		w.WriteString(`<figure class="code-figure"><figcaption>`)
-		// The caption is author text, and it is being written into markup
-		// this function builds by hand rather than through goldmark's
-		// escaping writer.
+		// The caption is author text, HTML-escaped here because it is
+		// written into markup this function builds by hand rather than
+		// through goldmark's escaping writer. Escaping only guards against
+		// literal markup injection: parseFragment re-parses this
+		// <figcaption> like everything else in the tree, so its text nodes
+		// are ordinary prose by the time Chips and SectionLinks walk the
+		// document — a caption's "[proven]" or "§2.1" resolves the same
+		// way it would in body text, not as literal escaped brackets.
 		w.WriteString(gohtml.EscapeString(caption))
 		w.WriteString("</figcaption>")
 	}

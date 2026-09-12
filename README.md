@@ -126,8 +126,11 @@ out, err := md2html.Convert(src, md2html.Options{SourcePath: "doc.md"})
 
 `Options.Warn`, when set, receives one message per non-fatal problem found
 while converting a document — a container naming a kind that doesn't exist,
-so far. `Convert` never writes to stderr itself; the callback runs
-synchronously on the calling goroutine.
+so far — when `Transforms` is left nil, as in the example above. A caller
+who supplies their own `Transforms`, as below, builds that list itself and
+must pass the sink to `Containers` directly for it to see anything.
+`Convert` never writes to stderr itself; the callback runs synchronously on
+the calling goroutine.
 
 Add a transform by writing a `func(*html.Node) error`:
 
