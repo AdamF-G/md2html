@@ -268,3 +268,30 @@ func TestBrowserBackdropClickCloses(t *testing.T) {
 		t.Fatalf("chromedp: %v", err)
 	}
 }
+
+// An image already wrapped in a link keeps that link's behavior — the
+// author chose it already, and a second, conflicting click meaning would
+// override it.
+func TestBrowserLinkedImageNotWired(t *testing.T) {
+	page, err := Convert([]byte("[![big](big.png)](https://example.invalid)\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{
+		"index.html": page,
+		"big.png":    pngFixture(2000, 1500),
+	})
+
+	ctx := newBrowserCtx(t)
+	var expandable bool
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	if expandable {
+		t.Error("an image wrapped in <a> got .expandable; it should be left to the link")
+	}
+}
