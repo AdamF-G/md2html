@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -144,5 +145,52 @@ func TestRunInPlaceWritesBesideSource(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "docs/a.html")); err != nil {
 		t.Errorf("in-place output missing: %v", err)
+	}
+}
+
+func TestStringListSplitsAndAccumulates(t *testing.T) {
+	var l stringList
+	if err := l.Set("a,b"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if err := l.Set(" c "); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got := []string(l); !reflect.DeepEqual(got, []string{"a", "b", "c"}) {
+		t.Errorf("got %v, want [a b c]", got)
+	}
+}
+
+// Empty values would resolve to base itself, excluding the whole tree.
+func TestStringListDropsEmptyValues(t *testing.T) {
+	var l stringList
+	if err := l.Set("a,,b,"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if got := []string(l); !reflect.DeepEqual(got, []string{"a", "b"}) {
+		t.Errorf("got %v, want [a b]", got)
+	}
+}
+
+// End to end: an excluded subtree gets no .html written into it, and the
+// run still succeeds.
+func TestRunExcludeWritesNothingIntoExcludedTree(t *testing.T) {
+	root := tree(t, map[string]string{
+		"index.md":       "[d](./slides/deck.md)\n",
+		"slides/deck.md": "# Deck\n",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{"--exclude", "slides", root}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "slides/deck.html")); !os.IsNotExist(err) {
+		t.Errorf("wrote into excluded subtree: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "index.html")); err != nil {
+		t.Errorf("did not write index.html: %v", err)
+	}
+	if !strings.Contains(errb.String(), "excluded") {
+		t.Errorf("no exclusion warning on stderr: %s", errb.String())
 	}
 }

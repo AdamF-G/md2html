@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/AdamF-G/md2html"
@@ -14,6 +15,23 @@ import (
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// stringList is a flag.Value collecting a repeatable, comma-separable
+// option. Both spellings are accepted — "--exclude a --exclude b" and
+// "--exclude a,b" — because supporting only one reliably produces a
+// directory named "a,b" or a second flag that is silently ignored.
+type stringList []string
+
+func (l *stringList) String() string { return strings.Join(*l, ",") }
+
+func (l *stringList) Set(v string) error {
+	for _, part := range strings.Split(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			*l = append(*l, p)
+		}
+	}
+	return nil
 }
 
 // run is the testable entry point. It returns the process exit code.
@@ -32,8 +50,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 Usage:
   md2html [flags] <entry> [entry...]
 
-Entries may be files or directories. Links between documents are always
-followed, across directories, without limit. Output never leaves -o.
+Entries may be files or directories, and several may be given in one run:
+the emit set is their union, so an extra directory can be built for a
+single invocation without being added to a standing entry list. Links
+between documents are followed across directories, without limit unless
+--link-depth says otherwise, and never into an --exclude'd directory.
+Output never leaves -o.
 
 Flags:
 `)
@@ -51,6 +73,8 @@ Flags:
 		noMd     = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets = fs.Bool("no-assets", false, "do not rewrite asset links")
 	)
+	var exclude stringList
+	fs.Var(&exclude, "exclude", "directory prefix never to enter or write to (repeatable, comma-separated)")
 	// Go's flag package stops parsing at the first positional argument, so a
 	// plain fs.Parse would read "md2html ./docs -o ./site" as three entry
 	// points. Resume parsing after each positional so flags may appear
@@ -85,6 +109,7 @@ Flags:
 		Entries:   entries,
 		OutDir:    *outDir,
 		Depth:     *depth,
+		Exclude:   exclude,
 		NoMdLinks: *noMd,
 		NoAssets:  *noAssets,
 	})
