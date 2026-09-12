@@ -103,7 +103,7 @@ unrelated tools that share the name is never claimed.
 | `--no-external-links` | do not mark external links |
 | `--no-md-links` | do not rewrite `.md` links |
 | `--no-assets` | do not rewrite asset links |
-| `--exclude DIR` | never enter, seed, follow into, or write to `DIR` (relative to the base, or absolute); repeatable, or comma-separated |
+| `--exclude DIR` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute); repeatable, or comma-separated |
 
 ## Writing docs for it
 

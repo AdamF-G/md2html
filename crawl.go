@@ -20,7 +20,7 @@ type CrawlOptions struct {
 	OutDir string
 	// Depth bounds how many directory levels a directory entry seeds.
 	// 0 seeds only files directly inside it; -1 is unlimited. It never
-	// affects link traversal, which is always unlimited.
+	// affects link traversal; LinkDepth, below, bounds that instead.
 	Depth int
 	// NoMdLinks leaves document links unrewritten.
 	NoMdLinks bool
@@ -64,7 +64,9 @@ type Doc struct {
 
 // Warning is a non-fatal problem found during a run.
 type Warning struct {
-	// Src is the document the warning was raised while processing.
+	// Src is the document the warning was raised while processing, or, for
+	// a warning with no document to point at (an --exclude value that
+	// matches nothing on disk), the offending value itself.
 	Src string
 	// Message describes the problem.
 	Message string
@@ -144,15 +146,13 @@ func seed(entry string, depth int, excluded []string) (files []string, skipped i
 	if err != nil {
 		return nil, 0, err
 	}
-	var out []string
-	skippedCount := 0
 	err = filepath.WalkDir(rootAbs, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // unreadable subtree: skip, do not abort
 		}
 		if d.IsDir() {
 			if isExcluded(p, excluded) {
-				skippedCount++
+				skipped++
 				return filepath.SkipDir
 			}
 			if depth < 0 || p == rootAbs {
@@ -180,14 +180,14 @@ func seed(entry string, depth int, excluded []string) (files []string, skipped i
 			// Resolution can land a file inside an excluded subtree even
 			// though the walk reached it outside one, via a symlink.
 			if isExcluded(rp, excluded) {
-				skippedCount++
+				skipped++
 				return nil
 			}
-			out = append(out, rp)
+			files = append(files, rp)
 		}
 		return nil
 	})
-	return out, skippedCount, err
+	return files, skipped, err
 }
 
 // pathDepth counts separators in a cleaned relative path: "a" is 1,
@@ -207,18 +207,24 @@ func pathDepth(rel string) int {
 }
 
 // resolveExcludes turns each Exclude value into an absolute, cleaned,
-// symlink-resolved directory prefix.
+// symlink-resolved directory prefix, plus a warning for any value that
+// matches nothing on disk.
 //
 // A relative value is taken against base, which is why this runs after
 // commonAncestor rather than at the top of Crawl. Symlinks are resolved so
 // a subtree reached through a link is still recognized as the excluded one,
 // matching how every other path in the crawler is keyed. A value naming
-// nothing on disk is kept as a literal cleaned path rather than dropped:
-// excluding a directory that does not exist yet is harmless, whereas
-// silently ignoring a misspelled value would hand back a build that quietly
-// entered the subtree the caller was trying to protect.
-func resolveExcludes(vals []string, base string) []string {
+// nothing on disk is kept as a literal cleaned path rather than dropped —
+// excluding a directory that does not exist yet is harmless — but it is
+// warned about: a literal path that exists nowhere excludes nothing, which
+// is observationally identical to silently dropping it, and because a
+// relative value is resolved against base rather than against the entry
+// point that named it, a value like "docs/vendor" against entry "docs"
+// resolves to ".../docs/docs/vendor" and excludes nothing without the
+// warning saying why.
+func resolveExcludes(vals []string, base string) ([]string, []Warning) {
 	out := make([]string, 0, len(vals))
+	var warnings []Warning
 	for _, v := range vals {
 		v = strings.TrimSpace(v)
 		if v == "" {
@@ -228,13 +234,17 @@ func resolveExcludes(vals []string, base string) []string {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(base, p)
 		}
+		if _, statErr := os.Stat(p); statErr != nil {
+			warnings = append(warnings, Warning{v,
+				fmt.Sprintf("exclude %q matches nothing on disk", v)})
+		}
 		r, err := resolve(p)
 		if err != nil {
 			r = filepath.Clean(p)
 		}
 		out = append(out, r)
 	}
-	return out
+	return out, warnings
 }
 
 // Crawl discovers every document reachable from the entry points.
@@ -252,7 +262,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		entryAbs = append(entryAbs, p)
 	}
 	base := commonAncestor(entryAbs)
-	excluded := resolveExcludes(opt.Exclude, base)
+	excluded, excludeWarnings := resolveExcludes(opt.Exclude, base)
 
 	// queued pairs a document with its distance, in links, from the nearest
 	// seed. BFS dequeues in nondecreasing hop order, so the first time a
@@ -263,7 +273,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		hops int
 	}
 
-	res := &CrawlResult{Base: base}
+	res := &CrawlResult{Base: base, Warnings: excludeWarnings}
 	visited := map[string]bool{}
 	var queue []queued
 
@@ -317,21 +327,16 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		}
 	}
 	if found == 0 {
-		// Pruning excluded directories means an all-excluded tree no longer
-		// reaches the empty-queue guard below with a non-zero found: seed
-		// never walked far enough to count its files. skipped is the only
-		// way left to tell that apart from a tree with no Markdown at all.
+		// skipped can't tell "everything here was excluded" apart from "an
+		// excluded directory happened to be empty too": SkipDir is what
+		// makes pruning cheap, and it fires on the directory itself without
+		// looking inside, so skipped counts pruned paths, not files that
+		// would otherwise have been Markdown. The message can only claim
+		// exclusion was involved, not that it was the sole cause.
 		if skipped > 0 {
-			return nil, fmt.Errorf("no Markdown files found in entry points: every candidate path was excluded")
+			return nil, fmt.Errorf("no Markdown files found in entry points (some paths were excluded)")
 		}
 		return nil, fmt.Errorf("no Markdown files found in entry points")
-	}
-	// found counts what the entry points contain, before exclusion. A run
-	// whose every seed was excluded reaches here with a non-zero found and
-	// an empty queue, and would otherwise succeed having written nothing —
-	// indistinguishable, from the exit code, from a build that worked.
-	if len(queue) == 0 {
-		return nil, fmt.Errorf("every Markdown file in the entry points is excluded")
 	}
 
 	// linksBySrc caches the links extracted from each document during

@@ -194,6 +194,34 @@ func TestCrawlRefusesOutsideBaseInPlace(t *testing.T) {
 	}
 }
 
+// A seed that resolves outside the tree in in-place mode is refused with a
+// warning, not an error: the run emits nothing and says why. This was the
+// behavior before --exclude existed and must stay that way for callers who
+// set no exclusions at all.
+func TestCrawlOutOfTreeSeedInPlaceWarnsWithoutError(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"outside/real.md": "x",
+	})
+	docs := filepath.Join(root, "docs")
+	if err := os.MkdirAll(docs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "outside/real.md"),
+		filepath.Join(docs, "link.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	res, err := Crawl(CrawlOptions{Entries: []string{docs}, Depth: -1})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if len(res.Docs) != 0 {
+		t.Errorf("emitted %d docs, want none", len(res.Docs))
+	}
+	if len(res.Warnings) == 0 {
+		t.Error("no warning for the refused out-of-tree seed")
+	}
+}
+
 // mustCrawl fails the test on error instead of leaving a nil result to be
 // dereferenced into a panic.
 func mustCrawl(t *testing.T, opt CrawlOptions) *CrawlResult {
@@ -498,6 +526,41 @@ func TestCrawlExcludeAcceptsAbsolutePath(t *testing.T) {
 	}
 }
 
+// An --exclude value that matches nothing on disk excludes nothing, which
+// is silently indistinguishable from dropping it — easy to hit, since a
+// relative value is resolved against base rather than against whichever
+// entry point the caller had in mind. That must be warned about, while a
+// value that does resolve to something real stays quiet.
+func TestCrawlExcludeWarnsWhenValueMatchesNothing(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "x",
+		"docs/slides/deck.md": "y",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"slides", "nope-does-not-exist"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	var sawMissing, sawReal bool
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, "nope-does-not-exist") {
+			sawMissing = true
+		}
+		if strings.Contains(w.Message, "slides") {
+			sawReal = true
+		}
+	}
+	if !sawMissing {
+		t.Errorf("no warning naming the nonexistent exclude value, got %v", res.Warnings)
+	}
+	if sawReal {
+		t.Errorf("existing exclude value was warned about unnecessarily, got %v", res.Warnings)
+	}
+}
+
 // Excluding everything is a mistake worth failing on, not an empty build
 // that silently succeeds.
 func TestCrawlExcludeEverythingIsAnError(t *testing.T) {
@@ -578,8 +641,12 @@ func TestCrawlAllExcludedReportsExclusion(t *testing.T) {
 }
 
 // An empty tree is not an exclusion problem, and must not be reported as
-// one just because an unrelated --exclude was set.
-func TestCrawlEmptyTreeWithUnrelatedExcludeReportsNoFiles(t *testing.T) {
+// one just because an unrelated --exclude was set. Here "vendor" matches
+// nothing on disk, so the walk never reaches the SkipDir branch and
+// skipped stays 0 — this covers the no-pruning path only. See
+// TestCrawlEmptyTreeWithPrunedDirectoryMentionsExclusion for the case
+// where something was actually pruned.
+func TestCrawlEmptyTreeWithNoPruningReportsNoFiles(t *testing.T) {
 	root := writeTree(t, map[string]string{"docs/notes.txt": "x"})
 	_, err := Crawl(CrawlOptions{
 		Entries: []string{filepath.Join(root, "docs")},
@@ -591,6 +658,28 @@ func TestCrawlEmptyTreeWithUnrelatedExcludeReportsNoFiles(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "excluded") {
 		t.Errorf("error %q blames exclusion for an empty tree", err)
+	}
+}
+
+// A pruned directory bumps the skipped count whether or not it held any
+// Markdown, so an empty tree with a real excluded directory is reported as
+// possibly-exclusion rather than definitely-empty. SkipDir is what makes
+// pruning cheap, so the count can never know what was inside.
+func TestCrawlEmptyTreeWithPrunedDirectoryMentionsExclusion(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/notes.txt":         "x",
+		"docs/vendor/readme.txt": "y",
+	})
+	_, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"vendor"},
+	})
+	if err == nil {
+		t.Fatal("want an error when no Markdown is found")
+	}
+	if !strings.Contains(err.Error(), "excluded") {
+		t.Errorf("error %q does not mention exclusion", err)
 	}
 }
 
@@ -685,5 +774,40 @@ func TestCrawlLinkDepthNegativeFollowsNothing(t *testing.T) {
 	}
 	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
 		t.Errorf("got %v, want [docs/index.md]", got)
+	}
+}
+
+// Exclusion and the hop limit compose: a link inside the budget is still
+// refused for being excluded, and one beyond the budget is not followed at
+// all. The hop gate short-circuits before admit, so the out-of-budget link
+// produces no exclusion warning — nothing was followed either way.
+func TestCrawlExcludeAndLinkDepthCompose(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":    "[a](./a.md)",
+		"docs/a.md":        "[v](./vendor/x.md)\n[b](./b.md)",
+		"docs/b.md":        "end",
+		"docs/vendor/x.md": "owned elsewhere",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries:   []string{filepath.Join(root, "docs/index.md")},
+		Depth:     -1,
+		LinkDepth: 2,
+		Exclude:   []string{"vendor"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	want := []string{"docs/a.md", "docs/b.md", "docs/index.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	var warned bool
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, "./vendor/x.md") && strings.Contains(w.Message, "excluded") {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("no exclusion warning for the in-budget link, got %v", res.Warnings)
 	}
 }
