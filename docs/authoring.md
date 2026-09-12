@@ -96,36 +96,208 @@ one yourself.
 | `--depth` | unlimited |
 ```
 
-### Callouts and containers
+### Containers
 
-Fenced containers become `<div>`. **The braces are required.**
+Fenced containers become `<div>`, except two kinds which become collapsible
+`<details>`. Bare and braced forms are equivalent in element and classes:
 
 ```markdown
-::: {.callout}
+::: callout
 This renders as a styled callout box.
 :::
 
+::: {.callout}
+Same thing.
+:::
+```
+
+The shipped vocabulary is `callout`, `warning` and `card` (`<div>`), and
+`aside` and `example` (`<details>`):
+
+```markdown
+::: warning
+Overwrites state.
+:::
+```
+
+renders `<div class="callout callout-warning">`.
+
+**Only the bare form can carry a title**, written on the fence's opening
+line:
+
+```markdown
+::: aside Why this matters
+Because.
+:::
+```
+
+The braced form structurally cannot: goldmark's fence library merges the
+rest of the opening line into the container's first paragraph, so a title
+after `{.aside}` is indistinguishable from a first line of body text. Give
+up the brace, or give up the title.
+
+`aside` with no title falls back to "Aside" in its `<summary>`; `example`
+falls back to "Example", or "Example — Title" when one is given.
+
+**Classes merge, they never replace.** A braced container's extra classes
+and id survive alongside the kind's own:
+
+```markdown
 ::: {#note .callout .compact}
 An id and several classes.
 :::
 ```
 
-`::: {.callout}` and `:::{.callout}` both work. But this does not:
+renders `<div id="note" class="callout compact">`.
 
-```markdown
-::: warning        <- WRONG: silently emits <div> with no class at all
-```
+**Kind-matching inspects only the first class token.** `{.callout
+.compact}` normalizes; `{.compact .callout}` does not — `compact` is
+checked as the kind name, isn't one, and the whole class list is left
+exactly as written, unstyled. Put the kind word first.
 
-The bare form drops the name without warning, so you get an unstyled div and
-no error. Always use braces.
+Containers nest.
 
-**Prefer `.callout`.** It is the one container class the default stylesheet
-styles. `.warning`, `.note`, `.tip` and friends produce a correctly classed div
-that is visually identical to a plain paragraph unless you supply your own CSS
-with `--css`.
+An unknown bare kind (`::: house-style`) emits an unclassed `<div>` and the
+run warns. A braced class outside the vocabulary (`::: {.house-brand}`)
+emits a correctly classed, unstyled `<div>` — silently, since the author
+supplies their own CSS for it.
 
 Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
 to write and it drops you out of Markdown for the enclosed content.
+
+### Status chips
+
+A fixed vocabulary of bracketed words becomes a small badge, in body text
+or in a heading alike:
+
+```markdown
+[proven] [verified] [designed] [planned] [draft] [deprecated]
+```
+
+Each becomes `<span class="chip chip-proven">proven</span>` (and so on).
+Anything outside that list needs the escape hatch:
+
+```markdown
+[c:needs review]   ->   <span class="chip">needs review</span>
+```
+
+`[c:]` — no label — is left as literal text: an empty badge is worse than
+showing the author what they wrote.
+
+A chip on a heading never enters its slug or the page `<title>`:
+`## 4.2 Rollback [proven]` still gets `id="42-rollback"`, so relabeling or
+removing a marker later never rots an anchor or retitles the tab. A chip
+inside a code span or code block is inert — `` `[proven]` `` stays literal
+text, not a badge — and a bracketed word outside the vocabulary, like
+`[1]`, is never touched.
+
+### Section cross-references
+
+`§4.2` autolinks to whichever heading's visible text begins with the number
+`4.2`:
+
+```markdown
+## 4.2 Rollback
+
+See §4.2 for details.   ->   <a class="xref" href="#42-rollback">§4.2</a>
+```
+
+No heading claims that number: left as plain text. Two things opt out even
+when a number does match:
+
+- **A possessive scoping it to another document** — "the design doc's §7"
+  — is recognized and left literal. Any other cross-document phrasing
+  still needs an escape.
+- **A code span**: `` `§4.2` `` stays literal, same as any other inline
+  code.
+
+This resolves against heading ids after they are assigned, so an explicit
+`{#custom-id}` is what a reference to that heading's number resolves to.
+
+### Contents list
+
+`[[toc]]` alone on its own line — nothing else in the paragraph — becomes a
+flat `<nav class="toc">` listing every heading in the current document, in
+document order, each linking to its id:
+
+```markdown
+[[toc]]
+```
+
+Flat, not nested: heading level travels only as a `toc-h3`/`toc-h4`/… class
+on the `<li>`, so a document that jumps from `h2` to `h4` doesn't produce
+broken list nesting. Chips and the heading's own anchor link are excluded
+from the link text.
+
+The marker must be the paragraph's *entire* content. Wrapped in a link or a
+code span, it is left alone — `` `[[toc]]` `` and a link whose text happens
+to be `[[toc]]` both stay literal. A document with no linkable headings —
+none present, or built with `--no-anchors` — leaves the marker as literal
+text rather than deleting it, so the reader isn't left wondering where the
+list went.
+
+This is a per-page contents list only — see Traps for what is still out of
+scope.
+
+### Front matter
+
+A leading `---`-delimited block of flat `key: value` lines sets `title`,
+`subtitle` and `date`:
+
+```markdown
+---
+title: Reference
+subtitle: every new convention
+date: 2026-09-11
+---
+
+# Reference
+```
+
+Only those three keys do anything; any other key is silently stripped from
+the body and dropped. A repeated key keeps the last value. `subtitle` and
+`date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
+under the document's leading `<h1>` — body nodes, not a page-shell slot.
+
+**The block must be flat.** An indented (nested) value makes the whole
+thing fail to parse as front matter, and it falls through to being rendered
+as visible Markdown — an `<hr>` followed by whatever heading-like thing the
+leftover lines happen to form. That is intentionally noisy, so a malformed
+block is hard to miss.
+
+Without front matter, an italic line immediately after the leading `<h1>`
+is lifted into the same subtitle — but only when neither a subtitle nor a
+title was supplied some other way (front matter, or `Options` in library
+use):
+
+```markdown
+# Reference
+
+*every new convention*
+```
+
+### Code captions
+
+A `caption="…"` attribute in a fenced code block's info string renders a
+caption bar above the code, wrapping the block in a `<figure>`:
+
+````markdown
+```go caption="server.go"
+func main() {}
+```
+````
+
+renders `<figure class="code-figure"><figcaption>server.go</figcaption>`
+around the existing `<pre><code class="language-go">`.
+
+The caption may come before the language — `` ```caption="x.go" go `` still
+yields `class="language-go"` — since only the caption token is stripped
+out; the language is whatever token is left, not whatever is first. Every
+other info-string attribute is ignored, exactly as before.
+
+There is no escaping for a quote embedded in the caption's value —
+`caption="has \"quote\""` does not produce a caption containing a literal
+`"`. Write a caption without one instead.
 
 ### Heading ids and classes
 
@@ -216,22 +388,36 @@ With `--fragment` nothing is injected, matching the mermaid runtime.
 ## What the default theme styles
 
 Styled: headings and anchors, paragraphs, lists, tables, code and `<pre>`,
-blockquotes, `<hr>`, images, video, inline SVG, definition lists, and
-`.callout`.
+blockquotes, `<hr>`, images, video, inline SVG, definition lists, the shipped
+containers (`.callout`, `.callout-warning`, `.card`, `details.container`,
+`.example`), status chips, cross-references (`.xref`), the contents list
+(`nav.toc`), document metadata (`.subtitle`, `.docdate`), and code captions
+(`.code-figure`).
 
 Not styled: the footnote block, and task-list checkboxes.
 
-**Every class you write is inert unless the stylesheet names it.** `.callout`
-is the only one it does. A class on a container (`::: {.warning}`) or on a
-heading (`## Title {.lead}`) is faithfully emitted and then ignored — the
-markup is correct, the page looks unchanged. Write such classes only as hooks
-for a stylesheet you are actually going to supply.
+**A class you write is inert unless the stylesheet names it.** The shipped
+vocabulary above does; nothing else does. A class on a container outside
+that vocabulary (`::: {.house-brand}`) or on a heading (`## Title {.lead}`)
+is faithfully emitted and then ignored — the markup is correct, the page
+looks unchanged. Write such classes only as hooks for a stylesheet you are
+actually going to supply.
 
 Supply `--css mine.css` to replace the stylesheet entirely.
 
 ## Traps
 
-- **`::: name` without braces** silently produces an unclassed div.
+- **Container kind-matching checks only the first class token.** `{.compact
+  .callout}` is not recognized as `callout`; put the kind word first:
+  `{.callout .compact}`. A bare unknown kind (`::: house-style`) warns; a
+  braced unknown class does not.
+- **A cross-reference scoped to another document may still autolink.** Only
+  the possessive phrasing ("the design doc's §7") is recognized as
+  cross-document. Write `` `§7` `` to keep any other phrasing literal.
+- **Front matter must be flat `key: value`.** A nested value makes the whole
+  block render as visible text above the title rather than being parsed.
+- **Only `caption=` is read from a code fence's info string.** Every other
+  attribute is ignored, exactly as before.
 - **Linking to `.html`** is never rewritten and will usually 404.
 - **`a.md` and `a.markdown` in one directory** both map to `a.html`, and the
   build refuses the whole run rather than racing two writes to one path.
@@ -244,9 +430,10 @@ Supply `--css mine.css` to replace the stylesheet entirely.
   target is never converted, so the link resolves to whatever that subtree's
   own tool produced — which is the point — but nothing checks that it did.
   The run warns once per such link.
-- **No navigation is generated.** There is no sidebar, index, or table of
-  contents. Write your own contents list with anchor links — the heading ids
-  are stable and predictable, so this is reliable.
+- **No cross-document navigation is generated.** There is still no sidebar
+  or site index. `[[toc]]` gives a per-page contents list; anything that
+  reaches across documents you still write yourself with anchor links — the
+  heading ids are stable and predictable, so this is reliable.
 - **Several entry points build as one set.** `md2html -o ./site ./docs
   ./notes` emits both trees into one output root, with links between them
   rewritten. Nothing has to be added to a standing entry list to include a

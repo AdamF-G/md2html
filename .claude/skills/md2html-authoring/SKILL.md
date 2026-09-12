@@ -8,25 +8,27 @@ description: Use when writing or editing Markdown that will be converted to HTML
 ## Overview
 
 `md2html` converts a Markdown tree to HTML. Several of its features are not
-discoverable from the README, and two of them fail silently — you get valid
+discoverable from the README, and one of them fails silently — you get valid
 output that quietly lacks what you asked for, with no warning and a zero exit.
 
 **Read `docs/authoring.md` in this repo before writing the page.** It is the
 full reference, and every claim in it is verified against the binary.
 
-## The two silent failures
+## The remaining silent failure
 
-Both produce working output with no error, so nothing tells you they happened.
-
-**A container without braces loses its class.**
+**A container kind outside the shipped set has no styling.**
 
 ```markdown
-::: {.callout}     correct   -> <div class="callout">
-::: warning        WRONG     -> <div> with no class at all
+::: callout        -> <div class="callout">
+::: {.callout}     -> <div class="callout">          (same thing)
+::: house-style    -> <div>, and the run warns
 ```
 
-Use `.callout` specifically: it is the only container class the default
-stylesheet styles. Other names give you a correctly classed but unstyled div.
+The shipped kinds are `callout`, `warning`, `card`, `aside` and `example`.
+`aside` and `example` are collapsible `<details>`; the brace-free form takes
+a title on the fence line (`::: aside Why this matters`). A braced class
+outside the set still emits a correctly classed but unstyled div, silently —
+that is deliberate, since the author supplies the CSS.
 
 **A link to `.html` is never rewritten.**
 
@@ -53,15 +55,24 @@ not for images.
 
 ## What has no shortcut
 
-There is no navigation, sidebar, or table-of-contents generation. Write the
-contents list yourself with anchor links; heading slugs are stable and keep
-letters from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
+There is no sidebar or site index, and no cross-document navigation. A
+per-page contents list does exist — `[[toc]]` alone on a line — but heading
+slugs are still worth knowing: they are stable and keep letters from any
+script, so `## 日本語の見出し` yields `#日本語の見出し`.
 
 ## Quick reference
 
 | Need | Write |
 |---|---|
-| Callout | `::: {.callout}` … `:::` |
+| Callout | `::: callout` … `:::` |
+| Warning | `::: warning` … `:::` |
+| Collapsible aside | `::: aside Title` … `:::` |
+| Worked example | `::: example Title` … `:::` |
+| Status marker | `[proven]`, or `[c:any label]` |
+| Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |
+| Contents list | `[[toc]]` alone on a line |
+| Title/subtitle/date | `---` front matter, or an italic line under the H1 |
+| Code caption | ` ```go caption="server.go" ` |
 | Stable anchor | `## Title {#my-id}` |
 | Diagram | `` ```mermaid `` fence |
 | Cross-document link | `[x](./other.md)` — never `.html` |

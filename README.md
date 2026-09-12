@@ -13,7 +13,12 @@ md2html ./docs -o ./site
 Walks your docs, follows links between documents across directories, and
 writes a browsable HTML tree. Tables get scroll containers, headings get
 anchors, `.md` links become `.html` links, and mermaid fences render as
-diagrams.
+diagrams. Markdown also gets a few extras beyond CommonMark/GFM: fenced
+containers (`::: callout` … `:::`) for callouts, warnings, cards and
+collapsible asides/examples; `[proven]`-style status chips; `§4.2`
+cross-references that autolink to numbered headings; a `[[toc]]` marker for
+a per-page contents list; `title`/`subtitle`/`date` front matter; and a
+`caption="…"` attribute on code fences.
 
 The one thing a generated page fetches at view time is MermaidJS, and only
 a page that actually contains a diagram: it loads a pinned build from a CDN.
@@ -108,7 +113,7 @@ unrelated tools that share the name is never claimed.
 ## Writing docs for it
 
 Callouts, diagrams, heading attributes, footnotes and definition lists all
-work, and two of them fail silently if you get the syntax wrong. See
+work, and one of them fails silently if you get the syntax wrong. See
 [docs/authoring.md](./docs/authoring.md).
 
 ## Library use
@@ -118,6 +123,11 @@ import "github.com/AdamF-G/md2html"
 
 out, err := md2html.Convert(src, md2html.Options{SourcePath: "doc.md"})
 ```
+
+`Options.Warn`, when set, receives one message per non-fatal problem found
+while converting a document — a container naming a kind that doesn't exist,
+so far. `Convert` never writes to stderr itself; the callback runs
+synchronously on the calling goroutine.
 
 Add a transform by writing a `func(*html.Node) error`:
 
