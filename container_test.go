@@ -153,3 +153,117 @@ func TestContainerBracedKindKeepsExtraClassesAndId(t *testing.T) {
 		t.Errorf("compact class dropped\ngot: %s", got)
 	}
 }
+
+func TestContainerBareTitleBecomesTitleParagraph(t *testing.T) {
+	got := convert(t, "::: callout Read this first\nbody text\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title">Read this first</p>`) {
+		t.Errorf("no title paragraph\ngot: %s", got)
+	}
+	if !strings.Contains(got, "body text") {
+		t.Errorf("body lost\ngot: %s", got)
+	}
+	if strings.Contains(got, "Read this first\nbody text") {
+		t.Errorf("title not separated from body\ngot: %s", got)
+	}
+}
+
+// Inline Markdown in the title is already parsed by the time the transform
+// sees it, so it survives as markup rather than as escaped text. R14: the
+// space between the code span and the following word must survive too —
+// only the title's outer edges get trimmed, never whitespace between
+// inline nodes — so this asserts the full rendered title, not just that a
+// <code> element is present somewhere in it.
+func TestContainerTitleKeepsInlineMarkdown(t *testing.T) {
+	got := convert(t, "::: callout Read `this` first\nbody\n:::\n", nil)
+	want := `<p class="container-title">Read <code>this</code> first</p>`
+	if !strings.Contains(got, want) {
+		t.Errorf("title malformed\nwant substring: %s\ngot: %s", want, got)
+	}
+}
+
+// No title on the fence line means no title paragraph — not an empty one.
+func TestContainerNoTitleEmitsNoTitleParagraph(t *testing.T) {
+	got := convert(t, "::: callout\nbody\n:::\n", nil)
+	if strings.Contains(got, "container-title") {
+		t.Errorf("emitted an empty title\ngot: %s", got)
+	}
+}
+
+// A title with a blank line after it leaves the first paragraph empty; it
+// must be removed rather than rendered as <p></p>.
+func TestContainerTitleWithBlankLineDropsEmptyParagraph(t *testing.T) {
+	got := convert(t, "::: callout Heads up\n\nbody\n:::\n", nil)
+	if strings.Contains(got, "<p></p>") {
+		t.Errorf("empty paragraph left behind\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<p class="container-title">Heads up</p>`) {
+		t.Errorf("no title\ngot: %s", got)
+	}
+}
+
+// The braced form keeps today's semantics exactly: its first line is body,
+// because nothing can tell it from a title.
+func TestContainerBracedFormNeverLiftsATitle(t *testing.T) {
+	got := convert(t, "::: {.callout}\nfirst line\nsecond line\n:::\n", nil)
+	if strings.Contains(got, "container-title") {
+		t.Errorf("braced form lifted a title\ngot: %s", got)
+	}
+}
+
+func TestContainerAsideIsCollapsible(t *testing.T) {
+	got := convert(t, "::: aside Why this matters\nbecause\n:::\n", nil)
+	if !strings.Contains(got, `<details class="container aside">`) {
+		t.Errorf("not a details element\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("no summary\ngot: %s", got)
+	}
+	if !strings.Contains(got, "because") {
+		t.Errorf("body lost\ngot: %s", got)
+	}
+}
+
+// A collapsible kind with no title still needs a summary, or the disclosure
+// triangle has nothing to label it.
+func TestContainerAsideWithoutTitleUsesFallbackSummary(t *testing.T) {
+	got := convert(t, "::: aside\nbecause\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Aside</summary>") {
+		t.Errorf("no fallback summary\ngot: %s", got)
+	}
+}
+
+// The example kind is the same shape with a different label prefix.
+func TestContainerExamplePrefixesItsSummary(t *testing.T) {
+	got := convert(t, "::: example Rolling back\nsteps\n:::\n", nil)
+	if !strings.Contains(got, `<details class="container example">`) {
+		t.Errorf("not a details element\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<summary>Example — Rolling back</summary>") {
+		t.Errorf("no prefixed summary\ngot: %s", got)
+	}
+}
+
+func TestContainerExampleWithoutTitleIsJustThePrefix(t *testing.T) {
+	got := convert(t, "::: example\nsteps\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Example</summary>") {
+		t.Errorf("no prefix-only summary\ngot: %s", got)
+	}
+}
+
+// R7: braced collapsible kinds get the same <details> treatment as bare
+// ones — the plan calls for the shipped kinds to behave symmetrically in
+// both spellings, and only the frozen callout keeps its div. The braced
+// form never lifts a title (see TestContainerBracedFormNeverLiftsATitle),
+// so the summary falls back exactly as a titleless bare aside's would.
+func TestContainerBracedAsideIsCollapsible(t *testing.T) {
+	got := convert(t, "::: {.aside}\nSomething\n:::\n", nil)
+	if !strings.Contains(got, `<details class="container aside">`) {
+		t.Errorf("braced aside is not a details element\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<summary>Aside</summary>") {
+		t.Errorf("no fallback summary\ngot: %s", got)
+	}
+	if !strings.Contains(got, "Something") {
+		t.Errorf("body lost\ngot: %s", got)
+	}
+}

@@ -174,16 +174,73 @@ func Containers(warn func(string)) Transform {
 	}}
 }
 
-// applyKind gives a container its element and classes. p is the first
-// paragraph for a brace-free container, whose kind word has already been
-// stripped, or nil for a braced one; Task 3 uses it to lift a title.
+// detachTitle removes and returns the inline nodes that made up the rest of
+// a brace-free container's opening fence line. The kind word has already
+// been stripped from p's leading text node by the caller.
+//
+// goldmark merges the text after ":::" with the next source line into one
+// paragraph, so the first newline among p's direct children is exactly the
+// end of the fence line. That boundary is only trustworthy for the
+// brace-free form, where the leading word has already proven this paragraph
+// began on the fence line; the braced form is ambiguous and never gets here.
+//
+// Only direct children are scanned. Emphasis opened on the fence line and
+// closed on the next one would carry the newline inside an element, and the
+// title then runs to the following top-level newline — a title containing a
+// newline, which HTML collapses to a space. Harmless, and not worth cloning
+// elements across the split to avoid.
+//
+// Whitespace is trimmed only at the title's two outer edges: the trailing
+// space before the newline here, and (via the empty-remnant check below)
+// the leading space firstWord left behind after removing the kind word.
+// Whitespace between inline nodes — e.g. the space between a `code` span
+// and the word after it — is part of the title's own text and must survive
+// untouched, or the rendered title would run words together.
+func detachTitle(p *html.Node) []*html.Node {
+	var title []*html.Node
+	for c := p.FirstChild; c != nil; {
+		next := c.NextSibling
+		if c.Type == html.TextNode {
+			if i := strings.IndexByte(c.Data, '\n'); i >= 0 {
+				head := strings.TrimRight(c.Data[:i], " \t")
+				c.Data = c.Data[i+1:]
+				if head != "" {
+					title = append(title, &html.Node{Type: html.TextNode, Data: head})
+				}
+				return title
+			}
+			if len(title) == 0 && strings.TrimSpace(c.Data) == "" {
+				// The empty (or whitespace-only) remnant left behind after
+				// firstWord stripped the kind word and its separating
+				// space — not a real leading space in the title, so it
+				// must not become one.
+				p.RemoveChild(c)
+				c = next
+				continue
+			}
+		}
+		p.RemoveChild(c)
+		title = append(title, c)
+		c = next
+	}
+	// No newline anywhere: the whole paragraph was the opening fence line.
+	return title
+}
+
+// applyKind gives a container its element, classes and — for a brace-free
+// container with a title on the fence line — its title paragraph or summary.
+// p is that container's first paragraph with the kind word already stripped,
+// or nil for a braced container, which never gets a title.
 //
 // A braced container may already carry classes of its own — {#note .callout
 // .compact} is documented and merges to class="callout compact" — so this
 // merges the kind's classes in rather than overwriting the attribute, with
 // the kind's classes first and every token de-duplicated. Overwriting would
 // silently discard an author's extra class on a shipping, documented
-// syntax.
+// syntax. toDetails below carries div's full attribute set (including this
+// merged class, and anything else like an id) forward onto the replacement
+// <details> element, so this merge is what a collapsible kind ends up
+// wearing too.
 func applyKind(div *html.Node, k containerKind, p *html.Node) {
 	existing, _ := attr(div, "class")
 	seen := map[string]bool{}
@@ -195,6 +252,64 @@ func applyKind(div *html.Node, k containerKind, p *html.Node) {
 		}
 	}
 	setAttr(div, "class", strings.Join(tokens, " "))
+
+	var title []*html.Node
+	if p != nil {
+		title = detachTitle(p)
+		if p.FirstChild == nil {
+			// The fence line was the paragraph's entire content.
+			p.Parent.RemoveChild(p)
+		}
+	}
+
+	if k.tag == "details" {
+		toDetails(div, k, title)
+		return
+	}
+	if len(title) > 0 {
+		tp := &html.Node{Type: html.ElementNode, DataAtom: atom.P, Data: "p",
+			Attr: []html.Attribute{{Key: "class", Val: "container-title"}}}
+		for _, n := range title {
+			tp.AppendChild(n)
+		}
+		div.InsertBefore(tp, div.FirstChild)
+	}
+}
+
+// toDetails rebuilds a container as a <details> with a <summary>.
+//
+// The element has to be replaced rather than relabeled: x/net/html keys
+// rendering off DataAtom and Data, and a <div> cannot simply become a
+// <details> in place without leaving one of the two stale. div's Attr slice
+// — already carrying the merged class from applyKind, plus anything else
+// the author wrote, like an id — is reused as-is rather than rebuilt from
+// k.class alone, so a braced collapsible container's extra attributes
+// survive the rebuild.
+func toDetails(div *html.Node, k containerKind, title []*html.Node) {
+	d := &html.Node{Type: html.ElementNode, DataAtom: atom.Details, Data: "details", Attr: div.Attr}
+
+	sum := &html.Node{Type: html.ElementNode, DataAtom: atom.Summary, Data: "summary"}
+	switch {
+	case k.prefix != "" && len(title) > 0:
+		sum.AppendChild(&html.Node{Type: html.TextNode, Data: k.prefix + " — "})
+	case k.prefix != "":
+		sum.AppendChild(&html.Node{Type: html.TextNode, Data: k.prefix})
+	case len(title) == 0:
+		sum.AppendChild(&html.Node{Type: html.TextNode, Data: k.fallback})
+	}
+	for _, n := range title {
+		sum.AppendChild(n)
+	}
+	d.AppendChild(sum)
+
+	for c := div.FirstChild; c != nil; {
+		next := c.NextSibling
+		div.RemoveChild(c)
+		d.AppendChild(c)
+		c = next
+	}
+	div.Parent.InsertBefore(d, div)
+	div.Parent.RemoveChild(div)
 }
 
 // knownKindList renders the vocabulary for a warning message, in a stable

@@ -165,14 +165,34 @@ dialog.media-lightbox svg {
 
 /* An always-visible highlighted card: a box rather than a margin rail, for
    content that is a thing in its own right rather than an aside on the
-   paragraph above it. */
-.card {
+   paragraph above it. Shares its border and margin with the collapsible
+   containers below — both are boxed asides, they just disclose differently. */
+.card, details.container {
   border: 1px solid var(--rule);
+  margin: 1.5rem 0;
+}
+.card {
   background: var(--code-bg);
   border-radius: 8px;
   padding: 1rem 1.25rem;
-  margin: 1.5rem 0;
 }
+
+/* Collapsible containers. <details> gives open/closed state, keyboard
+   access and find-in-page expansion natively; a scripted accordion would
+   give up all three. */
+details.container {
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+}
+details.container > summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin: 0.25rem 0;
+}
+details.container[open] > summary { margin-bottom: 0.75rem; }
+details.container.example { border-left: 3px solid var(--accent); }
+
+.container-title { font-weight: 600; margin: 0 0 0.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
