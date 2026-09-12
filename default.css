@@ -228,3 +228,18 @@ nav.toc li { margin: 0.15rem 0; }
 nav.toc .toc-h3 { padding-left: 1.25rem; }
 nav.toc .toc-h4 { padding-left: 2.5rem; }
 nav.toc .toc-h5, nav.toc .toc-h6 { padding-left: 3.75rem; }
+
+/* Document metadata sits under the title, where a reader expects a
+   standfirst — not above it, which is why these are body nodes rather than
+   a slot in the page shell. */
+p.subtitle {
+  font-size: 1.15rem;
+  color: var(--muted);
+  margin: -0.25rem 0 0.5rem;
+  text-wrap: balance;
+}
+p.docdate {
+  color: var(--muted);
+  font-size: 0.9em;
+  margin: 0 0 2.5rem;
+}

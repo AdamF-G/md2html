@@ -90,6 +90,11 @@ func newParser() goldmark.Markdown {
 
 // Convert renders Markdown to HTML, running transforms over the parsed tree.
 func Convert(src []byte, opt Options) ([]byte, error) {
+	// Front matter comes off the bytes: a "---" block is already valid
+	// Markdown, so by the time a tree exists it has become an <hr> and a
+	// setext heading, with no way back to the key/value lines.
+	meta, src := splitFrontMatter(src)
+
 	var buf bytes.Buffer
 	if err := newParser().Convert(src, &buf); err != nil {
 		return nil, err
@@ -101,10 +106,25 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 
 	// Before transforms: HeadingAnchors would otherwise contribute its "#"
 	// anchor text to the derived title.
+	explicitTitle := opt.Title != "" || meta["title"] != ""
 	title := opt.Title
+	if title == "" {
+		title = meta["title"]
+	}
 	if title == "" {
 		title = extractTitle(root, opt.SourcePath)
 	}
+
+	// Also before transforms, so the subtitle paragraph is an ordinary part
+	// of the tree by the time anything walks it. The italic-line lift is a
+	// fallback for documents that declare neither a subtitle nor a title —
+	// gating it on subtitle alone would let it eat an italic line of body
+	// text out from under a document that only omitted a subtitle.
+	subtitle := meta["subtitle"]
+	if subtitle == "" && !explicitTitle {
+		liftSubtitle(root)
+	}
+	applyDocMeta(root, subtitle, meta["date"])
 
 	transforms := opt.Transforms
 	if transforms == nil {
