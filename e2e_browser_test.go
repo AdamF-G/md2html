@@ -19,11 +19,14 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io/fs"
 	"log"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -367,5 +370,123 @@ func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
 	}
 	if mediaDialogOpen {
 		t.Error("clicking an svg inside pre.mermaid opened dialog.media-lightbox; it should be left to mermaidRuntime")
+	}
+}
+
+// A real ```mermaid fence, rendered by the actual vendored library (not the
+// hand-authored fixture TestBrowserSvgInsideMermaidPreExcluded uses above),
+// must become expandable and open dialog.mermaid-lightbox on click, with the
+// clone carrying its real viewBox-derived size — proving mermaidRuntime's
+// clone-sizing logic (see its doc comment in page.go) against genuine
+// mermaid output rather than a fixture shaped by hand to match it.
+//
+// mermaid.esm.min.mjs is not a self-contained bundle: it's a ~30KB loader
+// that lazily imports per-diagram chunks from ./chunks/mermaid.esm.min/ at
+// runtime, as relative specifiers resolved against wherever the entrypoint
+// itself was fetched from. Since the entrypoint is served here at
+// vendor/mermaid.esm.min.mjs, those relative imports resolve against
+// vendor/chunks/mermaid.esm.min/, so the whole testdata/vendor tree is
+// walked and republished under vendor/ — renaming only the versioned
+// entrypoint file — rather than hardcoding the chunk list, which would
+// silently rot on a re-vendor. Only the chunks a `graph LR` flowchart needs
+// are vendored (a deliberate choice to keep the module zip small), so this
+// test sticks to that diagram type.
+func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
+	// mime.TypeByExtension(".mjs") already returns "text/javascript" on
+	// macOS, via the system's own mime.types — so this call is a no-op
+	// there. It's the portable fix for platforms without that
+	// mapping: Chrome refuses to execute a module script served with the
+	// wrong MIME type. mime.AddExtensionType is process-global with no way
+	// to restore the previous mapping — acceptable in a test binary, but a
+	// surprise if a reader assumes it's scoped to this test.
+	mime.AddExtensionType(".mjs", "text/javascript")
+
+	dir, baseURL := serveDir(t)
+
+	vendorRoot := filepath.Join("testdata", "vendor")
+	vendorFiles := map[string][]byte{}
+	err := filepath.WalkDir(vendorRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(vendorRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "mermaid-11.17.2.esm.min.mjs" {
+			rel = "mermaid.esm.min.mjs"
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		vendorFiles["vendor/"+filepath.ToSlash(rel)] = content
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", vendorRoot, err)
+	}
+	writeFiles(t, dir, vendorFiles)
+
+	original := mermaidCDN
+	mermaidCDN = baseURL + "/vendor/mermaid.esm.min.mjs"
+	t.Cleanup(func() { mermaidCDN = original })
+
+	page, err := Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	// The generated page's only reference to a mermaid build is this literal
+	// import string, baked in by mermaidRuntime at the Convert call above.
+	// Confirming it names our local server — not the live jsdelivr CDN,
+	// which a test machine may well be able to reach — rules out a false
+	// green from a render served over the network instead of from the
+	// vendored tree actually under test.
+	if !bytes.Contains(page, []byte(`import mermaid from "`+mermaidCDN+`"`)) {
+		t.Fatal("generated page does not import mermaid from the local test server")
+	}
+	writeFiles(t, dir, map[string][]byte{"index.html": page})
+
+	ctx := newBrowserCtx(t)
+	var roleDescription string
+	var roleOK bool
+	var widthOK, heightOK bool
+	var width, height string
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		// Mermaid inserts the <svg> before it finishes writing this
+		// attribute onto it, so waiting on the bare svg selector races the
+		// attribute write; waiting on the attribute-selector variant instead
+		// blocks until it's actually there.
+		chromedp.WaitVisible(`pre.mermaid svg[aria-roledescription]`, chromedp.ByQuery),
+		chromedp.AttributeValue(`pre.mermaid svg`, "aria-roledescription", &roleDescription, &roleOK, chromedp.ByQuery),
+		chromedp.Click(`pre.mermaid`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.WaitVisible(`dialog.mermaid-lightbox[open]`, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.mermaid-lightbox svg`, "width", &width, &widthOK, chromedp.ByQuery),
+		chromedp.AttributeValue(`dialog.mermaid-lightbox svg`, "height", &height, &heightOK, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// aria-roledescription="flowchart-v2" is a marker only mermaid's own
+	// flowchart renderer writes onto its output SVG; neither the
+	// hand-authored fixture in TestBrowserSvgInsideMermaidPreExcluded nor a
+	// silently-failed render would carry it, so this is the positive check
+	// that the vendored library actually rendered this diagram.
+	if !roleOK || roleDescription != "flowchart-v2" {
+		t.Fatalf("pre.mermaid svg aria-roledescription = %q, ok=%v; want %q — real mermaid render never happened", roleDescription, roleOK, "flowchart-v2")
+	}
+	if !widthOK || !heightOK {
+		t.Fatal("cloned <svg> in the mermaid dialog has no width/height attribute")
+	}
+	// Parsed as numbers, comfortably above zero: proof they came from a real
+	// viewBox on a real rendered diagram, not merely non-empty strings.
+	widthNum, werr := strconv.ParseFloat(width, 64)
+	heightNum, herr := strconv.ParseFloat(height, 64)
+	if werr != nil || herr != nil || widthNum <= 10 || heightNum <= 10 {
+		t.Errorf("cloned svg size = %sx%s, want real dimensions from the viewBox", width, height)
 	}
 }
