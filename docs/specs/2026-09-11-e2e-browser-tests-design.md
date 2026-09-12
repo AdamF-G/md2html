@@ -43,8 +43,16 @@ builds.
 ```
 e2e_browser_test.go        //go:build e2e_browser — the new test file
 testdata/vendor/
-  mermaid-11.17.2.esm.min.mjs   vendored copy of the pinned CDN build
+  mermaid-11.17.2.esm.min.mjs   vendored entrypoint of the pinned CDN build
+  chunks/mermaid.esm.min/...   the per-diagram chunks that entrypoint imports
 ```
+
+`mermaid.esm.min.mjs` is not a self-contained bundle — it's a ~30 KB
+loader that lazily imports per-diagram chunks from `./chunks/...` at
+runtime. Only the chunks a `graph LR` flowchart actually needs are
+vendored, a deliberate trade to keep the module zip small (since
+`testdata/` ships in it), not an oversight: the full vendored tree is 27
+files and 0.82 MiB, not the 30 KB the entrypoint alone would suggest.
 
 `chromedp` lands in `go.mod`, but only test files import it, and Go never
 compiles test files into a non-test build — `go install
@@ -96,8 +104,8 @@ func pngFixture(w, h int) []byte
 
 Synthesizes a solid-color PNG at an exact pixel size with the stdlib
 `image`/`image/png` packages. No binary test images are committed to the
-repo; only the mermaid bundle needs that treatment, because it can't be
-synthesized.
+repo; only the vendored mermaid tree needs that treatment, because it
+can't be synthesized.
 
 ### `mermaidCDN` becomes injectable
 
@@ -140,7 +148,14 @@ default `go test ./...` run, not just in the opt-in browser suite.
    `<pre class="mermaid"><svg>…</svg></pre>` fixture (not a real mermaid
    render — just that DOM shape) confirms the media-expand runtime's
    exclusion filter in isolation, without needing mermaid to run at all.
-6. **`TestBrowserMermaidDiagramExpandsOnClick`** — a real ` ```mermaid `
+6. **`TestBrowserSvgInsideExpandsOnClick`** — a hand-authored inline
+   `<svg>`, not inside `pre.mermaid`, rendered below its own viewBox size
+   gets `.expandable`; clicking it opens `dialog.media-lightbox[open]`
+   containing a cloned `<svg>` with explicit `width`/`height` attributes
+   taken from the viewBox, not the displayed size — the positive
+   counterpart to test 5, since that test alone would pass just as well if
+   the SVG branch of `naturalSize` were removed entirely.
+7. **`TestBrowserMermaidDiagramExpandsOnClick`** — a real ` ```mermaid `
    fence, served against the vendored library so it actually renders,
    opens `dialog.mermaid-lightbox[open]` on click with a cloned SVG
    carrying explicit width/height from its viewBox.

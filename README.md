@@ -123,6 +123,19 @@ out, err := md2html.Convert(src, md2html.Options{Transforms: ts})
 Transforms run over a real HTML tree, so they reach hand-written raw HTML
 in your Markdown as well as generated markup.
 
+## Development
+
+`go test ./...` needs no browser. A separate, opt-in suite drives real
+headless Chrome to exercise the click-to-expand JavaScript runtimes end to
+end:
+
+```bash
+go test -tags e2e_browser ./...
+```
+
+This requires Chrome or Chromium installed locally; it is not wired into
+any CI.
+
 ## License
 
 MIT
