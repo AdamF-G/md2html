@@ -388,3 +388,129 @@ func TestCrawlRefusesDuplicateOutputPaths(t *testing.T) {
 		}
 	}
 }
+
+// A link into an excluded subtree must not pull the target in, and must
+// leave the href exactly as written so the other tool's output still
+// resolves.
+func TestCrawlExcludeRefusesLinkTarget(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "[slides](./slides/deck.md)\n[ok](./ok.md)",
+		"docs/slides/deck.md": "owned by another tool",
+		"docs/ok.md":          "fine",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs/index.md")},
+		Depth:   -1,
+		Exclude: []string{"slides"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	want := []string{"docs/index.md", "docs/ok.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	var idx *Doc
+	for i := range res.Docs {
+		if strings.HasSuffix(res.Docs[i].Src, "index.md") {
+			idx = &res.Docs[i]
+		}
+	}
+	if idx == nil {
+		t.Fatal("index.md not emitted")
+	}
+	if repl, mapped := idx.LinkMap["./slides/deck.md"]; mapped {
+		t.Errorf("excluded link was rewritten to %q, want left as written", repl)
+	}
+	if idx.LinkMap["./ok.md"] != "ok.html" {
+		t.Errorf("non-excluded link map = %q, want %q", idx.LinkMap["./ok.md"], "ok.html")
+	}
+}
+
+// The refusal is reported, not silent: a link that stops resolving to a
+// generated page is something the author needs to know about.
+func TestCrawlExcludeWarnsOnLinkTarget(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "[slides](./slides/deck.md)",
+		"docs/slides/deck.md": "x",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs/index.md")},
+		Depth:   -1,
+		Exclude: []string{"slides"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	var found bool
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, "./slides/deck.md") && strings.Contains(w.Message, "excluded") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no exclusion warning, got %v", res.Warnings)
+	}
+}
+
+// Seeding an excluded subtree is silent: the caller asked for the
+// exclusion, and naming every file inside it would bury the warnings that
+// matter under one line per excluded document.
+func TestCrawlExcludeSkipsSeedsSilently(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "no links",
+		"docs/slides/deck.md": "x",
+		"docs/slides/more.md": "y",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"slides"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
+		t.Errorf("got %v, want [docs/index.md]", got)
+	}
+	if len(res.Warnings) != 0 {
+		t.Errorf("excluded seeds warned: %v", res.Warnings)
+	}
+}
+
+// An absolute --exclude value is honored as given, rather than being
+// joined onto base a second time.
+func TestCrawlExcludeAcceptsAbsolutePath(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "x",
+		"docs/slides/deck.md": "y",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{filepath.Join(root, "docs/slides")},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
+		t.Errorf("got %v, want [docs/index.md]", got)
+	}
+}
+
+// Excluding everything is a mistake worth failing on, not an empty build
+// that silently succeeds.
+func TestCrawlExcludeEverythingIsAnError(t *testing.T) {
+	root := writeTree(t, map[string]string{"docs/slides/deck.md": "x"})
+	_, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"slides"},
+	})
+	if err == nil {
+		t.Fatal("want error when every seed is excluded")
+	}
+	if !strings.Contains(err.Error(), "excluded") {
+		t.Errorf("error %q does not mention exclusion", err)
+	}
+}

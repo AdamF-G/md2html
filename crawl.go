@@ -26,6 +26,17 @@ type CrawlOptions struct {
 	NoMdLinks bool
 	// NoAssets leaves asset links unrewritten.
 	NoAssets bool
+	// Exclude lists directory prefixes that must never be entered. Each
+	// value is either absolute or relative to the resolved base. A path at
+	// or beneath one is never seeded, never followed as a link target, and
+	// never written to; a link pointing at one keeps its href exactly as
+	// written, the same handling a link escaping base gets in in-place mode.
+	//
+	// This exists for subtrees some other tool already owns — a slide-deck
+	// renderer, a vendored dependency's own generated docs, a frozen
+	// archive. Without it the only way to keep the crawler out of one is to
+	// move it out of the source tree, which is rarely possible.
+	Exclude []string
 }
 
 // Doc is one document in the emit set.
@@ -157,6 +168,37 @@ func pathDepth(rel string) int {
 	return n
 }
 
+// resolveExcludes turns each Exclude value into an absolute, cleaned,
+// symlink-resolved directory prefix.
+//
+// A relative value is taken against base, which is why this runs after
+// commonAncestor rather than at the top of Crawl. Symlinks are resolved so
+// a subtree reached through a link is still recognized as the excluded one,
+// matching how every other path in the crawler is keyed. A value naming
+// nothing on disk is kept as a literal cleaned path rather than dropped:
+// excluding a directory that does not exist yet is harmless, whereas
+// silently ignoring a misspelled value would hand back a build that quietly
+// entered the subtree the caller was trying to protect.
+func resolveExcludes(vals []string, base string) []string {
+	out := make([]string, 0, len(vals))
+	for _, v := range vals {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		p := v
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(base, p)
+		}
+		r, err := resolve(p)
+		if err != nil {
+			r = filepath.Clean(p)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
 // Crawl discovers every document reachable from the entry points.
 func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	if len(opt.Entries) == 0 {
@@ -172,6 +214,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		entryAbs = append(entryAbs, p)
 	}
 	base := commonAncestor(entryAbs)
+	excluded := resolveExcludes(opt.Exclude, base)
 
 	res := &CrawlResult{Base: base}
 	visited := map[string]bool{}
@@ -183,8 +226,20 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	// symlinked seed pointing outside the tree is refused for the same
 	// reason, and recorded in External for the same reason, as a link is.
 	// src is the document or entry point the target was reached from and
-	// ref is how it was written there, both for diagnostics only.
-	admit := func(src, target, ref string) {
+	// ref is how it was written there, both for diagnostics only. viaLink
+	// is what decides whether a refusal is reported: a refused seed is the
+	// caller getting exactly what they asked for, while a refused link
+	// changes how an existing document renders and has to be surfaced.
+	admit := func(src, target, ref string, viaLink bool) {
+		// Exclusion is checked before containment: both are real
+		// constraints, and either one alone has to be able to stop a path.
+		if isExcluded(target, excluded) {
+			if viaLink {
+				res.Warnings = append(res.Warnings, Warning{src,
+					fmt.Sprintf("not following %s: excluded directory", ref)})
+			}
+			return
+		}
 		if !isUnder(target, base) {
 			if opt.OutDir == "" {
 				res.Warnings = append(res.Warnings, Warning{src,
@@ -209,11 +264,18 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		for _, p := range s {
 			// A seed can point outside the tree even though it was found
 			// inside it: a symlinked .md resolves wherever it points.
-			admit(entryAbs[i], p, p)
+			admit(entryAbs[i], p, p, false)
 		}
 	}
 	if found == 0 {
 		return nil, fmt.Errorf("no Markdown files found in entry points")
+	}
+	// found counts what the entry points contain, before exclusion. A run
+	// whose every seed was excluded reaches here with a non-zero found and
+	// an empty queue, and would otherwise succeed having written nothing —
+	// indistinguishable, from the exit code, from a build that worked.
+	if len(queue) == 0 {
+		return nil, fmt.Errorf("every Markdown file in the entry points is excluded")
 	}
 
 	// linksBySrc caches the links extracted from each document during
@@ -262,7 +324,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 					fmt.Sprintf("link target does not exist: %s", l.Href)})
 				continue
 			}
-			admit(cur, target, l.Href)
+			admit(cur, target, l.Href, true)
 		}
 	}
 
