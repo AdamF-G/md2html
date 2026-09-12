@@ -61,3 +61,25 @@ func walk(n *html.Node, fn func(*html.Node)) {
 		walk(c, fn)
 	}
 }
+
+// headingNodes returns every h1–h6 element under root, in document order.
+//
+// Three transforms need this same set — HeadingAnchors to assign ids,
+// SectionLinks (Task 6) to index numbered headings, and a later task to
+// come — so it lives here rather than being re-typed as a switch on
+// n.DataAtom in each one. HeadingAnchors' own copy predates this helper and
+// is left untouched: rewriting it risks the byte-identical-slug guarantee
+// for no benefit.
+func headingNodes(root *html.Node) []*html.Node {
+	var heads []*html.Node
+	walk(root, func(n *html.Node) {
+		if n.Type != html.ElementNode {
+			return
+		}
+		switch n.DataAtom {
+		case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
+			heads = append(heads, n)
+		}
+	})
+	return heads
+}

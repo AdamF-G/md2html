@@ -23,19 +23,22 @@ func Builtins() []Transform {
 // it restructures fenced containers before anything else inspects the tree;
 // Chips must run before HeadingAnchors so a status marker is already a
 // <span class="chip"> — and therefore excluded by headingText — by the time
-// slugs are computed; nothing else among the rest depends on running before
-// or after another today, but the list's order is a correctness constraint,
-// not a style choice: later tasks insert their transforms at specific
-// positions in it (id-resolving transforms after anchors are assigned), so
-// new entries belong at their documented position, not appended to the end.
-// warn is threaded through so a transform can report a non-fatal problem;
-// only Containers uses it so far.
+// slugs are computed; SectionLinks must run after HeadingAnchors because it
+// resolves "§4.2" against the ids HeadingAnchors assigns. Nothing else
+// among the rest depends on running before or after another today, but the
+// list's order is a correctness constraint, not a style choice: later
+// tasks insert their transforms at specific positions in it (id-resolving
+// transforms after anchors are assigned), so new entries belong at their
+// documented position, not appended to the end. warn is threaded through so
+// a transform can report a non-fatal problem; only Containers uses it so
+// far.
 func builtins(warn func(string)) []Transform {
 	return []Transform{
 		Containers(warn),
 		TableScroll(),
 		Chips(),
 		HeadingAnchors(),
+		SectionLinks(),
 		ExternalLinks(),
 	}
 }

@@ -215,3 +215,7 @@ details.container.example { border-left: 3px solid var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* A cross-reference is a link, but a quieter one than a prose link: it
+   points inside the page the reader is already on. */
+a.xref { text-decoration: underline dotted; text-underline-offset: 0.2em; }
