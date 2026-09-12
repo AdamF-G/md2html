@@ -295,3 +295,77 @@ func TestBrowserLinkedImageNotWired(t *testing.T) {
 		t.Error("an image wrapped in <a> got .expandable; it should be left to the link")
 	}
 }
+
+// mermaid's own <svg> lives inside pre.mermaid and is already wired up by
+// mermaidRuntime; without this exclusion, media-expand's own click listener
+// would double-wire it, and a click would fight over which dialog opens.
+// This fixture hand-authors the DOM shape directly, with no real mermaid
+// render involved, to test the exclusion filter alone.
+//
+// It still has to run on a page carrying class="mermaid", so hasMermaid
+// makes renderPage inject mermaidRuntime alongside mediaExpandRuntime —
+// which is exactly the double-wiring setup this exclusion exists to guard
+// against, and mermaidRuntime's own import statement would otherwise reach
+// across the network for the real, ~0.8MB CDN build (out of scope per the
+// spec, and this suite must run offline). Worse, if that fetch succeeded,
+// mermaid.initialize({startOnLoad: true}) would try to render this pre's
+// content as diagram source, fail (it's SVG markup, not mermaid syntax),
+// and replace the fixture's <svg> with mermaid's own error-diagram SVG —
+// silently making every assertion below pass by inspecting the wrong
+// element rather than testing anything. mermaidCDN is redirected at a
+// local, inert ESM stub instead: it satisfies the one call the runtime
+// makes on it (initialize) and does nothing else, so the fixture DOM is
+// left exactly as authored while mermaidRuntime's lightbox-wiring code
+// still runs for real.
+//
+// The svg's inline width/height style (shrinking its rendered box below
+// its own viewBox) is deliberate: wireExpand only wires an element when its
+// natural size exceeds its rendered box, so without forcing the box
+// smaller than the 10x10 viewBox, this fixture would never become a
+// candidate for .expandable regardless of the mermaid exclusion, and the
+// falsifiability check below would be a silent no-op.
+func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
+	original := mermaidCDN
+	dir, baseURL := serveDir(t)
+	writeFiles(t, dir, map[string][]byte{
+		"mermaid-stub.js": []byte("export default { initialize() {} };\n"),
+	})
+	mermaidCDN = baseURL + "/mermaid-stub.js"
+	t.Cleanup(func() { mermaidCDN = original })
+
+	const src = `<pre class="mermaid"><svg viewBox="0 0 10 10" style="width:5px;height:5px"><circle cx="5" cy="5" r="4"/></svg></pre>
+`
+	page, err := Convert([]byte(src), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	writeFiles(t, dir, map[string][]byte{"index.html": page})
+
+	ctx := newBrowserCtx(t)
+	var viewBox string
+	var viewBoxOK bool
+	var expandable bool
+	var mediaDialogOpen bool
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.AttributeValue(`pre.mermaid svg`, "viewBox", &viewBox, &viewBoxOK, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector("pre.mermaid svg").classList.contains("expandable")`, &expandable),
+		chromedp.Click(`pre.mermaid svg`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Evaluate(`document.querySelector("dialog.media-lightbox[open]") !== null`, &mediaDialogOpen),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// Prove this is the hand-authored fixture, not a mermaid-generated
+	// replacement, before drawing any conclusion from its class or click
+	// behavior.
+	if !viewBoxOK || viewBox != "0 0 10 10" {
+		t.Fatalf("pre.mermaid svg viewBox = %q, ok=%v; want %q — fixture svg missing or replaced", viewBox, viewBoxOK, "0 0 10 10")
+	}
+	if expandable {
+		t.Error("an svg inside pre.mermaid got .expandable; that's mermaidRuntime's element")
+	}
+	if mediaDialogOpen {
+		t.Error("clicking an svg inside pre.mermaid opened dialog.media-lightbox; it should be left to mermaidRuntime")
+	}
+}
