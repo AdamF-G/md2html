@@ -1,6 +1,8 @@
 package md2html
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -258,5 +260,29 @@ func TestConvertFragmentEndToEnd(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(s), "<body") {
 		t.Errorf("fragment leaked a body tag: %s", s)
+	}
+}
+
+// A future version bump to mermaidCDN must re-vendor the library, or every
+// mermaid browser test in e2e_browser_test.go silently starts testing a
+// stale build. This check needs no browser, so it runs in the default,
+// non-gated suite and fails loudly the moment the two drift apart.
+func TestVendoredMermaidVersionMatchesPinned(t *testing.T) {
+	entries, err := os.ReadDir(filepath.Join("testdata", "vendor"))
+	if err != nil {
+		t.Fatalf("read testdata/vendor: %v", err)
+	}
+	var found string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "mermaid-") {
+			found = e.Name()
+		}
+	}
+	if found == "" {
+		t.Fatal("no vendored mermaid build found in testdata/vendor")
+	}
+	version := strings.TrimSuffix(strings.TrimPrefix(found, "mermaid-"), ".esm.min.mjs")
+	if !strings.Contains(mermaidCDN, version) {
+		t.Errorf("vendored file %q (version %q) does not match pinned mermaidCDN %q", found, version, mermaidCDN)
 	}
 }
