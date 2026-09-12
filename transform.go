@@ -19,18 +19,18 @@ func Builtins() []Transform {
 	return builtins(nil)
 }
 
-// builtins is the ordered default list. Nothing among these three
-// transforms depends on running before or after another today, but the
-// list's order is a correctness constraint, not a style choice: later
-// tasks insert their transforms at specific positions in it (a container
-// restructuring transform before anything else inspects the tree, a chip
+// builtins is the ordered default list. Containers must run first because
+// it restructures fenced containers before anything else inspects the tree;
+// nothing among the rest depends on running before or after another today,
+// but the list's order is a correctness constraint, not a style choice:
+// later tasks insert their transforms at specific positions in it (a chip
 // transform before heading slugs are computed, id-resolving transforms
 // after anchors are assigned), so new entries belong at their documented
-// position, not appended to the end. warn is threaded through so a future
-// transform can report a non-fatal problem; none of the three below use it
-// yet.
+// position, not appended to the end. warn is threaded through so a
+// transform can report a non-fatal problem; only Containers uses it so far.
 func builtins(warn func(string)) []Transform {
 	return []Transform{
+		Containers(warn),
 		TableScroll(),
 		HeadingAnchors(),
 		ExternalLinks(),

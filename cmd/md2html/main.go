@@ -206,6 +206,9 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
 	var ts []md2html.Transform
+	// Not covered by any --no-* flag: brace-free containers are core syntax,
+	// not an optional pass a caller would disable.
+	ts = append(ts, md2html.Containers(warn))
 	if !noTable {
 		ts = append(ts, md2html.TableScroll())
 	}

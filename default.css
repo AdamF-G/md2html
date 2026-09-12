@@ -6,6 +6,8 @@
   --rule: #e2ddd6;
   --code-bg: #f2eee9;
   --measure: 68ch;
+  --warn: #b4530a;
+  --ok: #2f6f43;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,6 +18,8 @@
     --accent: #e08a5c;
     --rule: #322d28;
     --code-bg: #221f1c;
+    --warn: #f0915a;
+    --ok: #6fbe89;
   }
 }
 
@@ -26,6 +30,8 @@
   --accent: #e08a5c;
   --rule: #322d28;
   --code-bg: #221f1c;
+  --warn: #f0915a;
+  --ok: #6fbe89;
 }
 
 :root[data-theme="light"] {
@@ -35,6 +41,8 @@
   --accent: #9a4f2c;
   --rule: #e2ddd6;
   --code-bg: #f2eee9;
+  --warn: #b4530a;
+  --ok: #2f6f43;
 }
 
 body {
@@ -150,6 +158,19 @@ dialog.media-lightbox svg {
   background: var(--code-bg);
   padding: 1rem 1.25rem;
   border-radius: 0 6px 6px 0;
+  margin: 1.5rem 0;
+}
+
+.callout.callout-warning { border-left-color: var(--warn); }
+
+/* An always-visible highlighted card: a box rather than a margin rail, for
+   content that is a thing in its own right rather than an aside on the
+   paragraph above it. */
+.card {
+  border: 1px solid var(--rule);
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
   margin: 1.5rem 0;
 }
 
