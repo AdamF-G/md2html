@@ -19,6 +19,11 @@ import (
 // noisy above a title and therefore self-reporting.
 func splitFrontMatter(src []byte) (map[string]string, []byte) {
 	s := string(src)
+	// A leading UTF-8 BOM makes this prefix check fail, so a document
+	// saved with one simply never has its front matter detected — the
+	// same as any other document with no leading "---". That degrades to
+	// prior behavior rather than corrupting anything, so it is left alone
+	// rather than stripped here.
 	if !strings.HasPrefix(s, "---\n") && !strings.HasPrefix(s, "---\r\n") {
 		return nil, src
 	}
@@ -48,6 +53,10 @@ func splitFrontMatter(src []byte) (map[string]string, []byte) {
 		if key == "" {
 			return nil, src
 		}
+		// A repeated key overwrites rather than erroring: last-wins is the
+		// same rule a Go map assignment gives for free, and treating a
+		// duplicate as malformed would make this stricter than the tool
+		// needs to be for three flat keys.
 		meta[strings.ToLower(key)] = strings.TrimSpace(v)
 	}
 	if end < 0 {
@@ -159,10 +168,10 @@ func applyDocMeta(root *html.Node, subtitle, date string) {
 		p.AppendChild(&html.Node{Type: html.TextNode, Data: text})
 		if anchor == nil {
 			root.InsertBefore(p, root.FirstChild)
-			return
+		} else {
+			anchor.Parent.InsertBefore(p, anchor.NextSibling)
 		}
-		anchor.Parent.InsertBefore(p, anchor.NextSibling)
-		anchor = p // keep date after subtitle
+		anchor = p // keep date after subtitle, on both branches
 	}
 	insert("subtitle", subtitle)
 	insert("docdate", date)

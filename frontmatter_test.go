@@ -73,6 +73,49 @@ func TestSplitFrontMatterIgnoresUnterminatedBlock(t *testing.T) {
 	}
 }
 
+// An empty block ("---\n---\n") is still a well-formed, if pointless, front
+// matter block: no lines between the delimiters means no keys, but the
+// block must still be recognized and stripped rather than treated as an
+// unterminated one.
+func TestSplitFrontMatterAcceptsEmptyBlock(t *testing.T) {
+	meta, body := splitFrontMatter([]byte("---\n---\n\n# H\n"))
+	if meta == nil {
+		t.Errorf("empty block not recognized as front matter")
+	}
+	if len(meta) != 0 {
+		t.Errorf("meta = %v, want empty", meta)
+	}
+	if !strings.Contains(string(body), "# H") {
+		t.Errorf("body lost: %q", body)
+	}
+}
+
+// A repeated key overwrites rather than erroring — last-wins, the same
+// rule a plain map assignment gives for free.
+func TestSplitFrontMatterDuplicateKeyLastWins(t *testing.T) {
+	meta, _ := splitFrontMatter([]byte("---\ntitle: First\ntitle: Second\n---\nx\n"))
+	if meta["title"] != "Second" {
+		t.Errorf("title = %q, want %q", meta["title"], "Second")
+	}
+}
+
+// A flat key outside title/subtitle/date is valid front matter — it is
+// still stripped from the body — but is not one of the three keys Convert
+// reads, so it is silently dropped rather than rendered or warned about.
+func TestSplitFrontMatterKeepsUnrecognizedKeyOutOfBodyOnly(t *testing.T) {
+	meta, body := splitFrontMatter([]byte("---\nauthor: Jane\ntitle: T\n---\n\n# H\n"))
+	if meta["author"] != "Jane" {
+		t.Errorf("author = %q, want %q", meta["author"], "Jane")
+	}
+	if strings.Contains(string(body), "author:") || strings.Contains(string(body), "Jane") {
+		t.Errorf("unrecognized key not stripped from body: %q", body)
+	}
+	got := convert(t, "---\nauthor: Jane\ntitle: T\n---\n\n# H\n", nil)
+	if strings.Contains(got, "Jane") {
+		t.Errorf("unrecognized key leaked into rendered output\ngot: %s", got)
+	}
+}
+
 func TestConvertFrontMatterTitleWins(t *testing.T) {
 	got := convert(t, "---\ntitle: Real Title\n---\n\n# Heading\n", nil)
 	if !strings.Contains(got, "<title>Real Title</title>") {
@@ -212,5 +255,27 @@ func TestConvertFrontMatterDatePlusItalicLiftOrdersDateAfterSubtitle(t *testing.
 	dateIdx := strings.Index(got, `class="docdate"`)
 	if subIdx < 0 || dateIdx < 0 || dateIdx < subIdx {
 		t.Errorf("date must come after the lifted subtitle\ngot: %s", got)
+	}
+}
+
+// Fix for the reviewer-reported bug: applyDocMeta's "anchor == nil" branch
+// (no leading h1 at all) returned before advancing anchor to the just-
+// inserted subtitle paragraph, so the date's insertion still saw anchor
+// == nil and landed before root.FirstChild — ahead of the subtitle it was
+// meant to follow. This is the no-h1 counterpart of
+// TestConvertFrontMatterSubtitleAndDateRender, which only exercises the
+// h1-anchored path.
+func TestConvertFrontMatterSubtitleAndDateOrderWithoutHeading(t *testing.T) {
+	got := convert(t, "---\nsubtitle: Sub\ndate: 2026-01-01\n---\n\nSome prose.\n", nil)
+	if !strings.Contains(got, `<p class="subtitle">Sub</p>`) {
+		t.Errorf("no subtitle\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<p class="docdate">2026-01-01</p>`) {
+		t.Errorf("no date\ngot: %s", got)
+	}
+	subIdx := strings.Index(got, `class="subtitle"`)
+	dateIdx := strings.Index(got, `class="docdate"`)
+	if subIdx < 0 || dateIdx < 0 || dateIdx < subIdx {
+		t.Errorf("date must come after subtitle even with no leading h1\ngot: %s", got)
 	}
 }

@@ -93,6 +93,13 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Front matter comes off the bytes: a "---" block is already valid
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
+	//
+	// Only title/subtitle/date are read below. A block carrying some other
+	// flat key (an "author:" line, say) is still accepted and still
+	// stripped from the body — it parsed as valid front matter — but the
+	// key itself is silently dropped: there is nowhere in the page for it
+	// to go yet, and warning about a key the format doesn't forbid would
+	// be noise, not a diagnostic.
 	meta, src := splitFrontMatter(src)
 
 	var buf bytes.Buffer
