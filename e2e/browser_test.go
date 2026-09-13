@@ -37,14 +37,15 @@ import (
 // Two budgets, because they bound genuinely different things.
 //
 // stepTimeout is the diagnostic one: it turns a selector that never matches
-// into a named failure in seconds, instead of the ten-minute panic the Go
-// test binary would otherwise produce. Every assertion in this file is
-// comfortably inside it.
+// into a named failure in a minute, instead of the ten-minute panic the Go
+// test binary would otherwise produce. Every step in this file takes single
+// -digit seconds on a developer's machine; the margin is for shared CI
+// hardware, where 15s was measurably too tight.
 //
 // startTimeout covers getting a browser at all, which is not this suite's
 // subject and is far less predictable — see TestMain.
 const (
-	stepTimeout  = 15 * time.Second
+	stepTimeout  = 60 * time.Second
 	startTimeout = 90 * time.Second
 )
 
@@ -273,7 +274,6 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 	})
 
 	ctx := newBrowserCtx(t)
-	var expandable bool
 	var width, height string
 	var widthOK, heightOK bool
 	// ByQuery is required on every selector below: chromedp's default query
@@ -288,7 +288,17 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 	// problem. ByQuery pins every lookup to DOM.querySelector instead.
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(baseURL+"/index.html"),
-		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
+		// Waited for, not asserted with a bare Evaluate: the runtime wires
+		// an <img> only once it has loaded — the deferred branch the test
+		// below this one covers — so reading the class straight after
+		// Navigate races the wiring, and clicking on the same breath lands
+		// on an unwired image whose click opens nothing. The dialog wait
+		// further down then burns the whole deadline with no hint that a
+		// race was ever involved, which is exactly how this test failed on
+		// CI while passing locally. A timeout here instead says plainly
+		// that the image never became expandable, which is the assertion
+		// the Evaluate used to make.
+		chromedp.WaitVisible(`img.expandable`, chromedp.ByQuery),
 		chromedp.Click(`img`, chromedp.ByQuery, chromedp.NodeVisible),
 		chromedp.WaitVisible(`dialog.media-lightbox[open]`, chromedp.ByQuery),
 		chromedp.AttributeValue(`dialog.media-lightbox img`, "width", &width, &widthOK, chromedp.ByQuery),
@@ -296,9 +306,6 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 	)
 	if err != nil {
 		t.Fatalf("chromedp: %v", err)
-	}
-	if !expandable {
-		t.Error("a 2000x1500 image never got .expandable")
 	}
 	if !widthOK || !heightOK {
 		t.Fatal("cloned <img> in the dialog has no width/height attribute")
