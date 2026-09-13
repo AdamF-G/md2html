@@ -111,6 +111,7 @@ unrelated tools that share the name is never claimed.
 | `--no-md-links` | do not rewrite `.md` links |
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute); repeatable, or comma-separated |
+| `--version` | print the version and exit; the same version the provenance marker carries |
 
 ## Writing docs for it
 

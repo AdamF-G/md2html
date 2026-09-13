@@ -36,12 +36,10 @@ func (l *stringList) Set(v string) error {
 
 // run is the testable entry point. It returns the process exit code.
 //
-// stdout is currently unused: md2html always writes files, never streams
-// HTML. The parameter is retained so tests capture both streams and so a
-// future --stdout mode needs no signature change. Name it _ if your linter
-// objects.
+// stdout carries only --version: md2html always writes files, never streams
+// HTML. Diagnostics all go to stderr, so a future --stdout mode needs no
+// signature change.
 func run(args []string, stdout, stderr io.Writer) int {
-	_ = stdout
 	fs := flag.NewFlagSet("md2html", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
@@ -73,6 +71,7 @@ Flags:
 		noExt     = fs.Bool("no-external-links", false, "do not mark external links")
 		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
+		version   = fs.Bool("version", false, "print the version and exit")
 	)
 	var exclude stringList
 	fs.Var(&exclude, "exclude", "directory prefix never to enter or write to (repeatable, comma-separated)")
@@ -90,6 +89,14 @@ Flags:
 		}
 		entries = append(entries, fs.Arg(0))
 		args = fs.Args()[1:]
+	}
+	// Ahead of the entry check, so --version needs no entry point, and
+	// ahead of any work, so it never converts a document. The string is
+	// the constant stamped into every generated file's provenance marker:
+	// what a user reads here always matches what is in their output.
+	if *version {
+		fmt.Fprintf(stdout, "md2html %s\n", md2html.Version)
+		return 0
 	}
 	if len(entries) == 0 {
 		fs.Usage()

@@ -278,3 +278,35 @@ func TestRunResolvesChipsSectionLinksAndTOC(t *testing.T) {
 		t.Errorf("section reference not resolved\ngot: %s", got)
 	}
 }
+
+// --version reports the same constant that every generated file's
+// provenance marker carries, so the two can never disagree.
+func TestRunVersionPrintsVersionToStdout(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--version"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if got, want := out.String(), "md2html "+md2html.Version+"\n"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if errb.Len() != 0 {
+		t.Errorf("nothing should go to stderr, got: %s", errb.String())
+	}
+}
+
+// The flag wins over the work: asking for the version never converts a
+// document, wherever in the arguments it appears.
+func TestRunVersionAfterEntryConvertsNothing(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": "# A"})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "docs"), "--version"}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), md2html.Version) {
+		t.Errorf("version not printed: %q", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "docs", "a.html")); err == nil {
+		t.Error("--version converted a document")
+	}
+}
