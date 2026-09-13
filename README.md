@@ -115,12 +115,36 @@ unrelated tools that share the name is never claimed.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute); repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
+| `--install-skill-user` | install the Claude Code authoring skill under `~/.claude/skills` and exit |
+| `--install-skill-project` | install it under `./.claude/skills` instead |
 
 ## Writing docs for it
 
 Callouts, diagrams, heading attributes, footnotes and definition lists all
 work, and one of them fails silently if you get the syntax wrong. See
 [docs/authoring.md](./docs/authoring.md).
+
+### Installing the skill
+
+If you write those docs with Claude Code, the binary carries the authoring
+skill and will install it for you:
+
+```bash
+md2html --install-skill-user      # for you, under ~/.claude/skills
+md2html --install-skill-project   # for this repo, under ./.claude/skills
+```
+
+Each writes `SKILL.md` and a copy of the authoring reference into a
+`md2html-authoring` directory, so the guidance travels with the binary and
+always describes the version you installed — which a link to this repo's
+`main` would not. Neither will create the `.claude` directory itself: a
+missing one means this is not a Claude Code workspace, or you are not
+standing where you meant to be, and inventing it would leave the skill
+somewhere nothing reads.
+
+Both files carry the same provenance marker as generated HTML, so a later
+`--install-skill-user` replaces this tool's own copy silently and refuses a copy
+you have edited, naming it.
 
 ## Library use
 

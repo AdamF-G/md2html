@@ -329,3 +329,145 @@ func TestRunReportsContainerWarningToStderr(t *testing.T) {
 		t.Errorf("container warning not counted in the summary:\n%s", errb.String())
 	}
 }
+
+// installed returns the two paths the skill occupies under a skills parent.
+func installed(parent string) (skill, ref string) {
+	dir := filepath.Join(parent, "md2html-authoring")
+	return filepath.Join(dir, "SKILL.md"), filepath.Join(dir, "authoring.md")
+}
+
+// --install-skill-project writes into the .claude the caller is standing
+// in, so a repo can carry the skill for everyone who clones it.
+func TestRunInstallSkillProjectWritesBesideTheCaller(t *testing.T) {
+	root := tree(t, map[string]string{".claude/settings.json": "{}"})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	if code := run([]string{"--install-skill-project"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	skill, ref := installed(filepath.Join(root, ".claude", "skills"))
+	for _, p := range []string{skill, ref} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("missing %s: %v", p, err)
+		}
+	}
+	if !strings.HasPrefix(readFile(t, skill), "---\n") {
+		t.Error("installed SKILL.md does not open with its front matter")
+	}
+	if !strings.Contains(out.String(), "md2html-authoring") {
+		t.Errorf("install reported nothing useful on stdout: %q", out.String())
+	}
+}
+
+// --install-skill-user installs for the user, under their home.
+func TestRunInstallSkillWritesUnderHome(t *testing.T) {
+	home := tree(t, map[string]string{".claude/settings.json": "{}"})
+	t.Setenv("HOME", home)
+
+	var out, errb bytes.Buffer
+	if code := run([]string{"--install-skill-user"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	skill, _ := installed(filepath.Join(home, ".claude", "skills"))
+	if _, err := os.Stat(skill); err != nil {
+		t.Errorf("missing %s: %v", skill, err)
+	}
+}
+
+// A missing .claude means this is not a Claude Code workspace — or the
+// caller is in the wrong directory. Inventing one puts the skill somewhere
+// nothing will ever read it and still reports success, which is the same
+// failure `just install` refuses for the binary.
+func TestRunInstallSkillRefusesToInventDotClaude(t *testing.T) {
+	root := tree(t, map[string]string{"docs/index.md": "# x"})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	code := run([]string{"--install-skill-project"}, &out, &errb)
+	if code == 0 {
+		t.Fatal("installing into a tree with no .claude reported success")
+	}
+	// Absolute, not a bare ".claude": this error exists to catch a caller
+	// who is not standing where they think they are, and a relative path is
+	// the least useful thing to tell exactly that caller.
+	if !strings.Contains(errb.String(), filepath.Join(root, ".claude")) {
+		t.Errorf("error does not name the directory it wanted, in full: %s", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".claude")); err == nil {
+		t.Error(".claude was created anyway")
+	}
+}
+
+// Re-installing over this tool's own copy is how an upgrade lands, and must
+// be silent rather than a refusal the user has to clear by hand.
+func TestRunInstallSkillReplacesItsOwnEarlierCopy(t *testing.T) {
+	root := tree(t, map[string]string{".claude/settings.json": "{}"})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	if code := run([]string{"--install-skill-project"}, &out, &errb); code != 0 {
+		t.Fatalf("first install: exit %d, stderr: %s", code, errb.String())
+	}
+	out.Reset()
+	errb.Reset()
+	if code := run([]string{"--install-skill-project"}, &out, &errb); code != 0 {
+		t.Fatalf("re-install: exit %d, stderr: %s", code, errb.String())
+	}
+}
+
+// A copy the user has edited carries no marker, and is never destroyed —
+// the same rule, and the same message, a generated page gets.
+func TestRunInstallSkillRefusesAHandEditedCopy(t *testing.T) {
+	root := tree(t, map[string]string{
+		".claude/settings.json":                     "{}",
+		".claude/skills/md2html-authoring/SKILL.md": "---\nname: mine\n---\n\nhand written\n",
+	})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	code := run([]string{"--install-skill-project"}, &out, &errb)
+	if code == 0 {
+		t.Fatal("overwrote a hand-edited skill and reported success")
+	}
+	skill, ref := installed(filepath.Join(root, ".claude", "skills"))
+	if got := readFile(t, skill); !strings.Contains(got, "hand written") {
+		t.Errorf("hand-edited SKILL.md was destroyed, now:\n%s", got)
+	}
+	if !strings.Contains(errb.String(), "refusing") {
+		t.Errorf("refusal not reported: %s", errb.String())
+	}
+	// Nothing half-installed: the reference is not written either, so the
+	// directory is not left holding one file from this version beside one
+	// the user wrote.
+	if _, err := os.Stat(ref); err == nil {
+		t.Error("authoring.md was installed beside the refused SKILL.md")
+	}
+}
+
+// Installing is a whole invocation, like --version: it needs no entry point
+// and must convert nothing.
+func TestRunInstallSkillNeedsNoEntryAndConvertsNothing(t *testing.T) {
+	root := tree(t, map[string]string{
+		".claude/settings.json": "{}",
+		"docs/index.md":         "# Home",
+	})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	if code := run([]string{"--install-skill-project"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "docs", "index.html")); err == nil {
+		t.Error("installing the skill also converted a document")
+	}
+}
+
+func readFile(t *testing.T, p string) string {
+	t.Helper()
+	b, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

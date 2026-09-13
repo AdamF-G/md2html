@@ -9,6 +9,34 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- `--install-skill-user` and `--install-skill-project` install the Claude Code
+  authoring skill, which now travels inside the binary along with a copy of
+  `docs/authoring.md` it defers to. The guidance therefore always matches
+  the version installed, which a link to this repo's `main` would not.
+  Neither flag creates the `.claude` directory it writes under. Both files
+  carry the usual provenance marker, so a re-install replaces this tool's
+  own copy silently and refuses one you have edited — and refuses the whole
+  install rather than leaving half of it in place.
+
+### Fixed
+
+- The browser suite's first test no longer fails on a cold CI runner. It
+  clicked an image in the same breath as navigating, but the page's runtime
+  wires an image only once it has loaded, so on a slow machine the click
+  landed on an unwired image and the dialog wait burned the deadline. It now
+  waits for the wiring, which is also the assertion it used to make with a
+  bare evaluate. `TestMain` additionally pays Chrome's cold-start cost once,
+  outside any test's deadline, and the per-step budget went to 60s.
+
+### Repository
+
+- CI moved to `actions/checkout@v7` and `actions/setup-go@v7`; the previous
+  majors target the deprecated Node 20 and were being force-upgraded.
+
 ## v0.2.0 — 2026-09-13
 
 ### Added

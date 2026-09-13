@@ -11,8 +11,9 @@ description: Use when writing or editing Markdown that will be converted to HTML
 discoverable from the README, and one of them fails silently — you get valid
 output that quietly lacks what you asked for, with no warning and a zero exit.
 
-**Read `docs/authoring.md` in this repo before writing the page.** It is the
-full reference, and every claim in it is verified against the binary.
+**Read the full reference before writing the page.** It is `authoring.md`,
+sitting beside this file in an installed skill, and `docs/authoring.md` in
+the md2html repo itself. Every claim in it is verified against the binary.
 
 ## The remaining silent failure
 
