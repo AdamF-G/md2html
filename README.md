@@ -152,6 +152,19 @@ in your Markdown as well as generated markup.
 
 ## Development
 
+`just install` builds the binary and installs it to `~/.local/bin`, then
+prints the version it just installed:
+
+```bash
+just install                        # to ~/.local/bin
+just bindir=/somewhere/else install # anywhere else
+```
+
+It refuses to install into a directory that does not already exist, rather
+than creating one: `go install` will happily create a missing `GOBIN` and
+every level above it, which on a fresh machine puts the binary somewhere
+nothing on `PATH` will ever read and still reports success.
+
 `go test ./...` needs no browser. A separate, opt-in suite drives real
 headless Chrome to exercise the click-to-expand JavaScript runtimes end to
 end:
