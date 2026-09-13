@@ -234,3 +234,61 @@ func TestFigDefsGrid(t *testing.T) {
 		}
 	}
 }
+
+// A figure label promises *inline* Markdown, and the promise is load-bearing
+// rather than cosmetic: a block-level pass lets a label mint headings that
+// compete for anchor ids, join [[toc]], and enter the namespace § references
+// resolve against — all silently, from text an author wrote as a label.
+//
+// Every case here is a block construct that must survive as literal text.
+func TestFigInlineRejectsBlockConstructs(t *testing.T) {
+	r := newFigRenderer()
+	cases := []struct{ in, want string }{
+		{"1. Validate", "1. Validate"},
+		{"- parse", "- parse"},
+		{"> note", "&gt; note"},
+		{"# Step", "# Step"},
+		{"    indented code", "indented code"},
+		{"a\n\nb", "a b"},
+		{"one\ntwo", "one two"},
+		{"***", "***"},
+		{"| a | b |", "| a | b |"},
+	}
+	for _, c := range cases {
+		got := r.inline(c.in)
+		if got != c.want {
+			t.Errorf("inline(%q) = %q, want %q", c.in, got, c.want)
+		}
+		for _, banned := range []string{"<p>", "</p>", "<ol", "<ul", "<li", "<h1", "<blockquote", "<pre", "<hr"} {
+			if strings.Contains(got, banned) {
+				t.Errorf("inline(%q) = %q: contains block markup %q", c.in, got, banned)
+			}
+		}
+	}
+}
+
+// The end-to-end half of the same claim: a heading-shaped label must not
+// reach the document's heading namespace. Before the inline pass was really
+// inline, `box: "## Real"` emitted an <h2> that the TOC listed and that
+// anchor generation gave an id to.
+func TestFigLabelCannotMintAHeading(t *testing.T) {
+	src := "# Doc\n\n[[toc]]\n\n## Real\n\n```fig\nitems:\n  - box: \"## Fake\"\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if strings.Contains(out, `id="fake"`) {
+		t.Errorf("a box label must not create a heading anchor:\n%s", out)
+	}
+	if strings.Contains(out, `href="#fake"`) {
+		t.Errorf("a box label must not appear in the toc:\n%s", out)
+	}
+	if !strings.Contains(out, `<div class="fig-box">## Fake</div>`) {
+		t.Errorf("the label should survive as literal text:\n%s", out)
+	}
+	// The real heading still works, so the test is not passing vacuously.
+	if !strings.Contains(out, `href="#real"`) {
+		t.Errorf("the real heading should still be in the toc:\n%s", out)
+	}
+}

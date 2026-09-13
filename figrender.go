@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	gohtml "html"
+	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/parser"
 	goldhtml "github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/util"
 )
 
 // figRenderer emits a figure's markup. It owns one inline-Markdown parser
@@ -18,21 +21,57 @@ import (
 type figRenderer struct{ md goldmark.Markdown }
 
 func newFigRenderer() *figRenderer {
-	// No extensions: a figure label wants CommonMark inline syntax — code
+	// The parser is cut down to *one* block parser — paragraphs — plus the
+	// full default inline set. That is what makes the pass genuinely inline
+	// rather than merely inline-looking.
+	//
+	// goldmark.New with its defaults is a whole-document parser: it would
+	// read "1. Validate" in a box label as an ordered list, "# Step" as a
+	// heading, and four leading spaces as an indented code block. A heading
+	// is the dangerous one, because it does not stay inside the figure — it
+	// competes for anchor ids, joins [[toc]], and enters the namespace §
+	// cross-references resolve against, all from text an author wrote as a
+	// label. With only the paragraph parser registered, every block
+	// construct degrades to the literal characters the author typed, which
+	// is exactly what a label promises.
+	//
+	// No extensions either: a label wants CommonMark inline syntax — code
 	// spans, emphasis, links — not tables or footnotes. Unsafe matches the
 	// main parser, so raw HTML in a label behaves as it does in prose.
 	return &figRenderer{md: goldmark.New(
+		goldmark.WithParser(parser.NewParser(
+			parser.WithBlockParsers(util.Prioritized(parser.NewParagraphParser(), 1000)),
+			parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+			parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+		)),
 		goldmark.WithRendererOptions(goldhtml.WithUnsafe()),
 	)}
 }
 
+// figNewlines collapses any run of newlines (and the whitespace around it)
+// to a single space.
+var figNewlines = regexp.MustCompile(`[ \t]*\r?\n[ \t\r\n]*`)
+
 // inline renders one author-facing text field as inline Markdown and strips
-// the block wrapper goldmark puts around it.
+// the single <p> wrapper the paragraph parser leaves around it.
 //
-// A field is one line by construction, so exactly one <p> comes back. If
-// conversion somehow fails, the text is escaped and passed through: a
+// Stripping exactly one <p>/</p> pair is only sound because the parser
+// built in newFigRenderer can emit exactly one block, a paragraph. Two
+// things are done to the field first to guarantee it really is one:
+//
+//   - Newline runs collapse to a single space. A YAML block scalar is a
+//     legitimate way to write a long label, and a blank line inside one
+//     would otherwise close the paragraph and open a second — leaving
+//     unbalanced markup ("a</p>\n<p>b") after the strip.
+//   - The result is trimmed. Leading whitespace is not merely cosmetic
+//     here: goldmark trims it from the paragraph's own output, so a
+//     four-space-indented label would leave the "<p>" prefix unstripped
+//     without the trim.
+//
+// If conversion somehow fails, the text is escaped and passed through: a
 // visible label beats a dropped one.
 func (r *figRenderer) inline(s string) string {
+	s = strings.TrimSpace(figNewlines.ReplaceAllString(s, " "))
 	var buf bytes.Buffer
 	if err := r.md.Convert([]byte(s), &buf); err != nil {
 		return gohtml.EscapeString(s)
