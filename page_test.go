@@ -435,3 +435,42 @@ func TestExtractTitleStripsChipTokens(t *testing.T) {
 		t.Errorf("got %q, want %q", got, "Rollback")
 	}
 }
+
+// The figure component set must ship in the embedded stylesheet, and must
+// define no new colors: every value comes from the existing tokens, so all
+// four theme states (light, dark, and both explicit data-theme overrides)
+// apply to figures without a single extra rule.
+func TestDefaultCSSStylesFigures(t *testing.T) {
+	for _, sel := range []string{
+		".fig-box", ".fig-arrow", ".fig-result", ".fig-rail",
+		".fig-stats", ".fig-stat", ".fig-defs", ".fig-group",
+		".fig-chain", ".fig-lanes", ".fig-lane",
+		".fig-rows", ".fig-cols", ".fig-split", ".fig-boundary",
+		"--fig-weight",
+	} {
+		if !strings.Contains(defaultCSS, sel) {
+			t.Errorf("default.css is missing %q", sel)
+		}
+	}
+	if !strings.Contains(defaultCSS, "@media (max-width") {
+		t.Error("figures need a narrow-width rule; default.css has no width query")
+	}
+	if regexp.MustCompile(`\.fig-[a-z-]*\s*\{[^}]*#[0-9a-fA-F]{3,6}`).MatchString(defaultCSS) {
+		t.Error("a fig rule defines a literal color; use the existing tokens")
+	}
+}
+
+// The stylesheet has to travel with an Artifact fragment, not just with a
+// standalone page: a figure is plain markup plus CSS, and unlike mermaid
+// there is no host runtime to fall back on. Task 3 pins the markup half of
+// this claim; the styles half can only be checked once the rules exist.
+func TestFigStylesTravelWithAFragment(t *testing.T) {
+	got, err := Convert([]byte("```fig\nitems:\n  - box: Client\n```\n"),
+		Options{Fragment: true})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if !strings.Contains(string(got), ".fig-box") {
+		t.Error("a fragment must carry the figure styles with it")
+	}
+}

@@ -260,3 +260,117 @@ figure.code-figure > pre {
   margin-top: 0;
   border-radius: 0 0 6px 6px;
 }
+
+/* Structured figures (```fig) */
+figure.fig {
+  margin: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+figure.fig > figcaption {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.fig-rows, .fig-cols, .fig-lanes, .fig-chain, .fig-split, .fig-lane {
+  display: flex;
+  gap: 0.5rem;
+}
+.fig-rows, .fig-lane { flex-direction: column; }
+.fig-cols, .fig-lanes, .fig-chain, .fig-split { flex-direction: row; }
+.fig-chain, .fig-split { align-items: center; }
+.fig-cols > .fig-panel, .fig-lane, .fig-split > .fig-panel {
+  flex: var(--fig-weight, 1) 1 0;
+  min-width: 0;
+}
+
+.fig-box {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--code-bg);
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+}
+.fig-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.fig-rows > .fig-arrow::before,
+.fig-lane > .fig-arrow::before { content: "\2193"; }
+.fig-cols > .fig-arrow::before,
+.fig-chain > .fig-arrow::before { content: "\2192"; }
+
+.fig-result {
+  border: 1px solid var(--ok);
+  border-left-width: 3px;
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+.fig-rail {
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.fig-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.fig-stat {
+  flex: 1 1 0;
+  min-width: 6rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.5rem;
+  text-align: center;
+}
+.fig-stat-value {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.fig-stat-label { display: block; font-size: 0.8rem; color: var(--muted); }
+
+.fig-defs { margin: 0; }
+.fig-defs dt { font-weight: 600; }
+.fig-defs dd { margin: 0 0 0.5rem; color: var(--muted); }
+
+.fig-group {
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.fig-group-title {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fig-boundary {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* The one width query in this stylesheet. Side-by-side anything becomes a
+   single column on a phone, and weights stop applying: a 3:1 split of a
+   narrow screen is two unreadable columns, not a layout. */
+@media (max-width: 34rem) {
+  .fig-cols, .fig-lanes, .fig-chain, .fig-split { flex-direction: column; }
+  .fig-cols > .fig-panel, .fig-split > .fig-panel { flex: 1 1 auto; }
+  .fig-cols > .fig-arrow::before,
+  .fig-chain > .fig-arrow::before { content: "\2193"; }
+}
