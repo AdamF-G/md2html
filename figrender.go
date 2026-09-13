@@ -42,6 +42,17 @@ func (r *figRenderer) inline(s string) string {
 	return out
 }
 
+// items renders a run of items with no wrapper of its own. Every nesting
+// kind shares it, which is what keeps recursion depth a non-issue: nesting
+// is the same code all the way down.
+func (r *figRenderer) items(list []figItem) string {
+	var b strings.Builder
+	for _, it := range list {
+		b.WriteString(r.item(it))
+	}
+	return b.String()
+}
+
 // item renders one item. Kinds arrive here already validated, so an item
 // that matches nothing renders as nothing rather than as a diagnostic.
 func (r *figRenderer) item(it figItem) string {
@@ -81,6 +92,21 @@ func (r *figRenderer) item(it figItem) string {
 			b.WriteString(`</dd>`)
 		}
 		b.WriteString(`</dl>`)
+		return b.String()
+	case it.Group != nil:
+		return `<div class="fig-group"><div class="fig-group-title">` +
+			r.inline(*it.Group) + `</div>` + r.items(it.Items) + `</div>`
+	case it.Chain != nil:
+		return `<div class="fig-chain">` + r.items(it.Chain) + `</div>`
+	case it.Lanes != nil:
+		var b strings.Builder
+		b.WriteString(`<div class="fig-lanes">`)
+		for _, lane := range it.Lanes {
+			b.WriteString(`<div class="fig-lane">`)
+			b.WriteString(r.items(lane))
+			b.WriteString(`</div>`)
+		}
+		b.WriteString(`</div>`)
 		return b.String()
 	}
 	return ""

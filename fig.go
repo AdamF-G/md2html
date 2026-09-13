@@ -165,9 +165,7 @@ func renderFig(body []byte, warn func(string)) (string, bool) {
 	var b strings.Builder
 	b.WriteString(`<figure class="fig">`)
 	b.WriteString(`<div class="fig-rows">`)
-	for _, it := range doc.Items {
-		b.WriteString(r.item(it))
-	}
+	b.WriteString(r.items(doc.Items))
 	b.WriteString(`</div>`)
 	if doc.Caption != "" {
 		b.WriteString(`<figcaption>`)

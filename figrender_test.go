@@ -111,6 +111,60 @@ func TestFigStatsRow(t *testing.T) {
 	}
 }
 
+func TestFigGroupNests(t *testing.T) {
+	src := "```fig\nitems:\n  - group: Server\n    items:\n      - box: Handler\n      - result: 200\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-group">`,
+		`<div class="fig-group-title">Server</div>`,
+		`<div class="fig-box">Handler</div>`,
+		`<div class="fig-result">200</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestFigGroupNestsToDepth(t *testing.T) {
+	src := "```fig\nitems:\n  - group: Outer\n    items:\n      - group: Inner\n        items:\n          - box: Leaf\n```\n"
+	out, _ := figConvert(t, src)
+
+	if strings.Count(out, `class="fig-group"`) != 2 {
+		t.Errorf("want two nested groups, got:\n%s", out)
+	}
+	if !strings.Contains(out, `<div class="fig-box">Leaf</div>`) {
+		t.Errorf("the innermost leaf should render:\n%s", out)
+	}
+}
+
+func TestFigChainAndLanes(t *testing.T) {
+	src := "```fig\nitems:\n  - chain:\n      - box: Parse\n      - box: Render\n  - lanes:\n      - - box: L1\n      - - box: L2\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-chain">`,
+		`<div class="fig-box">Parse</div>`,
+		`<div class="fig-lanes">`,
+		`<div class="fig-lane">`,
+		`<div class="fig-box">L2</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, `class="fig-lane"`) != 2 {
+		t.Errorf("want two lanes, got:\n%s", out)
+	}
+}
+
 // defs is a real <dl>, matching what the DefinitionList extension emits for
 // prose, so the same stylesheet rules and the same semantics apply.
 func TestFigDefsGrid(t *testing.T) {
