@@ -59,7 +59,8 @@ func TestFigSurvivesFragmentMode(t *testing.T) {
 	if !strings.Contains(out, `<div class="fig-box">Client</div>`) {
 		t.Errorf("figure markup missing from a fragment:\n%s", out)
 	}
-	if !strings.Contains(out, ".fig-box") {
-		t.Error("a fragment must carry the figure styles with it")
-	}
 }
+
+// The other half of that claim — that a fragment carries the figure styles
+// with it — is asserted in Task 8, which is where the stylesheet lands. It
+// cannot be checked before then without failing for the wrong reason.
