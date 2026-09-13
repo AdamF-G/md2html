@@ -48,6 +48,16 @@ func (r *figRenderer) item(it figItem) string {
 	switch {
 	case it.Box != nil:
 		return `<div class="fig-box">` + r.inline(*it.Box) + `</div>`
+	case it.Arrow != nil:
+		if *it.Arrow == "" {
+			// Decorative: the boxes either side carry the meaning.
+			return `<div class="fig-arrow" aria-hidden="true"></div>`
+		}
+		return `<div class="fig-arrow">` + r.inline(*it.Arrow) + `</div>`
+	case it.Result != nil:
+		return `<div class="fig-result">` + r.inline(*it.Result) + `</div>`
+	case it.Rail != nil:
+		return `<div class="fig-rail">` + r.inline(*it.Rail) + `</div>`
 	}
 	return ""
 }

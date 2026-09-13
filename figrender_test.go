@@ -64,3 +64,31 @@ func TestFigSurvivesFragmentMode(t *testing.T) {
 // The other half of that claim — that a fragment carries the figure styles
 // with it — is asserted in Task 8, which is where the stylesheet lands. It
 // cannot be checked before then without failing for the wrong reason.
+
+func TestFigSimpleLeaves(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig\nitems:\n  - arrow: HTTP POST\n  - result: 200 OK\n  - rail: Release\n```\n")
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-arrow">HTTP POST</div>`,
+		`<div class="fig-result">200 OK</div>`,
+		`<div class="fig-rail">Release</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// An unlabeled arrow carries no information a screen reader needs: the
+// connection is conveyed by the surrounding boxes.
+func TestFigUnlabeledArrowIsHidden(t *testing.T) {
+	out, _ := figConvert(t, "```fig\nitems:\n  - box: A\n  - arrow: \"\"\n  - box: B\n```\n")
+
+	if !strings.Contains(out, `<div class="fig-arrow" aria-hidden="true"></div>`) {
+		t.Errorf("want a hidden arrow, got:\n%s", out)
+	}
+}
