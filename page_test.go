@@ -266,7 +266,7 @@ func TestConvertFragmentEndToEnd(t *testing.T) {
 }
 
 // A future version bump to mermaidCDN must re-vendor the library, or every
-// mermaid browser test in e2e_browser_test.go silently starts testing a
+// mermaid browser test in e2e/browser_test.go silently starts testing a
 // stale build. This check needs no browser, so it runs in the default,
 // non-gated suite and fails loudly the moment the two drift apart.
 func TestVendoredMermaidVersionMatchesPinned(t *testing.T) {

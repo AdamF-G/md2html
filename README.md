@@ -171,16 +171,23 @@ than creating one: `go install` will happily create a missing `GOBIN` and
 every level above it, which on a fresh machine puts the binary somewhere
 nothing on `PATH` will ever read and still reports success.
 
-`go test ./...` needs no browser. A separate, opt-in suite drives real
-headless Chrome to exercise the click-to-expand JavaScript runtimes end to
-end:
+`just test` (or `go test ./...`) needs no browser. A separate suite drives
+real headless Chrome to exercise the click-to-expand JavaScript runtimes
+end to end:
 
 ```bash
-go test -tags e2e_browser ./...
+just e2e     # or: cd e2e && go test ./...
 ```
 
-This requires Chrome or Chromium installed locally; it is not wired into
-any CI.
+It requires Chrome or Chromium installed locally, and lives in `e2e/` as its
+own Go module. That boundary is the only opt-in — there is no build tag —
+and it is what keeps chromedp out of the library: a test-only import would
+sit in this module's own `go.mod` as a direct requirement and be compiled by
+anyone who ran its tests. Nothing in a build or test of the library
+compiles it now. (It does still appear in `go.mod` as an *indirect* entry:
+`go.abhg.dev/goldmark/mermaid` requires it for a server-side renderer
+md2html never imports. That one is inherited, and the split cannot remove
+it.)
 
 ## License
 

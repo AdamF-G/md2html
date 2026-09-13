@@ -1,5 +1,3 @@
-//go:build e2e_browser
-
 // Package-level note for whoever appends the next test: every selector
 // passed to chromedp (Click, WaitVisible, AttributeValue, etc.)
 // needs the chromedp.ByQuery option. Without it, chromedp's default lookup
@@ -10,7 +8,7 @@
 // TestBrowserLargeImageExpandsOnClick's chromedp.Run call for the full
 // story.
 
-package md2html
+package e2e
 
 import (
 	"bytes"
@@ -32,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AdamF-G/md2html"
 	"github.com/chromedp/chromedp"
 )
 
@@ -212,7 +211,7 @@ func pngFixture(w, h int) []byte {
 // clone carrying the image's real, natural size — not the shrunk-to-fit
 // size the page displayed it at.
 func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
-	page, err := Convert([]byte("![big](big.png)\n"), Options{})
+	page, err := md2html.Convert([]byte("![big](big.png)\n"), md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -287,7 +286,7 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 // assumption — that the deferred branch, not the synchronous one, is what
 // wired this element up.
 func TestBrowserSlowImageExpandsAfterDeferredLoad(t *testing.T) {
-	page, err := Convert([]byte("![slow](slow.png)\n"), Options{})
+	page, err := md2html.Convert([]byte("![slow](slow.png)\n"), md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -390,7 +389,7 @@ func TestBrowserSlowImageExpandsAfterDeferredLoad(t *testing.T) {
 // A 10x10 image renders at its own size (nothing shrinks it), so it must
 // never get .expandable — there'd be nothing to zoom into.
 func TestBrowserSmallImageNotExpandable(t *testing.T) {
-	page, err := Convert([]byte("![small](small.png)\n"), Options{})
+	page, err := md2html.Convert([]byte("![small](small.png)\n"), md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -450,7 +449,7 @@ func TestBrowserSmallImageNotExpandable(t *testing.T) {
 // coordinate click at the corner of the viewport is what actually lands
 // on the ::backdrop.
 func TestBrowserBackdropClickCloses(t *testing.T) {
-	page, err := Convert([]byte("![big](big.png)\n"), Options{})
+	page, err := md2html.Convert([]byte("![big](big.png)\n"), md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -476,7 +475,7 @@ func TestBrowserBackdropClickCloses(t *testing.T) {
 // author chose it already, and a second, conflicting click meaning would
 // override it.
 func TestBrowserLinkedImageNotWired(t *testing.T) {
-	page, err := Convert([]byte("[![big](big.png)](https://example.invalid)\n"), Options{})
+	page, err := md2html.Convert([]byte("[![big](big.png)](https://example.invalid)\n"), md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -542,7 +541,7 @@ func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
 
 	const src = `<pre class="mermaid"><svg viewBox="0 0 10 10" style="width:5px;height:5px"><circle cx="5" cy="5" r="4"/></svg></pre>
 `
-	page, err := Convert([]byte(src), Options{
+	page, err := md2html.Convert([]byte(src), md2html.Options{
 		MermaidURL: baseURL + "/mermaid-stub.js",
 	})
 	if err != nil {
@@ -616,7 +615,7 @@ func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
 func TestBrowserSvgInsideExpandsOnClick(t *testing.T) {
 	const src = `<svg viewBox="0 0 800 600" style="width:100px;height:75px"><rect x="0" y="0" width="800" height="600" fill="red"/></svg>
 `
-	page, err := Convert([]byte(src), Options{})
+	page, err := md2html.Convert([]byte(src), md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -693,7 +692,10 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 
 	dir, baseURL := serveDir(t)
 
-	vendorRoot := filepath.Join("testdata", "vendor")
+	// Up one directory: the vendored build belongs to the library's own
+	// testdata (page_test.go pins its version against the default URL there),
+	// and this module only borrows it to serve offline.
+	vendorRoot := filepath.Join("..", "testdata", "vendor")
 	vendorFiles := map[string][]byte{}
 	err := filepath.WalkDir(vendorRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -730,8 +732,8 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 
 	mermaidURL := baseURL + "/vendor/mermaid.esm.min.mjs"
 
-	page, err := Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"),
-		Options{MermaidURL: mermaidURL})
+	page, err := md2html.Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"),
+		md2html.Options{MermaidURL: mermaidURL})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -820,7 +822,7 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 // byte-for-byte identical either way. Hence this test.
 func TestBrowserMediaExpandInsideCollapsedContainer(t *testing.T) {
 	md := "::: aside Collapsed\n\n![small](small.png)\n\n![big](big.png)\n\n:::\n"
-	page, err := Convert([]byte(md), Options{Transforms: Builtins()})
+	page, err := md2html.Convert([]byte(md), md2html.Options{Transforms: md2html.Builtins()})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -935,7 +937,7 @@ func TestBrowserMediaExpandInsideCollapsedContainer(t *testing.T) {
 func TestBrowserCollapsibleContainerDiscloses(t *testing.T) {
 	md := "::: aside Why this matters\n\nAside body.\n\n:::\n\n" +
 		"::: example Two\n\nExample body.\n\n:::\n"
-	page, err := Convert([]byte(md), Options{Transforms: Builtins()})
+	page, err := md2html.Convert([]byte(md), md2html.Options{Transforms: md2html.Builtins()})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -1044,9 +1046,9 @@ func TestBrowserCollapsibleContainerDiscloses(t *testing.T) {
 // Layout under a media query is still behavior, and it still needs a real
 // engine to observe, so it earns the one exception.
 func TestBrowserFigColsStackWhenNarrow(t *testing.T) {
-	page, err := Convert([]byte(
+	page, err := md2html.Convert([]byte(
 		"```fig\nlayout: cols\nitems:\n  - box: Left\n  - box: Right\n```\n"),
-		Options{})
+		md2html.Options{})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
