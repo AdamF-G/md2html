@@ -58,6 +58,30 @@ func (r *figRenderer) item(it figItem) string {
 		return `<div class="fig-result">` + r.inline(*it.Result) + `</div>`
 	case it.Rail != nil:
 		return `<div class="fig-rail">` + r.inline(*it.Rail) + `</div>`
+	case it.Stats != nil:
+		var b strings.Builder
+		b.WriteString(`<div class="fig-stats">`)
+		for _, s := range it.Stats {
+			b.WriteString(`<div class="fig-stat"><span class="fig-stat-value">`)
+			b.WriteString(r.inline(s.Value))
+			b.WriteString(`</span><span class="fig-stat-label">`)
+			b.WriteString(r.inline(s.Label))
+			b.WriteString(`</span></div>`)
+		}
+		b.WriteString(`</div>`)
+		return b.String()
+	case it.Defs != nil:
+		var b strings.Builder
+		b.WriteString(`<dl class="fig-defs">`)
+		for _, d := range it.Defs {
+			b.WriteString(`<dt>`)
+			b.WriteString(r.inline(d.Term))
+			b.WriteString(`</dt><dd>`)
+			b.WriteString(r.inline(d.Def))
+			b.WriteString(`</dd>`)
+		}
+		b.WriteString(`</dl>`)
+		return b.String()
 	}
 	return ""
 }

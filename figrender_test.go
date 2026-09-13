@@ -92,3 +92,41 @@ func TestFigUnlabeledArrowIsHidden(t *testing.T) {
 		t.Errorf("want a hidden arrow, got:\n%s", out)
 	}
 }
+
+func TestFigStatsRow(t *testing.T) {
+	src := "```fig\nitems:\n  - stats:\n      - value: 78ms\n        label: cold\n      - value: 31ms\n        label: warm\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-stats">`,
+		`<div class="fig-stat"><span class="fig-stat-value">78ms</span><span class="fig-stat-label">cold</span></div>`,
+		`<span class="fig-stat-value">31ms</span>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// defs is a real <dl>, matching what the DefinitionList extension emits for
+// prose, so the same stylesheet rules and the same semantics apply.
+func TestFigDefsGrid(t *testing.T) {
+	src := "```fig\nitems:\n  - defs:\n      - term: seed\n        def: an entry point\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<dl class="fig-defs">`,
+		`<dt>seed</dt>`,
+		`<dd>an entry point</dd>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
