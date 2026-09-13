@@ -7,11 +7,30 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// tocMarker is the token a document uses to ask for a contents list. It has
-// to be inert to every other Markdown renderer, so that a source file
-// carrying one still reads correctly unprocessed — double brackets are not
-// link syntax in CommonMark, so this renders as literal text elsewhere.
-const tocMarker = "[[toc]]"
+// tocMarkers are the tokens a document may use to ask for a contents list,
+// compared case-insensitively. Each has to be inert to every other Markdown
+// renderer, so that a source file carrying one still reads correctly
+// unprocessed; none is link syntax in CommonMark, so all render as literal
+// text elsewhere.
+//
+// There is no single convention here, so md2html accepts the two that
+// matter: "[[toc]]" is markdown-it and VitePress, and "[TOC]" is
+// Python-Markdown and therefore MkDocs, as well as Typora and StackEdit.
+// Documents are written for one or the other, and rejecting either would
+// be an arbitrary tax on whichever the author already knows.
+//
+// GitLab's "[[_TOC_]]" is absent on purpose: its underscores are emphasis
+// delimiters, so it never reaches this transform as a single text node.
+// See TestTOCGitLabMarkerIsNotSupported.
+var tocMarkers = map[string]bool{
+	"[[toc]]": true,
+	"[toc]":   true,
+}
+
+// isTOCMarker reports whether s, already trimmed, is one of them.
+func isTOCMarker(s string) bool {
+	return tocMarkers[strings.ToLower(s)]
+}
 
 // TOC replaces a marker paragraph with a flat list of the current
 // document's own headings.
@@ -45,7 +64,7 @@ func TOC() Transform {
 			// never a <p>, so it is excluded by construction.
 			if n.FirstChild != nil && n.FirstChild == n.LastChild &&
 				n.FirstChild.Type == html.TextNode &&
-				strings.TrimSpace(n.FirstChild.Data) == tocMarker {
+				isTOCMarker(strings.TrimSpace(n.FirstChild.Data)) {
 				markers = append(markers, n)
 			}
 		})

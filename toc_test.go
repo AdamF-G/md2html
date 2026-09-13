@@ -187,3 +187,47 @@ func TestTOCWithHeadingsButNoIDsLeavesTheMarker(t *testing.T) {
 		t.Errorf("marker was removed even though no heading had an id\ngot: %s", got)
 	}
 }
+
+// The other spellings in the wild: [TOC] is Python-Markdown, MkDocs,
+// Typora and StackEdit; [[_TOC_]] is GitLab. All name the same thing.
+func TestTOCAlternateMarkers(t *testing.T) {
+	for _, marker := range []string{"[[toc]]", "[TOC]", "[toc]", "[[TOC]]"} {
+		got := convert(t, "# Doc\n\n"+marker+"\n\n## One\n", nil)
+		if !strings.Contains(got, `<nav class="toc">`) {
+			t.Errorf("%s did not produce a contents list\ngot: %s", marker, got)
+		}
+		if strings.Contains(got, marker) {
+			t.Errorf("%s left in the body\ngot: %s", marker, got)
+		}
+	}
+}
+
+// The marker must still be the paragraph's entire content.
+func TestTOCAlternateMarkerMidSentenceStaysLiteral(t *testing.T) {
+	got := convert(t, "# Doc\n\nsee [TOC] here\n\n## One\n", nil)
+	if strings.Contains(got, `<nav class="toc">`) {
+		t.Errorf("mid-sentence marker produced a contents list\ngot: %s", got)
+	}
+}
+
+// A marker inside a code span documents the feature and must stay literal.
+func TestTOCAlternateMarkerInCodeStaysLiteral(t *testing.T) {
+	got := convert(t, "# Doc\n\n`[TOC]`\n\n## One\n", nil)
+	if strings.Contains(got, `<nav class="toc">`) {
+		t.Errorf("marker in a code span produced a contents list\ngot: %s", got)
+	}
+}
+
+// GitLab's [[_TOC_]] is deliberately not supported: the underscores are
+// emphasis delimiters, so goldmark hands this transform a paragraph of
+// "[[", <em>TOC</em>, "]]" rather than one text node. Recognizing it would
+// mean matching on flattened text, which is exactly what the single-text-
+// node guard exists to avoid — it would also match a link whose visible
+// text happens to read that way. Pinned so the limitation is discoverable
+// rather than surprising.
+func TestTOCGitLabMarkerIsNotSupported(t *testing.T) {
+	got := convert(t, "# Doc\n\n[[_TOC_]]\n\n## One\n", nil)
+	if strings.Contains(got, `<nav class="toc">`) {
+		t.Errorf("[[_TOC_]] unexpectedly produced a contents list\ngot: %s", got)
+	}
+}
