@@ -119,8 +119,8 @@ func newGuardedHandler(t *testing.T, fileServer http.Handler) http.Handler {
 
 // serveDir starts an HTTP server over a fresh temp directory and returns
 // both, so callers needing to know baseURL before every file exists
-// (TestBrowserMermaidDiagramExpandsOnClick, which must set mermaidCDN to a
-// URL under baseURL before calling Convert) can write files in after the
+// (TestBrowserMermaidDiagramExpandsOnClick, which must name a MermaidURL
+// under baseURL before calling Convert) can write files in after the
 // server is already serving.
 //
 // The plain files served here include a vendored mermaid build
@@ -523,11 +523,10 @@ func TestBrowserLinkedImageNotWired(t *testing.T) {
 // content as diagram source, fail (it's SVG markup, not mermaid syntax),
 // and replace the fixture's <svg> with mermaid's own error-diagram SVG —
 // silently making every assertion below pass by inspecting the wrong
-// element rather than testing anything. mermaidCDN is redirected at a
-// local, inert ESM stub instead: it satisfies the one call the runtime
-// makes on it (initialize) and does nothing else, so the fixture DOM is
-// left exactly as authored while mermaidRuntime's lightbox-wiring code
-// still runs for real.
+// element rather than testing anything. Options.MermaidURL names a local,
+// inert ESM stub instead: it satisfies the one call the runtime makes on it
+// (initialize) and does nothing else, so the fixture DOM is left exactly as
+// authored while the runtime's lightbox-wiring code still runs for real.
 //
 // The svg's inline width/height style (shrinking its rendered box below
 // its own viewBox) is deliberate: wireExpand only wires an element when its
@@ -536,25 +535,16 @@ func TestBrowserLinkedImageNotWired(t *testing.T) {
 // candidate for .expandable regardless of the mermaid exclusion, and the
 // falsifiability check below would be a silent no-op.
 func TestBrowserSvgInsideMermaidPreExcluded(t *testing.T) {
-	// mermaidCDN is shared package state, restored via t.Cleanup below. That
-	// makes t.Parallel() unsafe on this test and on
-	// TestBrowserMermaidDiagramExpandsOnClick, which does the same
-	// reassignment: a concurrent run would race the two overrides against
-	// each other. Six Chrome-spawning tests are a natural future candidate
-	// for parallelism, so if that's added later, these two must stay
-	// serial (or gain their own isolation) even though nothing enforces it
-	// today — there is no t.Parallel() anywhere in this repo yet.
-	original := mermaidCDN
 	dir, baseURL := serveDir(t)
 	writeFiles(t, dir, map[string][]byte{
 		"mermaid-stub.js": []byte("export default { initialize() {} };\n"),
 	})
-	mermaidCDN = baseURL + "/mermaid-stub.js"
-	t.Cleanup(func() { mermaidCDN = original })
 
 	const src = `<pre class="mermaid"><svg viewBox="0 0 10 10" style="width:5px;height:5px"><circle cx="5" cy="5" r="4"/></svg></pre>
 `
-	page, err := Convert([]byte(src), Options{})
+	page, err := Convert([]byte(src), Options{
+		MermaidURL: baseURL + "/mermaid-stub.js",
+	})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -718,7 +708,7 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 		}
 		// Matched structurally rather than against the literal versioned
 		// filename, so this doesn't become a fourth copy of the version pin
-		// (alongside mermaidCDN and the vendored file itself) that goes
+		// (alongside the pinned URL and the vendored file itself) that goes
 		// stale on a re-vendor. Only the top-level entrypoint
 		// (testdata/vendor/mermaid-<version>.esm.min.mjs) matches: chunk
 		// files live under chunks/ and their rel path starts with that
@@ -738,11 +728,10 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 	}
 	writeFiles(t, dir, vendorFiles)
 
-	original := mermaidCDN
-	mermaidCDN = baseURL + "/vendor/mermaid.esm.min.mjs"
-	t.Cleanup(func() { mermaidCDN = original })
+	mermaidURL := baseURL + "/vendor/mermaid.esm.min.mjs"
 
-	page, err := Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"), Options{})
+	page, err := Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"),
+		Options{MermaidURL: mermaidURL})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
@@ -752,7 +741,7 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 	// which a test machine may well be able to reach — rules out a false
 	// green from a render served over the network instead of from the
 	// vendored tree actually under test.
-	if !bytes.Contains(page, []byte(`import mermaid from "`+mermaidCDN+`"`)) {
+	if !bytes.Contains(page, []byte(`import mermaid from "`+mermaidURL+`"`)) {
 		t.Fatal("generated page does not import mermaid from the local test server")
 	}
 	writeFiles(t, dir, map[string][]byte{"index.html": page})

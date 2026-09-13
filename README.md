@@ -25,7 +25,9 @@ mermaid graph cannot express.
 The one thing a generated page fetches at view time is MermaidJS, and only
 a page that actually contains a diagram: it loads a pinned build from a CDN.
 Pages without diagrams reference nothing external, and `--fragment` output
-never loads it at all, because Artifacts render mermaid themselves.
+never loads it at all, because Artifacts render mermaid themselves. A build
+that must not reach a CDN can name its own copy — see `Options.MermaidURL`
+below.
 
 ## Usage
 
@@ -136,6 +138,10 @@ three arrive whatever `Transforms` holds — a builtin that reports is rebuilt
 against this sink before it runs, so appending to `Builtins()` costs you no
 diagnostics. `Convert` never writes to stderr itself; the callback runs
 synchronously on the calling goroutine.
+
+`Options.MermaidURL` names the ES module a page with a diagram imports at
+view time, for a docs build that must not reach a CDN. Empty keeps the
+pinned build.
 
 Add a transform by writing a `func(*html.Node) error`:
 

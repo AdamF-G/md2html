@@ -24,7 +24,7 @@ func TestExtractTitleFallsBackToFilename(t *testing.T) {
 }
 
 func TestPageShellIsCompleteDocument(t *testing.T) {
-	got := string(renderPage([]byte(`<p>hi</p>`), "T", "body{}"))
+	got := string(renderPage([]byte(`<p>hi</p>`), "T", "body{}", mermaidCDN))
 	for _, want := range []string{"<!doctype html>", "<html", "<head>", "<title>T</title>", "<body", "<p>hi</p>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("page missing %q\ngot: %s", want, got)
@@ -50,7 +50,7 @@ func TestFragmentShellOmitsDocumentWrapper(t *testing.T) {
 
 func TestBothShellsStartWithMarker(t *testing.T) {
 	for name, got := range map[string][]byte{
-		"page":     renderPage([]byte(`<p>x</p>`), "T", ""),
+		"page":     renderPage([]byte(`<p>x</p>`), "T", "", mermaidCDN),
 		"fragment": renderFragment([]byte(`<p>x</p>`), "T", ""),
 	} {
 		if !strings.HasPrefix(string(got), MarkerPrefix) {
@@ -301,25 +301,48 @@ func TestVendoredMermaidVersionMatchesPinned(t *testing.T) {
 	}
 }
 
-// mermaidCDN must be reassignable so a test can redirect the runtime's
-// import at a local, vendored copy instead of the live CDN. This is the
-// one production-code change the e2e browser suite depends on — proven
-// here without needing a browser at all.
-func TestMermaidCDNIsOverridable(t *testing.T) {
-	original := mermaidCDN
-	mermaidCDN = "http://example.test/mermaid.mjs"
-	t.Cleanup(func() { mermaidCDN = original })
-
-	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"), Options{})
+// A caller must be able to name the mermaid build a page imports: the
+// browser suite points it at a vendored copy so it can run offline, and a
+// docs build behind a firewall has the same need for the same reason. The
+// named build replaces the pinned one outright — a page that still reached
+// for jsdelivr alongside it would defeat both uses.
+func TestMermaidURLOverridesThePinnedBuild(t *testing.T) {
+	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"),
+		Options{MermaidURL: "http://example.test/mermaid.mjs"})
 	if err != nil {
 		t.Fatalf("Convert: %v", err)
 	}
 	s := string(got)
 	if !strings.Contains(s, "http://example.test/mermaid.mjs") {
-		t.Error("mermaidRuntime did not pick up the overridden mermaidCDN")
+		t.Error("mermaid runtime did not import the URL the caller named")
 	}
 	if strings.Contains(s, "cdn.jsdelivr.net") {
-		t.Error("mermaidRuntime still embedded the real CDN URL after override")
+		t.Error("mermaid runtime still embedded the pinned CDN URL alongside it")
+	}
+}
+
+// The zero value keeps the pinned build, so a caller who never heard of the
+// option gets the documented behavior.
+func TestMermaidURLEmptyKeepsThePinnedBuild(t *testing.T) {
+	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"), Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if !strings.Contains(string(got), mermaidCDN) {
+		t.Errorf("page does not import the pinned build %q", mermaidCDN)
+	}
+}
+
+// Fragment output never loads mermaid at all — Artifacts render it
+// natively — so naming a build must not talk one into a fragment.
+func TestMermaidURLIgnoredForFragments(t *testing.T) {
+	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"),
+		Options{Fragment: true, MermaidURL: "http://example.test/mermaid.mjs"})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if strings.Contains(string(got), "example.test") {
+		t.Error("fragment output imported a mermaid build")
 	}
 }
 

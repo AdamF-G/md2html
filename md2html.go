@@ -39,6 +39,15 @@ type Options struct {
 	SourcePath string
 	// CSS replaces the embedded default stylesheet. Empty uses the default.
 	CSS string
+	// MermaidURL is the ES module a page containing a mermaid diagram
+	// imports at view time. Empty uses the pinned CDN build.
+	//
+	// It is the only thing a generated page ever fetches, so this is the
+	// knob for a docs build that must not reach a CDN: point it at a copy
+	// you serve yourself. Nothing else changes — a page with no diagram
+	// still imports nothing, and Fragment output never imports at all,
+	// because Artifacts render mermaid themselves.
+	MermaidURL string
 	// Transforms to run. Nil means the default list.
 	//
 	// A list supplied here is used as given, except that any builtin in it
@@ -185,5 +194,9 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if opt.Fragment {
 		return renderFragment(body, title, css), nil
 	}
-	return renderPage(body, title, css), nil
+	mermaidURL := opt.MermaidURL
+	if mermaidURL == "" {
+		mermaidURL = mermaidCDN
+	}
+	return renderPage(body, title, css, mermaidURL), nil
 }
