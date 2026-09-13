@@ -2,6 +2,7 @@ package md2html
 
 import (
 	"bytes"
+	"fmt"
 	gohtml "html"
 	"strings"
 
@@ -110,4 +111,26 @@ func (r *figRenderer) item(it figItem) string {
 		return b.String()
 	}
 	return ""
+}
+
+// figWeight clamps a panel weight to 1-12. A weight is a ratio, not a
+// pixel count, and a figure with a panel 99 times wider than its neighbor
+// is a typo rather than a layout.
+func figWeight(n int) int {
+	switch {
+	case n < 1:
+		return 1
+	case n > 12:
+		return 12
+	}
+	return n
+}
+
+// panel wraps one top-level item of a cols or split layout. The weight
+// rides on a custom property rather than a raw flex-grow so a caller's
+// --css replacement can reinterpret it instead of being overridden by an
+// inline style it cannot reach.
+func (r *figRenderer) panel(it figItem) string {
+	return fmt.Sprintf(`<div class="fig-panel" style="--fig-weight:%d">%s</div>`,
+		figWeight(it.Weight), r.item(it))
 }

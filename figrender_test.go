@@ -167,6 +167,56 @@ func TestFigChainAndLanes(t *testing.T) {
 
 // defs is a real <dl>, matching what the DefinitionList extension emits for
 // prose, so the same stylesheet rules and the same semantics apply.
+func TestFigColsWrapsPanelsWithWeights(t *testing.T) {
+	src := "```fig\nlayout: cols\nitems:\n  - box: Wide\n    weight: 3\n  - box: Narrow\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-cols">`,
+		`<div class="fig-panel" style="--fig-weight:3">`,
+		`<div class="fig-panel" style="--fig-weight:1">`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, `class="fig-rows"`) {
+		t.Errorf("a cols layout must not emit a rows wrapper:\n%s", out)
+	}
+}
+
+func TestFigWeightIsClamped(t *testing.T) {
+	for _, c := range []struct {
+		in   int
+		want int
+	}{{0, 1}, {1, 1}, {7, 7}, {12, 12}, {99, 12}, {-4, 1}} {
+		if got := figWeight(c.in); got != c.want {
+			t.Errorf("figWeight(%d) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+func TestFigSplitPutsBoundaryBetweenPanels(t *testing.T) {
+	src := "```fig\nlayout: split\nboundary: before / after\nitems:\n  - box: Old\n  - box: New\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if !strings.Contains(out, `<div class="fig-split">`) {
+		t.Errorf("want a split wrapper:\n%s", out)
+	}
+	oldAt := strings.Index(out, "Old")
+	bound := strings.Index(out, `class="fig-boundary"`)
+	newAt := strings.Index(out, "New")
+	if !(oldAt < bound && bound < newAt) {
+		t.Errorf("boundary must sit between the panels:\n%s", out)
+	}
+}
+
 func TestFigDefsGrid(t *testing.T) {
 	src := "```fig\nitems:\n  - defs:\n      - term: seed\n        def: an entry point\n```\n"
 	out, warnings := figConvert(t, src)

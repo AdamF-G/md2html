@@ -164,9 +164,27 @@ func renderFig(body []byte, warn func(string)) (string, bool) {
 	r := newFigRenderer()
 	var b strings.Builder
 	b.WriteString(`<figure class="fig">`)
-	b.WriteString(`<div class="fig-rows">`)
-	b.WriteString(r.items(doc.Items))
-	b.WriteString(`</div>`)
+	switch doc.Layout {
+	case "cols":
+		b.WriteString(`<div class="fig-cols">`)
+		for _, it := range doc.Items {
+			b.WriteString(r.panel(it))
+		}
+		b.WriteString(`</div>`)
+	case "split":
+		// validateFig has already guaranteed exactly two items.
+		b.WriteString(`<div class="fig-split">`)
+		b.WriteString(r.panel(doc.Items[0]))
+		b.WriteString(`<div class="fig-boundary">`)
+		b.WriteString(r.inline(doc.Boundary))
+		b.WriteString(`</div>`)
+		b.WriteString(r.panel(doc.Items[1]))
+		b.WriteString(`</div>`)
+	default:
+		b.WriteString(`<div class="fig-rows">`)
+		b.WriteString(r.items(doc.Items))
+		b.WriteString(`</div>`)
+	}
 	if doc.Caption != "" {
 		b.WriteString(`<figcaption>`)
 		b.WriteString(r.inline(doc.Caption))
