@@ -190,7 +190,8 @@ md2html never imports. That one is inherited, and the split cannot remove
 it.)
 
 GitHub Actions runs both suites on every push and pull request, along with
-`gofmt`, `go vet` and `go mod tidy -diff`.
+`gofmt`, `go vet` and `go mod tidy -diff`. [CHANGELOG.md](./CHANGELOG.md)
+records what has changed.
 
 ## License
 
