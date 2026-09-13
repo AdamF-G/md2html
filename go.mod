@@ -1,6 +1,6 @@
 module github.com/AdamF-G/md2html
 
-go 1.27.1
+go 1.26
 
 require (
 	github.com/stefanfritsch/goldmark-fences v1.0.0
