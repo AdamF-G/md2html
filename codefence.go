@@ -97,9 +97,14 @@ func fenceTokens(s string) []string {
 // renderer never calls n.Attributes() either (CodeAttributeFilter is wired
 // up for inline code spans, not fenced blocks), so there is no existing
 // behavior here to preserve beyond "still does nothing with it".
-type codeFenceRenderer struct{}
+type codeFenceRenderer struct{ warn func(string) }
 
-func newCodeFenceRenderer() renderer.NodeRenderer { return &codeFenceRenderer{} }
+func newCodeFenceRenderer(warn func(string)) renderer.NodeRenderer {
+	if warn == nil {
+		warn = func(string) {}
+	}
+	return &codeFenceRenderer{warn: warn}
+}
 
 func (r *codeFenceRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindFencedCodeBlock, r.render)
@@ -118,6 +123,23 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 		info = string(n.Info.Segment.Value(source))
 	}
 	lang, caption := splitFenceInfo(info)
+
+	// A `fig` fence is a figure, not code. renderFig either returns markup
+	// or declines, in which case the body falls through to the ordinary
+	// code-block path below and the reader sees their own source.
+	if lang == "fig" {
+		var body strings.Builder
+		lines := n.Lines()
+		for i := 0; i < lines.Len(); i++ {
+			line := lines.At(i)
+			body.Write(line.Value(source))
+		}
+		if markup, ok := renderFig([]byte(body.String()), r.warn); ok {
+			w.WriteString(markup)
+			w.WriteByte('\n')
+			return ast.WalkSkipChildren, nil
+		}
+	}
 
 	if caption != "" {
 		w.WriteString(`<figure class="code-figure"><figcaption>`)

@@ -90,7 +90,9 @@ type CrawlResult struct {
 // Convert would inline the whole stylesheet on every discovery pass.
 func parseDoc(src []byte) (*html.Node, error) {
 	var buf bytes.Buffer
-	if err := newParser().Convert(src, &buf); err != nil {
+	// nil: discovery only needs the tree to extract links, and has no
+	// per-document warning sink of its own to hand a `fig` fence.
+	if err := newParser(nil).Convert(src, &buf); err != nil {
 		return nil, err
 	}
 	return parseFragment(buf.Bytes())

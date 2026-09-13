@@ -80,7 +80,11 @@ type Options struct {
 
 // newParser builds the goldmark instance. Every extension here is required
 // by the conformance fixture; see docs/specs.
-func newParser() goldmark.Markdown {
+//
+// warn is handed to the fenced-code renderer, which needs it for the `fig`
+// language: a malformed figure degrades to a code block and says why. It
+// may be nil.
+func newParser(warn func(string)) goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -97,7 +101,7 @@ func newParser() goldmark.Markdown {
 			// Priority below goldmark's own (1000) so this wins for
 			// fenced code blocks; every other node keeps the default
 			// renderer.
-			renderer.WithNodeRenderers(util.Prioritized(newCodeFenceRenderer(), 100)),
+			renderer.WithNodeRenderers(util.Prioritized(newCodeFenceRenderer(warn), 100)),
 		),
 	)
 }
@@ -120,7 +124,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
-	if err := newParser().Convert(src, &buf); err != nil {
+	if err := newParser(opt.Warn).Convert(src, &buf); err != nil {
 		return nil, err
 	}
 	root, err := parseFragment(buf.Bytes())
