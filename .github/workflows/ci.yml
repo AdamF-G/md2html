@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # The library and CLI. No browser, no network beyond the module download.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Read the floor from go.mod rather than naming a version here,
+          # so the two can never drift apart.
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:"; echo "$unformatted"; exit 1
+          fi
+      # A go.mod that has drifted from its imports is a release hazard, not
+      # a style one: it is what decides the dependency graph every consumer
+      # inherits.
+      - run: go mod tidy -diff
+      - run: go vet ./...
+      # -race because the CLI converts every document on its own goroutine
+      # and writes warnings into per-document slices.
+      - run: go test -race ./...
+      - run: go build ./cmd/md2html
+
+  # The click-to-expand runtimes, driven through real headless Chrome. Its
+  # own module, so it needs its own checkout step's worth of setup and never
+  # shares the library's dependency graph.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+      # Preinstalled on the GitHub-hosted Ubuntu images. Asserted up front so
+      # a runner image that drops it fails here, by name, rather than as
+      # eleven identical fifteen-second chromedp timeouts.
+      - run: google-chrome --version
+      - run: go test -count=1 ./...
+        working-directory: e2e
