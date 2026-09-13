@@ -1046,3 +1046,58 @@ func TestBrowserCollapsibleContainerDiscloses(t *testing.T) {
 		t.Errorf("summary cursor = %q, want %q", summaryCursor, "pointer")
 	}
 }
+
+// A cols layout must put its panels side by side on a wide viewport and
+// stack them on a phone. This is the one piece of figure behavior no markup
+// assertion can observe: the stylesheet's only media query decides it.
+//
+// The rest of this suite exists for JavaScript, which figures ship none of.
+// Layout under a media query is still behavior, and it still needs a real
+// engine to observe, so it earns the one exception.
+func TestBrowserFigColsStackWhenNarrow(t *testing.T) {
+	page, err := Convert([]byte(
+		"```fig\nlayout: cols\nitems:\n  - box: Left\n  - box: Right\n```\n"),
+		Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"fig.html": page})
+
+	ctx := newBrowserCtx(t)
+
+	// Both panels' left edges, read from the live layout.
+	const edges = `(() => {
+		const p = [...document.querySelectorAll(".fig-panel")];
+		return p.map(e => e.getBoundingClientRect().left).join(",");
+	})()`
+
+	// No sleep between the resize and the read: getBoundingClientRect
+	// forces a synchronous layout, and CDP applies the metrics override
+	// before the next evaluation returns. Polling until the assertion
+	// holds would turn a real failure into a timeout, which is worse
+	// diagnostics, not better.
+	var wide, narrow string
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/fig.html"),
+		chromedp.WaitVisible(".fig-cols", chromedp.ByQuery),
+		chromedp.Evaluate(edges, &wide),
+		chromedp.EmulateViewport(390, 800),
+		chromedp.Evaluate(edges, &narrow),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	wideLeft := strings.Split(wide, ",")
+	narrowLeft := strings.Split(narrow, ",")
+	if len(wideLeft) != 2 || len(narrowLeft) != 2 {
+		t.Fatalf("want two panels, got wide=%q narrow=%q", wide, narrow)
+	}
+	if wideLeft[0] == wideLeft[1] {
+		t.Errorf("panels should share a row when wide, both left edges at %s", wideLeft[0])
+	}
+	if narrowLeft[0] != narrowLeft[1] {
+		t.Errorf("panels should stack when narrow, left edges %q vs %q",
+			narrowLeft[0], narrowLeft[1])
+	}
+}
