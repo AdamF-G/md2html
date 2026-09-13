@@ -105,11 +105,14 @@ in the backlog:
 ### Layout
 
 ```
-fig.go          the fence branch, the YAML model, validation
-figrender.go    per-kind HTML emitters, the inline-Markdown pass
-default.css     the fig component block
-fig_test.go     model, validation, degradation
-figrender_test.go  per-kind golden markup, inline rendering
+fig.go                 the fence branch, the YAML model, validation
+figrender.go           per-kind HTML emitters, the inline-Markdown pass
+default.css            the fig component block
+fig_test.go            model, validation, degradation
+figrender_test.go      per-kind golden markup, inline rendering
+testdata/figures.md    the rendered gallery, every kind and layout
+testdata/conformance.md  gains fig coverage
+e2e_browser_test.go    gains one narrow-width stacking test
 ```
 
 Two files rather than one: nine item kinds and three layouts in a single
@@ -291,6 +294,8 @@ costs nothing, since the body genuinely is YAML.
 
 TDD throughout, as everywhere else in this repo.
 
+### Unit and integration
+
 - `fig_test.go` — the model and its failure modes: a valid document of each
   shape, an unknown key rejected by `KnownFields`, an item naming two kinds,
   an item naming none, a YAML syntax error. Each failing case asserts both
@@ -301,11 +306,59 @@ TDD throughout, as everywhere else in this repo.
 - A full-`Convert` test proving chips, `§` references and `.md` link
   rewriting all reach inside a figure, and that `ExtractLinks` returns a
   link that appears only in a figure label.
-- No browser test. `e2e_browser_test.go` exists because the mermaid and
-  media-expand paths ship JavaScript whose behavior cannot be read off the
-  HTML. This feature ships none.
-- `docs/authoring.md` gains a "Structured figures" section, and the
-  `md2html-authoring` skill's quick-reference table gains a row.
+
+### Why markup assertions are not sufficient here
+
+Every test above verifies *markup*. Nine item kinds and three layouts can
+emit perfectly correct markup and still render as an incoherent figure —
+lanes collapsing to a vertical pile, a chain's connectors landing in the
+wrong gaps, weights failing to divide a row. The assertions all pass and
+the output looks broken.
+
+That failure mode barely exists for chips or containers, whose whole
+contract *is* the markup. It is the dominant one for a figure that is
+hand-laid-out by definition, so this feature gets two things nothing else
+in the backlog needed: a rendered corpus, and one layout test in a real
+browser.
+
+::: warning
+The authoring docs cannot double as that corpus. Per "Documenting the
+syntax" above, their examples live in `yaml` fences precisely so they do
+*not* render. The corpus has to be a separate fixture that does.
+:::
+
+### The corpus
+
+- `testdata/conformance.md` gains `fig` coverage, with matching entries in
+  `conformanceChecks` (`md2html_test.go:18`). That file is described in its
+  own test as the contract for the pipeline, and a fence language that
+  survives conversion belongs in it.
+- `testdata/figures.md` is the gallery: every kind, every layout, nesting,
+  and the degradation cases side by side in one document. It backs a golden
+  test, but its real job is being the page a maintainer opens in a browser
+  after touching the stylesheet. It is built by this repo's own tool, so it
+  never drifts from what the tool actually emits.
+
+### The one browser test
+
+`e2e_browser_test.go` gains a single `fig` test, under the existing
+`e2e_browser` build tag.
+
+This is the one place this design deliberately departs from the rule that
+earned that file: the browser suite exists because mermaid and media-expand
+ship JavaScript whose behavior cannot be read off the HTML, and this
+feature ships none. But narrow-width stacking is *behavior*, not taste, and
+it is the only media query in the whole stylesheet — markup tests cannot
+observe it even in principle. The harness already asserts on
+`getBoundingClientRect()` (`e2e_browser_test.go:409`, `:868`), so the test
+emulates a phone viewport and checks that two `cols` panels share a row
+when wide and stack when narrow. One test, guarding the one thing nothing
+else can see.
+
+### Documentation
+
+`docs/authoring.md` gains a "Structured figures" section, and the
+`md2html-authoring` skill's quick-reference table gains a row.
 
 ## Alternatives considered
 
