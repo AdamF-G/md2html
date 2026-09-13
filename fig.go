@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -133,6 +134,68 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 	return nil
 }
 
+// figTypeNouns translates the Go type names yaml.v3 quotes in its errors
+// into the vocabulary the fence language actually uses. An author who wrote
+// a fig fence has never heard of md2html.figItem, and a warning that names
+// it is asking them to read this package's source to understand their typo.
+var figTypeNouns = map[string]string{
+	"figDoc":  "figure",
+	"figItem": "item",
+	"figStat": "stat tile",
+	"figDef":  "definition",
+}
+
+var (
+	figGoType     = regexp.MustCompile(`(\[\])?md2html\.(\w+)`)
+	figUnknownKey = regexp.MustCompile(`^line (\d+): field (\S+) not found in type \S+$`)
+	figLinePrefix = regexp.MustCompile(`^line (\d+): `)
+	figWhitespace = regexp.MustCompile(`\s+`)
+)
+
+// figFault renders one fault as a single line of author-facing prose.
+//
+// Two properties matter and neither is cosmetic. One line, because the CLI
+// prints every warning as "md2html: <file>: <msg>" — a second line escapes
+// that prefix and breaks the one-line-per-warning format every other
+// warning in this tool honours. And no Go type names, because yaml.v3
+// reports a misspelled key as "field boxes not found in type
+// md2html.figItem", which names an implementation detail instead of the
+// mistake.
+//
+// The line numbers yaml.v3 reports count from the start of the *fence
+// body*, not the document, so they are labelled as such: a reader who is
+// not told will reasonably count from the top of the file and land
+// somewhere unrelated.
+func figFault(err error) string {
+	var parts []string
+	var te *yaml.TypeError
+	if errors.As(err, &te) {
+		parts = te.Errors
+	} else {
+		parts = []string{strings.TrimPrefix(err.Error(), "yaml: ")}
+	}
+	for i, p := range parts {
+		p = figWhitespace.ReplaceAllString(strings.TrimSpace(p), " ")
+		if m := figUnknownKey.FindStringSubmatch(p); m != nil {
+			parts[i] = fmt.Sprintf("unknown key %q (line %s of the fence body)", m[2], m[1])
+			continue
+		}
+		p = figGoType.ReplaceAllStringFunc(p, func(t string) string {
+			m := figGoType.FindStringSubmatch(t)
+			noun, ok := figTypeNouns[m[2]]
+			if !ok {
+				noun = "value"
+			}
+			if m[1] == "[]" {
+				return "a list of " + noun + "s"
+			}
+			return "a " + noun
+		})
+		parts[i] = figLinePrefix.ReplaceAllString(p, "line $1 of the fence body: ")
+	}
+	return figWhitespace.ReplaceAllString(strings.Join(parts, "; "), " ")
+}
+
 // parseFig decodes a fence body. KnownFields(true) is the point of using a
 // real decoder: a misspelled key is an error that degrades visibly rather
 // than an item that silently vanishes.
@@ -178,11 +241,11 @@ func renderFig(body []byte, warn func(string)) (string, bool) {
 	}
 	doc, err := parseFig(body)
 	if err != nil {
-		warn(fmt.Sprintf("fig fence: %v; rendering it as a code block", err))
+		warn(fmt.Sprintf("fig fence: %s; rendering it as a code block", figFault(err)))
 		return "", false
 	}
 	if err := validateFig(doc); err != nil {
-		warn(fmt.Sprintf("fig fence: %v; rendering it as a code block", err))
+		warn(fmt.Sprintf("fig fence: %s; rendering it as a code block", figFault(err)))
 		return "", false
 	}
 

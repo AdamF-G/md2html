@@ -128,6 +128,24 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 	// or declines, in which case the body falls through to the ordinary
 	// code-block path below and the reader sees their own source.
 	if lang == "fig" {
+		// An info-string caption is code-fence vocabulary; a figure's
+		// caption is a `caption:` key in its body. It is not quietly
+		// adopted as a fallback, because one thing having two spellings is
+		// what the single-vocabulary rule exists to prevent — but author
+		// text must never be dropped in silence either, so say so and name
+		// the spelling that works.
+		//
+		// This warning is deliberately unconditional rather than raised
+		// only when the figure renders. The sentence is true either way —
+		// a caption in the info string is not part of the fence language —
+		// and an author whose body also fails to decode is otherwise told
+		// about the caption only later, once they have fixed the body and
+		// watched it vanish. Two mistakes here mean two warnings; the
+		// one-warning-per-fault invariant is per fault, not per fence.
+		if caption != "" {
+			r.warn(`fig fence: a caption in the info string is not part of a figure; ` +
+				`use a caption: key in the fence body instead`)
+		}
 		var body strings.Builder
 		lines := n.Lines()
 		for i := 0; i < lines.Len(); i++ {

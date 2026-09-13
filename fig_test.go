@@ -78,7 +78,10 @@ func TestFigValidationRejects(t *testing.T) {
 		{
 			name:    "unknown key",
 			src:     "```fig\nitems:\n  - boxes: A\n```\n",
-			wantMsg: "field boxes not found",
+			// yaml.v3 phrases this as "field boxes not found in type
+			// md2html.figItem"; figFault rewrites it into the fence
+			// language's own vocabulary.
+			wantMsg: `unknown key "boxes"`,
 		},
 		{
 			name:    "weight outside cols",
@@ -223,6 +226,109 @@ func TestFigEmptyFenceSaysSo(t *testing.T) {
 		}
 		if strings.Contains(warnings[0], "EOF") {
 			t.Errorf("warning should not leak the decoder's EOF: %q", warnings[0])
+		}
+	}
+}
+
+// A caption in the info string is code-fence vocabulary, not figure
+// vocabulary: a figure's caption is a `caption:` key in its body. The
+// fence used to compute the info-string caption and then return before the
+// code that renders it, so the author's text vanished without a word. It is
+// not adopted as a fallback — one thing gets one spelling — but it must not
+// disappear in silence either.
+func TestFigInfoStringCaptionWarns(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig caption=\"Request path\"\nitems:\n  - box: Client\n```\n")
+
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 warning, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], "caption:") {
+		t.Errorf("warning should name the caption: key as the alternative: %q", warnings[0])
+	}
+	// Not adopted: the info-string text must not become the figure caption.
+	if strings.Contains(out, "<figcaption>Request path</figcaption>") {
+		t.Errorf("the info-string caption must not be adopted:\n%s", out)
+	}
+	if !strings.Contains(out, `<div class="fig-box">Client</div>`) {
+		t.Errorf("the figure itself should still render:\n%s", out)
+	}
+}
+
+// A body caption still works, and on its own it warns about nothing.
+func TestFigBodyCaptionDoesNotWarn(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig\ncaption: Request path\nitems:\n  - box: Client\n```\n")
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if !strings.Contains(out, "<figcaption>Request path</figcaption>") {
+		t.Errorf("want the body caption rendered:\n%s", out)
+	}
+}
+
+// Two faults, two warnings. The one-warning-per-fault invariant is per
+// fault, not per fence: a misplaced caption and a body that will not decode
+// are separate mistakes with separate fixes, and collapsing them would hide
+// one of the two.
+func TestFigInfoStringCaptionAndBrokenBodyAreTwoWarnings(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig caption=\"Request path\"\nitems: [unclosed\n```\n")
+
+	if len(warnings) != 2 {
+		t.Fatalf("want 2 warnings, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], "caption:") {
+		t.Errorf("first warning should be about the caption: %q", warnings[0])
+	}
+	if !strings.Contains(warnings[1], "code block") {
+		t.Errorf("second warning should be the degradation: %q", warnings[1])
+	}
+	if !strings.Contains(out, `class="language-fig"`) {
+		t.Errorf("want a code-block fallback, got:\n%s", out)
+	}
+}
+
+// Every warning this tool emits is one line of author-facing prose: the CLI
+// prefixes each with "md2html: <file>: " and a second line would escape the
+// prefix entirely. yaml.v3's own error is two lines and names a Go type the
+// author has never heard of.
+func TestFigWarningsAreOneLineOfProse(t *testing.T) {
+	for _, src := range []string{
+		"```fig\nitems:\n  - boxes: A\n```\n",
+		"```fig\nitems:\n  - boxes: A\n    rails: B\n```\n",
+		"```fig\nitems: 3\n```\n",
+		"```fig\nitems:\n  - box: A\n    weight: xyz\n```\n",
+		"```fig\nitems: [unclosed\n```\n",
+	} {
+		_, warnings := figConvert(t, src)
+		if len(warnings) != 1 {
+			t.Fatalf("%q: want exactly 1 warning, got %v", src, warnings)
+		}
+		w := warnings[0]
+		if strings.ContainsAny(w, "\n\r") {
+			t.Errorf("%q: warning spans lines: %q", src, w)
+		}
+		if strings.Contains(w, "md2html.") {
+			t.Errorf("%q: warning leaks a Go type: %q", src, w)
+		}
+		if strings.Contains(w, "yaml:") {
+			t.Errorf("%q: warning leaks the decoder's prefix: %q", src, w)
+		}
+	}
+}
+
+// The unknown-key case is the common one, so it gets the phrasing an author
+// can act on — and says which line numbering it is quoting, since a fence
+// body's line 2 is rarely the document's line 2.
+func TestFigUnknownKeyWarningIsAuthorFacing(t *testing.T) {
+	_, warnings := figConvert(t, "```fig\nitems:\n  - boxes: A\n```\n")
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 warning, got %v", warnings)
+	}
+	for _, want := range []string{`unknown key "boxes"`, "line 2", "fence body"} {
+		if !strings.Contains(warnings[0], want) {
+			t.Errorf("warning %q should contain %q", warnings[0], want)
 		}
 	}
 }
