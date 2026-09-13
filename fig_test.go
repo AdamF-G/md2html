@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -131,5 +132,49 @@ func TestFigBlankBoxIsNotAWarning(t *testing.T) {
 	}
 	if !strings.Contains(out, `<div class="fig-box"></div>`) {
 		t.Errorf("want an empty box, got:\n%s", out)
+	}
+}
+
+// The gallery is a review artifact first, but it is also the broadest
+// end-to-end case there is: every kind and layout in one document.
+func TestFigGalleryRenders(t *testing.T) {
+	src, err := os.ReadFile("testdata/figures.md")
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var warnings []string
+	got, err := Convert(src, Options{Warn: func(m string) { warnings = append(warnings, m) }})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	out := string(got)
+
+	for _, want := range []string{
+		"fig-rail", "fig-box", "fig-arrow", "fig-result",
+		"fig-stat-value", "fig-defs", "fig-group", "fig-chain",
+		"fig-lane", "fig-cols", "fig-split", "fig-boundary",
+		"--fig-weight:3",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("gallery is missing %q", want)
+		}
+	}
+	// The gallery has to exercise an arrow at panel level inside a cols
+	// layout, because that is the nesting the stylesheet's arrow rules get
+	// wrong if written as `.fig-cols > .fig-arrow`. Without this shape in
+	// the corpus, a dead selector renders a glyphless box and no test
+	// notices.
+	if !strings.Contains(out, `<div class="fig-panel" style="--fig-weight:1"><div class="fig-arrow" aria-hidden="true">`) {
+		t.Errorf("gallery must contain a panel-level arrow in a cols layout:\n%s", out)
+	}
+	// The gallery ends with one deliberate failure case.
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly the one intended warning, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], "boxes") {
+		t.Errorf("warning should name the unknown key: %q", warnings[0])
+	}
+	if !strings.Contains(out, `class="language-fig"`) {
+		t.Error("the degradation case should leave a visible code block")
 	}
 }

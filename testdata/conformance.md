@@ -52,3 +52,11 @@ if (x < 10 && x > 1) { console.log("*not emphasis*"); }
 :::{.callout}
 Container body.
 :::
+
+```fig
+caption: Conformance figure
+items:
+  - box: In
+  - arrow: ""
+  - box: Out
+```
