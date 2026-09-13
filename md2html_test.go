@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // normEntities makes numeric and named entity escaping compare equal.
@@ -106,5 +108,63 @@ func TestBuiltinsSignatureUnchanged(t *testing.T) {
 		if got[i].Name != name {
 			t.Errorf("Builtins()[%d].Name = %q, want %q", i, got[i].Name, name)
 		}
+	}
+}
+
+// The documented way to add a transform is to append to Builtins() — README
+// shows exactly this. A caller doing that must not also have to know that
+// one entry in that list takes a warning sink, and to rebuild it by hand;
+// Options.Warn is the one place a caller says where diagnostics go, so
+// Convert wires it into the builtins that report, whatever list it is
+// handed.
+func TestConvertWiresWarnIntoCallerSuppliedTransforms(t *testing.T) {
+	var msgs []string
+	ts := append(Builtins(), Transform{
+		Name: "noop",
+		Fn:   func(*html.Node) error { return nil },
+	})
+	if _, err := Convert([]byte("::: kaution\noops\n:::\n"), Options{
+		Transforms: ts,
+		Warn:       func(m string) { msgs = append(msgs, m) },
+	}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	var found bool
+	for _, m := range msgs {
+		if strings.Contains(m, "kaution") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("caller-supplied transform list did not reach Options.Warn, got %v", msgs)
+	}
+}
+
+// The rewiring above must leave the caller's own slice alone: a transform
+// list is a value a caller may hold and reuse across documents, and Convert
+// replacing an entry in place would silently repoint that caller's sink at
+// whichever document was converted last.
+//
+// Asserted behaviourally rather than by comparing function values, which Go
+// will not do: the second Convert sets no Warn, so nothing rewires, and the
+// caller's own sink is the only route a warning can still take. It goes
+// quiet exactly when the first call overwrote the entry.
+func TestConvertDoesNotRewireCallersOwnTransformList(t *testing.T) {
+	var mine []string
+	ts := []Transform{Containers(func(m string) { mine = append(mine, m) })}
+
+	if _, err := Convert([]byte("::: kaution\noops\n:::\n"), Options{
+		Transforms: ts,
+		Warn:       func(string) {},
+	}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	mine = nil
+
+	if _, err := Convert([]byte("::: kaution\noops\n:::\n"), Options{Transforms: ts}); err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	if len(mine) == 0 {
+		t.Error("caller's own warning sink was replaced in their slice by the first Convert")
 	}
 }

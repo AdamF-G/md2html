@@ -217,6 +217,11 @@ Flags:
 // md2html_test.go's TestBuiltinsSignatureUnchanged already pins the
 // library's copy. main_test.go's TestBuildOptionsMatchesBuiltinsOrder pins
 // this one against it directly.
+//
+// Nothing here wires warn into an individual transform: Options.Warn is the
+// single place this run names its sink, and Convert rebuilds the builtins
+// that report against it. TestRunReportsContainerWarningToStderr covers the
+// one diagnostic that travels that way.
 func buildOptions(d md2html.Doc, fragment bool, css string,
 	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
@@ -229,13 +234,6 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 	for _, t := range md2html.Builtins() {
 		if skip[t.Name] {
 			continue
-		}
-		if t.Name == "containers" {
-			// Builtins() built this entry with a nil sink; swap in one
-			// wired to this document's own warning slice. Not covered by
-			// any --no-* flag: brace-free containers are core syntax, not
-			// an optional pass a caller would disable.
-			t = md2html.Containers(warn)
 		}
 		ts = append(ts, t)
 	}

@@ -13,8 +13,9 @@ import (
 //
 // It takes no arguments and reports nothing: it is the documented public
 // door for callers assembling their own transform list (see README), and
-// changing its signature would break them. Convert calls builtins directly
-// so that a caller who sets Options.Warn gets diagnostics.
+// changing its signature would break them. A list built from it still
+// reports — Convert rebuilds the entries in warnAware against Options.Warn
+// before running them — so the nil sink here costs a caller nothing.
 func Builtins() []Transform {
 	return builtins(nil)
 }
@@ -249,4 +250,39 @@ func ExternalLinks() Transform {
 		})
 		return nil
 	}}
+}
+
+// warnAware lists the builtins that report non-fatal problems, keyed by the
+// Name their constructor stamps on them. It exists so Options.Warn is the
+// single place a caller names a diagnostic sink: Convert rebuilds these
+// entries against that sink in whatever transform list it is handed, so a
+// caller who assembled their own list from Builtins() — the documented way
+// to add a transform — does not have to know which entries take one.
+//
+// A transform that starts reporting belongs here as well as in builtins,
+// or its warnings reach only callers who passed no list of their own.
+var warnAware = map[string]func(func(string)) Transform{
+	"containers": Containers,
+}
+
+// withWarn returns ts with every warn-aware builtin rebuilt against warn.
+//
+// ts is never written to. A transform list is a value a caller may hold and
+// reuse across documents, and the CLI converts documents in parallel from
+// one list per goroutine; mutating an entry in place would repoint a
+// sink at whichever document happened to be converted last.
+func withWarn(ts []Transform, warn func(string)) []Transform {
+	out, copied := ts, false
+	for i, t := range ts {
+		ctor, ok := warnAware[t.Name]
+		if !ok {
+			continue
+		}
+		if !copied {
+			out = append([]Transform(nil), ts...)
+			copied = true
+		}
+		out[i] = ctor(warn)
+	}
+	return out
 }

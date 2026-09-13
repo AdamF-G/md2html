@@ -39,9 +39,13 @@ type Options struct {
 	SourcePath string
 	// CSS replaces the embedded default stylesheet. Empty uses the default.
 	CSS string
-	// Transforms to run. Nil means the default list, built with Warn wired
-	// in — Builtins() itself always builds it with a nil sink instead, so
-	// the two are not quite the same list (see Warn below).
+	// Transforms to run. Nil means the default list.
+	//
+	// A list supplied here is used as given, except that any builtin in it
+	// that reports diagnostics is rebuilt against Warn — so appending to
+	// Builtins() keeps every warning a default conversion would have
+	// raised, without the caller naming the sink twice. The caller's own
+	// slice is never written to.
 	//
 	// Transforms and LinkMap are two alternative routes to link rewriting,
 	// not complementary ones: either place LinkRewrite in Transforms
@@ -70,13 +74,10 @@ type Options struct {
 	// is invoked synchronously on the calling goroutine, so a caller may
 	// append to an unsynchronized per-document slice.
 	//
-	// The sources reach it by different routes, which matters to a caller
-	// supplying Transforms. Convert raises the front matter warning itself
-	// and the fig fence warning comes from the renderer, so those always
-	// arrive. A transform's warning does not: it reaches transforms only
-	// through the default list, and a caller who builds Transforms
-	// themselves is responsible for passing the sink to the constructors
-	// that take one.
+	// Every source reaches it by the same route whatever Transforms holds:
+	// Convert raises the front matter warning itself, the fig fence warning
+	// comes from the renderer, and a transform that reports is rebuilt
+	// against this sink before it runs (see Transforms).
 	Warn func(string)
 }
 
@@ -159,6 +160,8 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	transforms := opt.Transforms
 	if transforms == nil {
 		transforms = builtins(opt.Warn)
+	} else if opt.Warn != nil {
+		transforms = withWarn(transforms, opt.Warn)
 	}
 	if opt.LinkMap != nil {
 		// Full-slice expression: never append into the caller's array.

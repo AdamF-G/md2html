@@ -128,14 +128,13 @@ out, err := md2html.Convert(src, md2html.Options{SourcePath: "doc.md"})
 ```
 
 `Options.Warn`, when set, receives one message per non-fatal problem found
-while converting a document. Two things report so far: a front matter block
-that isn't flat `key: value`, and a container naming a kind that doesn't
-exist. `Convert` raises the front matter warning itself, so it arrives
-whatever `Transforms` holds. The container warning reaches the sink only
-through the default transform list: a caller who supplies their own
-`Transforms`, as below, builds that list itself and must pass the sink to
-`Containers` to see that one. `Convert` never writes to stderr itself; the
-callback runs synchronously on the calling goroutine.
+while converting a document. Three things report so far: a front matter
+block that isn't flat `key: value`, a container naming a kind that doesn't
+exist, and a `fig` fence whose body doesn't parse or doesn't validate. All
+three arrive whatever `Transforms` holds — a builtin that reports is rebuilt
+against this sink before it runs, so appending to `Builtins()` costs you no
+diagnostics. `Convert` never writes to stderr itself; the callback runs
+synchronously on the calling goroutine.
 
 Add a transform by writing a `func(*html.Node) error`:
 

@@ -310,3 +310,22 @@ func TestRunVersionAfterEntryConvertsNothing(t *testing.T) {
 		t.Error("--version converted a document")
 	}
 }
+
+// The container warning is the one diagnostic that reaches the sink through
+// a transform rather than from Convert itself, so it is the one that goes
+// quiet if the CLI's transform list is ever assembled without the sink
+// wired in. Nothing else in this suite would notice: the page still
+// converts, and the run still exits 0.
+func TestRunReportsContainerWarningToStderr(t *testing.T) {
+	root := tree(t, map[string]string{"docs/index.md": "::: kaution\noops\n:::\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if !strings.Contains(errb.String(), "kaution") {
+		t.Errorf("container warning did not reach stderr:\n%s", errb.String())
+	}
+	if !strings.Contains(errb.String(), "1 warning(s)") {
+		t.Errorf("container warning not counted in the summary:\n%s", errb.String())
+	}
+}
