@@ -29,6 +29,119 @@ never loads it at all, because Artifacts render mermaid themselves. A build
 that must not reach a CDN can name its own copy — see `Options.MermaidURL`
 below.
 
+## Why Markdown, not HTML
+
+Every page here could be hand-written as HTML instead. The reason not to is
+that the Markdown costs less to write, less to revise, and less to review —
+and the first of those is measurable.
+
+### Writing it
+
+Rendering the 13 Markdown files in this repository and counting tokens on
+both sides:
+
+| | tokens | vs Markdown |
+|---|---:|---:|
+| Markdown source | 121,534 | 1.00× |
+| Generated HTML, body markup only | 166,113 | 1.37× |
+| Generated HTML, complete pages | 216,040 | 1.78× |
+
+Hand-writing this documentation set as finished pages costs about 94,500
+more tokens.
+
+The corpus figure understates the gap, because 58% of these documents is
+fenced source code, which passes through at roughly 1:1 and dilutes
+everything around it. Strip the fences and compare only prose and structure
+and the ratio is **1.57×**.
+
+It concentrates in exactly the constructs a document is built from:
+
+| One instance of | Markdown | HTML | |
+|---|---:|---:|---:|
+| `## Where output goes` | 4 | 35 | 8.75× |
+| a 2×3 table | 42 | 112 | 2.67× |
+| a code fence with `caption=` | 22 | 49 | 2.23× |
+| an internal and an external link | 22 | 43 | 1.95× |
+| a three-item bullet list | 29 | 51 | 1.76× |
+| `::: callout` | 26 | 36 | 1.38× |
+| a paragraph of prose | 39 | 43 | 1.10× |
+
+Headings are the outlier and a document is full of them: four tokens of
+Markdown against an id, an anchor and an `aria-hidden` attribute. Prose is
+the floor, at 1.10× — `<p>` and `</p>` and nothing else to pay for.
+
+The embedded stylesheet is a further 3,766 tokens you never write at all,
+which is why short pages gain most: `CHANGELOG.md` is 4.95× as a complete
+page against 1.45× on body markup alone.
+
+### Changing it
+
+Three ordinary revisions to this README — rewording a sentence, adding a row
+to the flags table, renaming a heading — produce a 325-token diff in the
+Markdown and a 491-token diff in the HTML. The ratio roughly holds, but the
+*shape* of the difference matters more than the size.
+
+Renaming a heading is one edit in Markdown. In HTML it is three, and they
+have to agree:
+
+```html
+-<h3 id="where-output-goes">Where output goes<a class="anchor" href="#where-output-goes" aria-hidden="true">#</a></h3>
++<h3 id="where-the-output-lands">Where the output lands<a class="anchor" href="#where-the-output-lands" aria-hidden="true">#</a></h3>
+```
+
+Miss one and the anchor points at nothing, silently, and so does every
+inbound link that used the old slug. Derived, the three cannot drift apart.
+
+Adding a table row is worse to read than to write. In Markdown the diff is
+the row. In HTML it is this:
+
+```
++</tr>
++<tr>
++<td><code>--quiet</code></td>
++<td>suppress per-file progress; warnings still print</td>
+```
+
+Four lines, and the first of them closes the *previous* row — because a
+line-based diff aligns on `</tr>`, not on the boundary a human sees. The
+reviewer has to reassemble the change before judging it.
+
+### Why it compounds for an agent
+
+An agent edits by string replacement, re-reads the file on every pass, and
+never sees the rendered page. All three favour the Markdown:
+
+- **Edits stay local.** A Markdown unit — a sentence, a row, a heading — is
+  addressable on its own. Its HTML counterpart is wrapped in tags whose
+  boundaries rarely coincide with the boundaries of the change, so the
+  smallest safe replacement is larger than the edit.
+- **Read cost recurs.** Write cost is paid once. Read cost is paid on every
+  turn that pulls the file back into context, and a 40,000-token page
+  against a 28,000-token source is not a one-time difference.
+- **Invariants cannot rot.** Heading ids, anchor hrefs,
+  `rel="noopener noreferrer"`, table scroll wrappers and `.md` → `.html`
+  rewriting are computed on every build. There is no copy of them an edit
+  can leave stale.
+- **Malformed structure is unrepresentable.** Markdown has no unclosed
+  `<div>`. A nesting mistake in hand-written HTML renders as something
+  plausible and wrong, which is the failure mode neither a human reviewer
+  nor an agent reliably catches.
+
+### What the numbers assume
+
+They assume the hand-written HTML would be *equivalent* — that you really
+would write the ids, the anchors, the `rel="noopener noreferrer"` and the
+table wrappers. Drop those and the prose-and-structure ratio falls from
+1.57× to 1.43×, so about a seventh of the measured win is work you might
+have skipped rather than typed.
+
+Pretty-printing, which looks like it ought to matter, does not: packing
+every newline out from between tags moves 1.57× to 1.56×. The cost is in
+tag names and attributes, not whitespace.
+
+Counts are `cl100k_base`. A different tokenizer moves the absolute numbers
+and leaves the ratios about where they are.
+
 ## Usage
 
 ```
