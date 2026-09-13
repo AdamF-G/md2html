@@ -188,9 +188,11 @@ Panel-level `layout` values, set once at the top level:
 | `cols` | each top-level item is a panel, side by side |
 | `split` | exactly two top-level items, with a labeled boundary between |
 
-Under `cols`, a top-level item may carry `weight`; anywhere else `weight` is
-an unknown key and fails like any other. A panel that needs a heading is a
-`group` — there is no separate panel kind.
+Under `cols`, a top-level item may carry `weight`. Anywhere else it is
+rejected by validation rather than by `KnownFields`: one struct carries
+every kind's fields, so the decoder cannot tell where a key is legal — only
+validation knows the item's position. A panel that needs a heading is a
+`group`; there is no separate panel kind.
 
 Under `split`, the label between the two panels is a top-level `boundary`
 key, not a third item:
@@ -238,9 +240,21 @@ Nothing here can fail a conversion. Three outcomes:
 
 | Condition | Result |
 |---|---|
-| YAML syntax error, unknown key, or an item naming zero or two kinds | one `Warn` naming the line; the fence emits as `<pre><code class="language-fig">` with its raw text |
+| YAML syntax error, unknown key, or an item naming zero or two kinds | one `Warn` locating the fault; the fence emits as `<pre><code class="language-fig">` with its raw text |
 | Empty text on an otherwise valid item | renders as an empty box, no warning — a blank spacer is legitimate |
 | A valid figure | figure markup |
+
+Where a fault is *located* differs by tier, because the two tiers know
+different things. A YAML syntax or unknown-key error carries `yaml.v3`'s own
+line number, so the warning quotes it. A validation error has no line —
+`KnownFields` forbids the custom unmarshaler that would retain one — so it
+names the item's path instead (`items[2].chain[0]`). Both point at one item;
+only one can say which line it started on.
+
+An item whose kind key has a null value (`box:` with nothing after it) reads
+as *no* kind, not an empty one, since a nil pointer is how an absent key
+arrives. Its warning says so and names the fix: an intentionally blank box
+is `box: ""`.
 
 The degradation is the one the backlog documented: the author sees their own
 source, unstyled but intact, rather than a blank space or broken markup. It
