@@ -51,3 +51,25 @@ jobs:
       - run: google-chrome --version
       - run: go test -count=1 ./...
         working-directory: e2e
+
+  # The Markdown dialect, characterised against Pandoc. Its own module, so
+  # the library's "one static binary, no runtime" stays true of anyone who
+  # runs `go test ./...` at the root.
+  compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: compat/go.mod
+      # Pinned, and installed from the upstream release rather than apt,
+      # for the reason the mermaid build is pinned: this suite records how
+      # two tools agree, so an unannounced upgrade of the other one would
+      # report a change in md2html that never happened. Bump deliberately.
+      - name: install pandoc
+        run: |
+          curl -fsSLo pandoc.deb https://github.com/jgm/pandoc/releases/download/3.11/pandoc-3.11-1-amd64.deb
+          sudo dpkg -i pandoc.deb
+          pandoc --version | head -1
+      - run: go test -count=1 ./...
+        working-directory: compat

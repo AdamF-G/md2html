@@ -20,8 +20,17 @@ test:
 
 # The browser suite is a separate module, so `go test ./...` at the root
 # never reaches it and the library's own go.mod stays free of chromedp.
-# That module boundary is the only opt-in: there is no build tag any more.
+# That module boundary is the opt-in: there is no build tag any more. The
+# compat suite below is separated the same way, for the same reason.
 
 # Run the browser suite (needs a local Chrome or Chromium).
 e2e:
     cd e2e && go test -count=1 ./...
+
+# The Pandoc compatibility suite is a separate module for the same reason:
+# it needs a tool that is not a dependency of md2html, and `go test ./...`
+# at the root must stay runnable with nothing installed.
+
+# Run the Pandoc compatibility suite (needs pandoc; skips without it).
+compat:
+    cd compat && go test -count=1 ./...
