@@ -2,7 +2,9 @@ package md2html
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -134,12 +136,35 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 // parseFig decodes a fence body. KnownFields(true) is the point of using a
 // real decoder: a misspelled key is an error that degrades visibly rather
 // than an item that silently vanishes.
+//
+// The decoder is asked for a *second* document and the body is rejected if
+// one arrives. yaml.Decoder yields one document per Decode call, so a body
+// containing a `---` separator would otherwise render its first document
+// and discard the rest with no diagnostic at all — which is the exact
+// silent-vanishing failure KnownFields exists to prevent, arriving through
+// another door. A fence describes one figure; a body that describes two is
+// a fault like any other and degrades to the source.
+//
+// io.EOF from the *first* Decode means the fence had no content. That is
+// also a fault, but reporting the decoder's "EOF" tells an author nothing,
+// so it is translated here into the thing that is actually wrong.
 func parseFig(body []byte) (figDoc, error) {
 	var doc figDoc
 	dec := yaml.NewDecoder(bytes.NewReader(body))
 	dec.KnownFields(true)
 	if err := dec.Decode(&doc); err != nil {
+		if errors.Is(err, io.EOF) {
+			return figDoc{}, errors.New("the fence is empty")
+		}
 		return figDoc{}, err
+	}
+	// A clean io.EOF here is the only outcome that means "that was all of
+	// it". Anything else — a second document, or a syntax error inside one
+	// — is content this figure would have dropped.
+	var more figDoc
+	if err := dec.Decode(&more); !errors.Is(err, io.EOF) {
+		return figDoc{}, errors.New(
+			"the body holds more than one YAML document; a fence is one figure, so remove the --- separator")
 	}
 	return doc, nil
 }

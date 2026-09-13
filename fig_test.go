@@ -178,3 +178,51 @@ func TestFigGalleryRenders(t *testing.T) {
 		t.Error("the degradation case should leave a visible code block")
 	}
 }
+
+// A `---` separator starts a second YAML document. yaml.Decoder hands back
+// one document per Decode call, so a single call renders the first and
+// discards everything after it — the silent-vanishing failure KnownFields
+// exists to prevent, arriving through another door. A body that says more
+// than one thing is a fault like any other: warn once, show the source.
+func TestFigMultiDocumentBodyDegrades(t *testing.T) {
+	src := "```fig\nitems:\n  - box: A\n---\nitems:\n  - box: B\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if !strings.Contains(out, `class="language-fig"`) {
+		t.Errorf("want a code-block fallback, got:\n%s", out)
+	}
+	if strings.Contains(out, `class="fig-box"`) {
+		t.Errorf("no part of a truncated body may render as a figure:\n%s", out)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 warning, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], "---") {
+		t.Errorf("warning should name the separator: %q", warnings[0])
+	}
+	// Both documents' source stays visible to the author.
+	if !strings.Contains(out, "box: A") || !strings.Contains(out, "box: B") {
+		t.Errorf("the whole body should survive into the code block:\n%s", out)
+	}
+}
+
+// An empty fence degrades correctly already; the point here is that the
+// message says what is wrong in the author's terms rather than reporting
+// the decoder's io.EOF.
+func TestFigEmptyFenceSaysSo(t *testing.T) {
+	for _, src := range []string{"```fig\n```\n", "```fig\n\n   \n```\n"} {
+		out, warnings := figConvert(t, src)
+		if !strings.Contains(out, `class="language-fig"`) {
+			t.Errorf("want a code-block fallback, got:\n%s", out)
+		}
+		if len(warnings) != 1 {
+			t.Fatalf("want exactly 1 warning, got %v", warnings)
+		}
+		if !strings.Contains(warnings[0], "empty") {
+			t.Errorf("warning should say the fence is empty: %q", warnings[0])
+		}
+		if strings.Contains(warnings[0], "EOF") {
+			t.Errorf("warning should not leak the decoder's EOF: %q", warnings[0])
+		}
+	}
+}
