@@ -267,3 +267,73 @@ func TestContainerBracedAsideIsCollapsible(t *testing.T) {
 		t.Errorf("body lost\ngot: %s", got)
 	}
 }
+
+// The directive label form: :::kind[Title]. Delimiting the title is what
+// lets a titled container also carry an attribute block, which the
+// undelimited form structurally cannot.
+func TestContainerLabelFormOnCollapsibleKind(t *testing.T) {
+	got := convert(t, ":::aside[Why this matters]\nBody.\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("label not lifted into the summary\ngot: %s", got)
+	}
+	if !strings.Contains(got, `class="container aside"`) {
+		t.Errorf("kind classes missing\ngot: %s", got)
+	}
+	if strings.Contains(got, "aside[") {
+		t.Errorf("fence line left in the body\ngot: %s", got)
+	}
+}
+
+func TestContainerLabelFormOnDivKind(t *testing.T) {
+	got := convert(t, ":::callout[A note]\nBody.\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title">A note</p>`) {
+		t.Errorf("label not lifted into a title paragraph\ngot: %s", got)
+	}
+}
+
+// The whole reason to adopt the form: a titled container that also carries
+// classes and an id, which "::: aside Title" cannot express.
+func TestContainerLabelFormWithAttributeBlock(t *testing.T) {
+	got := convert(t, ":::aside[Why]{#w .compact}\nBody.\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why</summary>") {
+		t.Errorf("label lost when an attribute block follows\ngot: %s", got)
+	}
+	if !strings.Contains(got, `id="w"`) || !strings.Contains(got, "compact") {
+		t.Errorf("attribute block not applied\ngot: %s", got)
+	}
+	// Regression: the bracketed-span transform must not claim the label.
+	if strings.Contains(got, `<span class="compact">`) {
+		t.Errorf("bracketed spans consumed the container label\ngot: %s", got)
+	}
+}
+
+func TestContainerLabelFormKeepsInlineMarkupInLabel(t *testing.T) {
+	got := convert(t, ":::aside[Why `code` matters]\nBody.\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why <code>code</code> matters</summary>") {
+		t.Errorf("inline markup in the label not preserved\ngot: %s", got)
+	}
+}
+
+func TestContainerLabelFormEmptyLabelUsesFallback(t *testing.T) {
+	got := convert(t, ":::aside[]\nBody.\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Aside</summary>") {
+		t.Errorf("empty label did not fall back\ngot: %s", got)
+	}
+}
+
+// An unknown kind in the label form warns like the bare form does.
+func TestContainerLabelFormUnknownKindWarns(t *testing.T) {
+	var warnings []string
+	convert(t, ":::housestyle[Title]\nBody.\n:::\n", func(s string) { warnings = append(warnings, s) })
+	if len(warnings) == 0 || !strings.Contains(warnings[0], "housestyle") {
+		t.Errorf("unknown kind in label form did not warn: %v", warnings)
+	}
+}
+
+// The undelimited form keeps working unchanged.
+func TestContainerBareTitleFormStillWorks(t *testing.T) {
+	got := convert(t, "::: aside Why this matters\nBody.\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("bare title form regressed\ngot: %s", got)
+	}
+}

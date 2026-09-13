@@ -160,6 +160,16 @@ func Containers(warn func(string)) Transform {
 				warn("container has no class and no recognizable kind name")
 				continue
 			}
+			if kind, isLabel := labelKind(p); isLabel {
+				if k, known := containerKinds[kind]; known {
+					if label, block, done := detachLabel(p); done {
+						applyLabelAttrs(div, block)
+						applyKindWithTitle(div, k, p, label)
+						continue
+					}
+				}
+			}
+
 			word, rest := firstWord(p.FirstChild.Data)
 			k, known := containerKinds[word]
 			if !known {
@@ -242,6 +252,17 @@ func detachTitle(p *html.Node) []*html.Node {
 // <details> element, so this merge is what a collapsible kind ends up
 // wearing too.
 func applyKind(div *html.Node, k containerKind, p *html.Node) {
+	var title []*html.Node
+	if p != nil {
+		title = detachTitle(p)
+	}
+	applyKindWithTitle(div, k, p, title)
+}
+
+// applyKindWithTitle is applyKind with the title already detached, for the
+// label form, whose title is delimited by brackets rather than by the end
+// of the fence line and so is found a different way.
+func applyKindWithTitle(div *html.Node, k containerKind, p *html.Node, title []*html.Node) {
 	existing, _ := attr(div, "class")
 	seen := map[string]bool{}
 	var tokens []string
@@ -253,13 +274,9 @@ func applyKind(div *html.Node, k containerKind, p *html.Node) {
 	}
 	setAttr(div, "class", strings.Join(tokens, " "))
 
-	var title []*html.Node
-	if p != nil {
-		title = detachTitle(p)
-		if p.FirstChild == nil {
-			// The fence line was the paragraph's entire content.
-			p.Parent.RemoveChild(p)
-		}
+	if p != nil && p.FirstChild == nil {
+		// The fence line was the paragraph's entire content.
+		p.Parent.RemoveChild(p)
 	}
 
 	if k.tag == "details" {
@@ -321,4 +338,132 @@ func knownKindList() string {
 	}
 	sort.Strings(names)
 	return strings.Join(names, ", ")
+}
+
+// labelKind reads the kind word of a label-form container — the "aside" of
+// ":::aside[Why this matters]" — without modifying anything, so an unknown
+// kind can fall through to the brace-free path and warn there exactly as
+// it does today.
+func labelKind(p *html.Node) (string, bool) {
+	first := p.FirstChild
+	if first == nil || first.Type != html.TextNode {
+		return "", false
+	}
+	open := strings.IndexByte(first.Data, '[')
+	if open <= 0 {
+		return "", false
+	}
+	kind := first.Data[:open]
+	if strings.ContainsAny(kind, " \t\n") {
+		return "", false
+	}
+	return kind, true
+}
+
+// detachLabel removes a label-form container's opening fence line from p,
+// returning the label's inline nodes and the contents of a trailing
+// attribute block if one followed.
+//
+// This is the directive label syntax — :::kind[Title] — from the
+// CommonMark generic directives proposal, as implemented by
+// remark-directive and used by Docusaurus. It exists alongside the
+// undelimited "::: kind Title" form rather than replacing it, and it is
+// the only one of the two that can also carry an attribute block: an
+// undelimited title runs to the end of the line, so a following {...}
+// would be part of the title text rather than attributes.
+//
+// The scan crosses sibling nodes because a label may contain inline
+// markup: "[Why `code` matters]" reaches this function as a text node, a
+// <code> element and another text node, and the closing bracket is in the
+// third of them.
+//
+// It reports false without mutating anything when there is no closing
+// bracket, leaving the caller to fall through to the brace-free path.
+func detachLabel(p *html.Node) (label []*html.Node, block string, ok bool) {
+	first := p.FirstChild
+	open := strings.IndexByte(first.Data, '[')
+
+	// Pass one: locate the closing bracket. Nothing is modified until it
+	// is known to exist, so a malformed fence line is left exactly as the
+	// author wrote it.
+	var closing *html.Node
+	closeIdx := -1
+	for c := first; c != nil; c = c.NextSibling {
+		if c.Type != html.TextNode {
+			continue
+		}
+		start := 0
+		if c == first {
+			start = open + 1
+		}
+		if j := strings.IndexByte(c.Data[start:], ']'); j >= 0 {
+			closing, closeIdx = c, start+j
+			break
+		}
+	}
+	if closing == nil {
+		return nil, "", false
+	}
+
+	// Pass two: move everything up to the bracket into the label.
+	for c := first; c != closing; {
+		next := c.NextSibling
+		if c == first {
+			if head := c.Data[open+1:]; head != "" {
+				label = append(label, &html.Node{Type: html.TextNode, Data: head})
+			}
+			p.RemoveChild(c)
+		} else {
+			p.RemoveChild(c)
+			label = append(label, c)
+		}
+		c = next
+	}
+	start := 0
+	if closing == first {
+		start = open + 1
+	}
+	if head := closing.Data[start:closeIdx]; head != "" {
+		label = append(label, &html.Node{Type: html.TextNode, Data: head})
+	}
+	rest := closing.Data[closeIdx+1:]
+
+	// An attribute block may follow the label on the same line.
+	if trimmed := strings.TrimLeft(rest, " \t"); strings.HasPrefix(trimmed, "{") {
+		if line, tail, found := strings.Cut(trimmed, "\n"); found {
+			if _, content, braced := splitBraced(line); braced {
+				block, rest = content, "\n"+tail
+			}
+		} else if _, content, braced := splitBraced(trimmed); braced {
+			block, rest = content, ""
+		}
+	}
+	// The newline ending the fence line is a separator, not body text —
+	// the same boundary detachTitle consumes for the undelimited form.
+	rest = strings.TrimPrefix(rest, "\n")
+
+	if rest == "" {
+		p.RemoveChild(closing)
+	} else {
+		closing.Data = rest
+	}
+	return label, block, true
+}
+
+// applyLabelAttrs puts a label-form container's attribute block onto the
+// div, before applyKindWithTitle merges the kind's own classes in on top.
+func applyLabelAttrs(div *html.Node, block string) {
+	if block == "" {
+		return
+	}
+	a, ok := parseAttrs(block)
+	if !ok {
+		return
+	}
+	if a.id != "" {
+		setAttr(div, "id", a.id)
+	}
+	if len(a.classes) > 0 {
+		setAttr(div, "class", strings.Join(a.classes, " "))
+	}
 }
