@@ -13,6 +13,39 @@ major version instead.
 
 ### Added
 
+- Five Markdown syntaxes from the surrounding ecosystem are now accepted,
+  all additive — nothing written for the older spellings changes meaning.
+  See [docs/specs/2026-09-13-standards-alignment.md](./docs/specs/2026-09-13-standards-alignment.md)
+  for the survey and the measurements behind them.
+  - **Bracketed spans**, Pandoc's `bracketed_spans`: `[needs review]{.chip}`
+    is a chip, `[text]{.lead}` is a classed span. A status word picks up its
+    `chip-<word>` class automatically unless you name a `chip-*` class
+    yourself. This retires `[c:…]`, which existed only because the bare form
+    has a closed vocabulary; it keeps parsing.
+  - **Fenced code attributes**, Pandoc's braced form:
+    ` ```{.go caption="server.go"} ` and ` ```go {caption="server.go"} `.
+    An `id` reaches the `<pre>`, further classes reach the `<code>`, and a
+    caption may contain a quote via a backslash escape.
+  - **The directive label form**, `:::kind[Title]`, from the CommonMark
+    generic directives proposal. It is the only titled container form that
+    can also carry an id and classes: `:::aside[Why]{#w .compact}`.
+  - **GitHub alerts.** `> [!WARNING]` produces exactly what `::: warning`
+    produces. Prefer it in any file that lives in a repository — GitHub,
+    Obsidian and Typora render it natively, while `::: warning` shows up
+    there as literal text.
+  - **`[TOC]`** alongside `[[toc]]`, case-insensitively. GitLab's
+    `[[_TOC_]]` is deliberately excluded: its underscores are emphasis
+    delimiters, so it never arrives as the single text node the marker
+    guard requires.
+- A shared `{#id .class key=value}` attribute parser behind all three of the
+  constructs that use that grammar, replacing three ad-hoc readers of which
+  only one — goldmark's heading attributes — was a real parser.
+- `compat/`, a third test suite characterising the Markdown dialect against
+  Pandoc, with a `just compat` target. It sorts every construct into one of
+  three buckets: agreeing with `pandoc -f commonmark_x`, passed through
+  inert, or degraded to a labelled code block. Its own module, like `e2e/`,
+  so the root module still needs nothing installed. Task lists are the one
+  divergence inside the shared subset.
 - `md2html.InstallSkill` installs the Claude Code authoring skill into a
   skills directory, and `--install-skill-user` / `--install-skill-project`
   expose it. The skill now travels inside the binary along with a copy of
@@ -27,6 +60,13 @@ major version instead.
 
 ### Fixed
 
+- `[proven]{.chip}` no longer renders broken. The chip transform fired on
+  the bracket and left `{.chip}` on the page as literal text; a
+  non-vocabulary label such as `[needs review]{.chip}` stayed literal in
+  full. Both now render the span Pandoc renders.
+- A braced code fence no longer mangles its own info string.
+  ` ```{.go caption="server.go"} ` produced `class="language-{.go"` and a
+  caption of `server.go"}`.
 - The browser suite's first test no longer fails on a cold CI runner. Its
   15s per-step budget also had to cover launching Chrome, which on a fresh
   runner left nothing for the test itself: the first test in the file, and

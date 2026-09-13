@@ -117,7 +117,7 @@ doing, but for a structural reason rather than a portability one — see
 
 All five are additive. Nothing written today changes meaning.
 
-### 3.1 Accept `[text]{.chip}` and stop mangling attribute blocks [planned]
+### 3.1 Accept `[text]{.chip}` and stop mangling attribute blocks [proven]
 
 Adopt Pandoc's `bracketed_spans` as the general form. `[proven]` stays as
 the shorthand.
@@ -140,7 +140,7 @@ reference link if a document happens to define `[proven]: <url>`.
 a second pattern for `\[([^\]\n]+)\]\{([^}\n]+)\}` plus an attribute
 parser, which §3.2 needs anyway.
 
-### 3.2 Accept braced code fence attributes [planned]
+### 3.2 Accept braced code fence attributes [proven]
 
 ````markdown
 ```go caption="server.go"        # current, keep
@@ -159,7 +159,7 @@ a bespoke token strip. Only the first is a real parser. Consolidating is
 most of the work in this document, and the rest is vocabulary.
 :::
 
-### 3.3 Accept `:::kind[Title]` [planned]
+### 3.3 Accept `:::kind[Title]` [proven]
 
 ```markdown
 ::: aside Why this matters      # current, keep
@@ -173,7 +173,7 @@ undelimited trailing string is indistinguishable from body text. A
 delimited label removes that constraint, so a titled container can also
 carry an id and classes — which today it cannot.
 
-### 3.4 Accept GitHub alert syntax [planned]
+### 3.4 Accept GitHub alert syntax [proven]
 
 ```markdown
 > [!WARNING]
@@ -199,7 +199,7 @@ Mapping: `NOTE` and `TIP` to `callout`, `IMPORTANT` to `callout`,
 a transform over `<blockquote>` in our existing pipeline, which adds no
 dependency.
 
-### 3.5 Accept `[TOC]` [planned]
+### 3.5 Accept `[TOC]` [proven]
 
 One line. `[[toc]]` is markdown-it/VitePress convention; `[TOC]` is
 Python-Markdown, MkDocs, Typora and StackEdit. Accept both, document
@@ -249,7 +249,7 @@ and its layout syntax is the part we should not copy.
 
 ## 5. A compatibility test suite
 
-A characterisation suite, not a conformance suite. [designed]
+A characterisation suite, not a conformance suite. [proven]
 
 **Assert structure, never bytes.** Pandoc emits no heading anchors, no
 table scroll wrapper, different footnote ids and different task-list
@@ -278,6 +278,28 @@ The suite's real output is a sentence for the README:
 > attributes, header attributes, definition lists, footnotes, pipe tables
 > and YAML front matter — the `commonmark_x` dialect — plus GitHub alerts,
 > status chips, `§` cross-references, `[[toc]]` and `fig`.
+
+## 5.1 What implementation changed
+
+Four things came out differently from the design above, all recorded in
+the commits that made them.
+
+- **Bracketed spans went general, not chip-only.** `[text]{.lead}` is a
+  classed span. Restricting the parser to `.chip` would have meant
+  recognising Pandoc's syntax and then refusing most of it.
+- **`[[_TOC_]]` is out.** Its underscores are emphasis delimiters, so
+  goldmark hands the transform `[[`, `<em>TOC</em>`, `]]` rather than one
+  text node. Matching it would mean matching on flattened text, which is
+  what the marker guard exists to avoid.
+- **The label form collided with bracketed spans.** `:::aside[Why]{.compact}`
+  is also a valid bracketed span, and Chips claimed it. Containers already
+  runs first, so implementing the label form resolved it — but the ordering
+  is now load-bearing for a second reason, and both the builtins comment
+  and a test say so.
+- **Alerts are a transform, not a dependency.** `github.com/yuin/goldmark-alert`
+  exists and would have worked, but an alert has to land on the shipped
+  container vocabulary rather than on markup of its own, and the tree layer
+  is already ours.
 
 ## 6. What we keep
 

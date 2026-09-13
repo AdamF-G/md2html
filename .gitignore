@@ -2,3 +2,7 @@
 # Deliberately not "*.png": this is a docs tool, and real image assets
 # belong in the repo. Stray screenshots should stay visible in git status.
 .playwright-mcp/
+
+# A root `go build` drops the binary here, next to the package it built.
+# Anchored: cmd/md2html is a directory that must stay tracked.
+/md2html
