@@ -8,14 +8,25 @@ description: Use when writing or editing Markdown that will be converted to HTML
 ## Overview
 
 `md2html` converts a Markdown tree to HTML. Several of its features are not
-discoverable from the README, and one of them fails silently — you get valid
+discoverable from the README, and two of them fail silently — you get valid
 output that quietly lacks what you asked for, with no warning and a zero exit.
 
 **Read the full reference before writing the page.** It is `authoring.md`,
 sitting beside this file in an installed skill, and `docs/authoring.md` in
 the md2html repo itself. Every claim in it is verified against the binary.
 
-## The remaining silent failure
+## The remaining silent failures
+
+**A fence inside a fence needs more backticks on the outside.**
+
+````markdown
+```markdown        <- ends at the FIRST ``` in its body, not the one you meant
+```
+````
+
+Showing three-backtick source requires a four-backtick fence around it.
+Nothing warns; the page renders as *something*, with your example split in
+half and the next block inheriting the wrong language.
 
 **A container kind outside the shipped set has no styling.**
 
@@ -26,10 +37,19 @@ the md2html repo itself. Every claim in it is verified against the binary.
 ```
 
 The shipped kinds are `callout`, `warning`, `card`, `aside` and `example`.
-`aside` and `example` are collapsible `<details>`; the brace-free form takes
-a title on the fence line (`::: aside Why this matters`). A braced class
-outside the set still emits a correctly classed but unstyled div, silently —
-that is deliberate, since the author supplies the CSS.
+`aside` and `example` are collapsible `<details>`. A braced class outside the
+set still emits a correctly classed but unstyled div, silently — that is
+deliberate, since the author supplies the CSS.
+
+Two forms carry a title: `::: aside Why this matters`, and the label form
+`:::aside[Why this matters]`. Use the label form when the container also
+needs an id or classes — `:::aside[Why]{#w .compact}` — because it is the
+only one that can carry both.
+
+**In a file that lives in a repository, prefer a GitHub alert to a `:::`
+callout.** `> [!WARNING]` renders natively on GitHub, Obsidian and Typora
+and produces exactly `::: warning` here; `::: warning` shows up on GitHub as
+the literal text `::: warning`.
 
 **A link to `.html` is never rewritten.**
 
@@ -57,23 +77,27 @@ not for images.
 ## What has no shortcut
 
 There is no sidebar or site index, and no cross-document navigation. A
-per-page contents list does exist — `[[toc]]` alone on a line — but heading
-slugs are still worth knowing: they are stable and keep letters from any
-script, so `## 日本語の見出し` yields `#日本語の見出し`.
+per-page contents list does exist — `[[toc]]` or `[TOC]` alone on a line —
+but heading slugs are still worth knowing: they are stable and keep letters
+from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 
 ## Quick reference
 
 | Need | Write |
 |---|---|
 | Callout | `::: callout` … `:::` |
-| Warning | `::: warning` … `:::` |
+| Warning | `::: warning` … `:::`, or `> [!WARNING]` |
+| Warning, in a repo file | `> [!WARNING]` — renders on GitHub too |
 | Collapsible aside | `::: aside Title` … `:::` |
+| Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
 | Worked example | `::: example Title` … `:::` |
-| Status marker | `[proven]`, or `[c:any label]` |
+| Status marker | `[proven]`, or `[any label]{.chip}` |
+| Any classed span | `[text]{.cls}` |
 | Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |
-| Contents list | `[[toc]]` alone on a line |
+| Contents list | `[[toc]]` or `[TOC]` alone on a line |
 | Title/subtitle/date | `---` front matter, or an italic line under the H1 |
 | Code caption | ` ```go caption="server.go" ` |
+| Code caption, Pandoc form | ` ```{.go caption="server.go"} ` |
 | Stable anchor | `## Title {#my-id}` |
 | Diagram | `` ```mermaid `` fence |
 | Hand-laid-out figure | ` ```fig ` fence, YAML body |

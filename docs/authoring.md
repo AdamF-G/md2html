@@ -122,19 +122,37 @@ Overwrites state.
 
 renders `<div class="callout callout-warning">`.
 
-**Only the bare form can carry a title**, written on the fence's opening
-line:
+**Two forms carry a title.** The bare form writes it on the fence's
+opening line; the label form delimits it in brackets:
 
 ```markdown
 ::: aside Why this matters
 Because.
 :::
+
+:::aside[Why this matters]
+Because.
+:::
 ```
 
-The braced form structurally cannot: goldmark's fence library merges the
-rest of the opening line into the container's first paragraph, so a title
-after `{.aside}` is indistinguishable from a first line of body text. Give
-up the brace, or give up the title.
+The label form is the directive syntax from the CommonMark generic
+directives proposal, as implemented by remark-directive and used by
+Docusaurus. Prefer it when the container also needs an id or classes,
+because it is the only one that can carry both:
+
+```markdown
+:::aside[Why this matters]{#why .compact}
+```
+
+The bare form cannot, and neither can `::: {.aside}`. An undelimited title
+runs to the end of the line, so goldmark's fence library merges it into the
+container's first paragraph and a trailing `{...}` would be part of the
+title text rather than attributes. Delimiting the label is what removes
+that constraint.
+
+A label form naming an unknown kind falls through to the bare form's rules
+and warns there, so `:::housestyle[Title]` is reported, not silently
+dropped.
 
 `aside` with no title falls back to "Aside" in its `<summary>`; `example`
 falls back to "Example", or "Example — Title" when one is given.
@@ -165,6 +183,33 @@ supplies their own CSS for it.
 Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
 to write and it drops you out of Markdown for the enclosed content.
 
+### Alerts
+
+GitHub's alert syntax is accepted and renders as the matching container:
+
+```markdown
+> [!WARNING]
+> Overwrites state.
+```
+
+is exactly `::: warning`. The five types map onto the two shipped kinds —
+`NOTE`, `TIP` and `IMPORTANT` to `callout`; `WARNING` and `CAUTION` to
+`callout callout-warning`.
+
+**Prefer this to `::: warning` in a file that lives in a repository.**
+GitHub, Obsidian and Typora all render it natively, and a renderer that
+does not know it shows an ordinary blockquote with a visible marker.
+`::: warning` shows up on GitHub as the literal text `::: warning`.
+
+The marker must be upper case and alone on its first line, exactly as
+GitHub requires — accepting more would let a document render here and not
+there. `[!HINT]`, `[!note]` and a marker mid-sentence are all left as
+ordinary blockquotes.
+
+The three informational types collapse onto one appearance because the
+stylesheet draws one informational box. The distinction survives in the
+source, where GitHub still renders all three differently.
+
 ### Status chips
 
 A fixed vocabulary of bracketed words becomes a small badge, in body text
@@ -175,7 +220,23 @@ or in a heading alike:
 ```
 
 Each becomes `<span class="chip chip-proven">proven</span>` (and so on).
-Anything outside that list needs the escape hatch:
+
+Anything outside that list uses the attribute form — Pandoc's
+`bracketed_spans`, and the form to prefer in new writing:
+
+```markdown
+[needs review]{.chip}      ->   <span class="chip">needs review</span>
+[proven]{.chip}            ->   <span class="chip chip-proven">proven</span>
+[shipped]{.chip .chip-ok}  ->   <span class="chip chip-ok">shipped</span>
+```
+
+A status word picks up its `chip-<word>` class automatically; write your
+own `chip-*` class and yours is used instead. The form is general, not
+chip-only — `[lead in]{.lead}` is a `<span class="lead">`, subject to the
+usual rule that a class the stylesheet does not name is inert.
+
+The older escape hatch still works and is no longer the recommended
+spelling:
 
 ```markdown
 [c:needs review]   ->   <span class="chip">needs review</span>
@@ -230,6 +291,15 @@ document order, each linking to its id:
 ```markdown
 [[toc]]
 ```
+
+`[TOC]` works too, and case does not matter for either. Two conventions
+exist — `[[toc]]` is markdown-it and VitePress, `[TOC]` is
+Python-Markdown and so MkDocs, as well as Typora and StackEdit — and a
+document written for one should not have to be rewritten for this tool.
+
+GitLab's `[[_TOC_]]` is **not** recognized: its underscores are emphasis
+delimiters, so the marker never arrives as the single unbroken run of text
+this feature requires.
 
 Flat, not nested: heading level travels only as a `toc-h3`/`toc-h4`/… class
 on the `<li>`, so a document that jumps from `h2` to `h4` doesn't produce
@@ -299,12 +369,25 @@ around the existing `<pre><code class="language-go">`.
 
 The caption may come before the language — `` ```caption="x.go" go `` still
 yields `class="language-go"` — since only the caption token is stripped
-out; the language is whatever token is left, not whatever is first. Every
-other info-string attribute is ignored, exactly as before.
+out; the language is whatever token is left, not whatever is first.
 
-There is no escaping for a quote embedded in the caption's value —
-`caption="has \"quote\""` does not produce a caption containing a literal
-`"`. Write a caption without one instead.
+**The braced form works too**, and is what a document written for Pandoc,
+kramdown or MyST will use:
+
+````markdown
+```{.go caption="server.go"}
+```go {caption="server.go"}
+````
+
+In the braced form the language is the first class, as Pandoc reads it,
+unless a word outside the braces names one — so `` ```go {.wide} `` is Go
+with a `wide` class. An `id` reaches the `<pre>` and any further class
+reaches the `<code>`, rather than being dropped.
+
+There is no escaping for a quote embedded in the caption's value in the
+brace-free form — `caption="has \"quote\""` does not produce a caption
+containing a literal `"`. The braced form does support it, so write
+`` ```{.go caption="has \"quote\""} `` when you need one.
 
 The caption's text runs through the same inline rewriters as any other
 prose: a status chip or a `§` cross-reference inside a caption renders as a
@@ -480,6 +563,12 @@ Supply `--css mine.css` to replace the stylesheet entirely.
 
 ## Traps
 
+- **A fence inside a fence needs more backticks on the outside.** A
+  ```` ```markdown ```` block whose body contains a ``` ``` ``` line ends
+  at that line, not at the one you meant — the rest of your example
+  becomes body text and the block after it inherits the wrong language.
+  Use a four-backtick fence to show three-backtick source. This is silent:
+  nothing warns, and the page renders as *something*.
 - **Container kind-matching checks only the first class token.** `{.compact
   .callout}` is not recognized as `callout`; put the kind word first:
   `{.callout .compact}`. A bare unknown kind (`::: house-style`) warns; a
@@ -489,8 +578,9 @@ Supply `--css mine.css` to replace the stylesheet entirely.
   cross-document. Write `` `§7` `` to keep any other phrasing literal.
 - **Front matter must be flat `key: value`.** A nested value makes the whole
   block render as visible text above the title rather than being parsed.
-- **Only `caption=` is read from a code fence's info string.** Every other
-  attribute is ignored, exactly as before.
+- **Only `caption=` is read from a *brace-free* code fence info string.**
+  In the braced form an `id`, classes and `caption` are all read; any other
+  key is still ignored.
 - **Linking to `.html`** is never rewritten and will usually 404.
 - **`a.md` and `a.markdown` in one directory** both map to `a.html`, and the
   build refuses the whole run rather than racing two writes to one path.

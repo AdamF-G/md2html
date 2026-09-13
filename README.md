@@ -14,13 +14,35 @@ Walks your docs, follows links between documents across directories, and
 writes a browsable HTML tree. Tables get scroll containers, headings get
 anchors, `.md` links become `.html` links, and mermaid fences render as
 diagrams. Markdown also gets a few extras beyond CommonMark/GFM: fenced
-containers (`::: callout` … `:::`) for callouts, warnings, cards and
-collapsible asides/examples; `[proven]`-style status chips; `§4.2`
-cross-references that autolink to numbered headings; a `[[toc]]` marker for
-a per-page contents list; `title`/`subtitle`/`date` front matter; a
-`caption="…"` attribute on code fences; and a `fig` fence for hand-laid-out
-diagrams — boxes, arrows and panels described in YAML, for layouts a
-mermaid graph cannot express.
+containers (`::: callout` … `:::`, or `:::callout[With a title]`) for
+callouts, warnings, cards and collapsible asides/examples; GitHub alerts
+(`> [!WARNING]`) as an alias for the same; `[proven]`-style status chips
+and the general `[label]{.chip}` form; `§4.2` cross-references that
+autolink to numbered headings; a `[[toc]]` or `[TOC]` marker for a
+per-page contents list; `title`/`subtitle`/`date` front matter; a
+`caption="…"` attribute on code fences, braced or bare; and a `fig` fence
+for hand-laid-out diagrams — boxes, arrows and panels described in YAML,
+for layouts a mermaid graph cannot express.
+
+## The dialect
+
+md2html reads **CommonMark plus fenced divs, bracketed spans, fenced code
+attributes, header attributes, definition lists, footnotes, pipe tables and
+YAML front matter** — which is to say Pandoc's `commonmark_x` — plus GitHub
+alerts, status chips, `§` cross-references, `[[toc]]` and `fig`.
+
+That is a measured claim, not an aspiration. `compat/` runs a corpus
+through both tools and sorts every construct into one of three buckets:
+the ones where md2html and `pandoc -f commonmark_x` produce the same
+structure, the ones Pandoc passes through untouched, and the ones Pandoc
+renders as a labelled code block. Task lists are the single divergence
+inside the shared subset — `commonmark_x` does not implement them and
+md2html follows GFM.
+
+The practical consequence is that a document written for md2html mostly
+survives `pandoc -f commonmark_x`, and a document written for Pandoc
+mostly converts here. Where a construct is ours alone, Pandoc degrades it
+legibly rather than corrupting it.
 
 The one thing a generated page fetches at view time is MermaidJS, and only
 a page that actually contains a diagram: it loads a pinned build from a CDN.
@@ -316,8 +338,16 @@ end to end:
 just e2e     # or: cd e2e && go test ./...
 ```
 
-It requires Chrome or Chromium installed locally, and lives in `e2e/` as its
-own Go module. That boundary is the only opt-in — there is no build tag —
+A third suite characterises the Markdown dialect against Pandoc:
+
+```bash
+just compat   # or: cd compat && go test ./...
+```
+
+It needs `pandoc` on PATH and skips itself without one.
+
+The browser suite requires Chrome or Chromium installed locally, and lives
+in `e2e/` as its own Go module — as `compat/` does, for the same reason. That boundary is the only opt-in — there is no build tag —
 and it is what keeps chromedp out of the library: a test-only import would
 sit in this module's own `go.mod` as a direct requirement and be compiled by
 anyone who ran its tests. Nothing in a build or test of the library
@@ -326,8 +356,11 @@ compiles it now. (It does still appear in `go.mod` as an *indirect* entry:
 md2html never imports. That one is inherited, and the split cannot remove
 it.)
 
-GitHub Actions runs both suites on every push and pull request, along with
-`gofmt`, `go vet` and `go mod tidy -diff`. [CHANGELOG.md](./CHANGELOG.md)
+GitHub Actions runs all three suites on every push and pull request, along
+with `gofmt`, `go vet` and `go mod tidy -diff`. Pandoc is pinned there, for
+the reason the mermaid build is pinned: the compat suite records how two
+tools agree, so an unannounced upgrade of the other one would report a
+change in md2html that never happened. [CHANGELOG.md](./CHANGELOG.md)
 records what has changed.
 
 ## License
