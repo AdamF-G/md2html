@@ -54,9 +54,10 @@ Links between documents are followed across directories, unbounded by
 default. `--depth` and `--link-depth` bound two different things: `--depth`
 limits how deep into a directory md2html looks for *unlinked* files to seed
 from; `--link-depth` limits how many hops from a seed link-following may
-travel (seeds are hop zero, `0` means unlimited, `-1` follows no links at
-all). `--depth 0` seeds only the Markdown sitting directly in the
-directory — and, with `--link-depth` left at its default, still follows
+travel. Both read the same way: `-1` is unlimited (the default for each),
+and a non-negative number is the bound itself, so `--link-depth 0` follows
+no links at all. `--depth 0` seeds only the Markdown sitting directly in
+the directory — and, with `--link-depth` left at its default, still follows
 every link out of it, however far that leads.
 
 ### Where output goes
@@ -101,8 +102,8 @@ unrelated tools that share the name is never claimed.
 | Flag | Effect |
 |---|---|
 | `-o DIR` | output directory; default writes beside each source |
-| `--depth N` | directory levels to seed from a directory entry; `-1` unlimited |
-| `--link-depth N` | hops from a seed that link-following may travel; `0` (default) is unlimited, `-1` follows none |
+| `--depth N` | directory levels to seed from a directory entry; `-1` (default) unlimited |
+| `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
 | `--fragment` | emit Artifact-shaped fragments instead of full pages |
 | `--css FILE` | replace the embedded stylesheet |
 | `--no-table-scroll` | do not wrap tables |

@@ -41,13 +41,12 @@ type CrawlOptions struct {
 	// counted in hops: a document a seed links to is one hop, one it links
 	// to in turn is two.
 	//
-	// 0 — the zero value, and the CLI default — means unlimited, which is
-	// the opposite of Depth's convention above and is deliberate. Depth was
-	// introduced with the tool; LinkDepth is being added to callers who
-	// already exist, and a zero-valued CrawlOptions has always followed
-	// links without limit. Mirroring Depth's -1 would have turned every
-	// such caller's build into a seeds-only build without a line of their
-	// code changing. A negative value follows no links at all.
+	// It reads exactly as Depth does: a non-negative value is the bound
+	// itself, and -1 is unlimited. 0 therefore follows no links at all,
+	// which is what makes a zero-valued CrawlOptions coherent rather than
+	// merely conservative — Depth's zero already seeds a directory's own
+	// files and none of its subdirectories, so both fields describe the
+	// smallest possible run, and the CLI asks for unlimited on both.
 	LinkDepth int
 }
 
@@ -394,11 +393,12 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 					fmt.Sprintf("link target does not exist: %s", l.Href)})
 				continue
 			}
-			// LinkDepth 0 is unlimited; a negative value follows nothing.
-			// The asset-existence warnings above stay unconditional —
-			// a missing image is worth reporting whether or not this
-			// document's links are being followed.
-			if opt.LinkDepth < 0 || (opt.LinkDepth > 0 && hops >= opt.LinkDepth) {
+			// A negative LinkDepth is unlimited; otherwise this document
+			// sits at hops and may only be followed out of while that is
+			// still short of the bound. The asset-existence warnings above
+			// stay unconditional — a missing image is worth reporting
+			// whether or not this document's links are being followed.
+			if opt.LinkDepth >= 0 && hops >= opt.LinkDepth {
 				continue
 			}
 			admit(cur, target, l.Href, true, hops+1)

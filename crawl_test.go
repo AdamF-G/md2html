@@ -65,7 +65,7 @@ func TestCrawlFollowsLinksAcrossDirectoriesUnbounded(t *testing.T) {
 		"docs/b/two.md":        "[c](./deep/three.md)",
 		"docs/b/deep/three.md": "end",
 	})
-	res, err := Crawl(CrawlOptions{Entries: []string{filepath.Join(root, "docs/index.md")}, Depth: -1})
+	res, err := Crawl(CrawlOptions{LinkDepth: -1, Entries: []string{filepath.Join(root, "docs/index.md")}, Depth: -1})
 	if err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestCrawlDepthZeroStillFollowsLinksDeeper(t *testing.T) {
 		"docs/top.md":            "[deep](./sub/deeper/low.md)",
 		"docs/sub/deeper/low.md": "end",
 	})
-	res, _ := Crawl(CrawlOptions{Entries: []string{filepath.Join(root, "docs")}, Depth: 0})
+	res, _ := Crawl(CrawlOptions{LinkDepth: -1, Entries: []string{filepath.Join(root, "docs")}, Depth: 0})
 	want := []string{"docs/sub/deeper/low.md", "docs/top.md"}
 	if got := srcNames(t, root, res.Docs); !eq(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -119,7 +119,7 @@ func TestCrawlTerminatesOnCycle(t *testing.T) {
 		"a.md": "[b](./b.md)",
 		"b.md": "[a](./a.md)",
 	})
-	res, err := Crawl(CrawlOptions{Entries: []string{filepath.Join(root, "a.md")}, Depth: -1})
+	res, err := Crawl(CrawlOptions{LinkDepth: -1, Entries: []string{filepath.Join(root, "a.md")}, Depth: -1})
 	if err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestCrawlFollowsOutsideBaseWithOutDir(t *testing.T) {
 		"docs/index.md": "[out](../outside/x.md)",
 		"outside/x.md":  "end",
 	})
-	res, err := Crawl(CrawlOptions{
+	res, err := Crawl(CrawlOptions{LinkDepth: -1,
 		Entries: []string{filepath.Join(root, "docs/index.md")},
 		OutDir:  filepath.Join(root, "site"),
 		Depth:   -1,
@@ -179,7 +179,7 @@ func TestCrawlRefusesOutsideBaseInPlace(t *testing.T) {
 		"docs/index.md": "[out](../outside/x.md)",
 		"outside/x.md":  "end",
 	})
-	res, err := Crawl(CrawlOptions{
+	res, err := Crawl(CrawlOptions{LinkDepth: -1,
 		Entries: []string{filepath.Join(root, "docs/index.md")},
 		Depth:   -1,
 	})
@@ -426,7 +426,7 @@ func TestCrawlExcludeRefusesLinkTarget(t *testing.T) {
 		"docs/slides/deck.md": "owned by another tool",
 		"docs/ok.md":          "fine",
 	})
-	res, err := Crawl(CrawlOptions{
+	res, err := Crawl(CrawlOptions{LinkDepth: -1,
 		Entries: []string{filepath.Join(root, "docs/index.md")},
 		Depth:   -1,
 		Exclude: []string{"slides"},
@@ -462,7 +462,7 @@ func TestCrawlExcludeWarnsOnLinkTarget(t *testing.T) {
 		"docs/index.md":       "[slides](./slides/deck.md)",
 		"docs/slides/deck.md": "x",
 	})
-	res, err := Crawl(CrawlOptions{
+	res, err := Crawl(CrawlOptions{LinkDepth: -1,
 		Entries: []string{filepath.Join(root, "docs/index.md")},
 		Depth:   -1,
 		Exclude: []string{"slides"},
@@ -734,15 +734,14 @@ func TestCrawlLinkDepthMeasuredFromEachSeed(t *testing.T) {
 	}
 }
 
-// The zero value must not change behavior: this is the same tree and the
-// same expectation as TestCrawlFollowsLinksAcrossDirectoriesUnbounded,
-// asserted through an explicit LinkDepth: 0.
-func TestCrawlLinkDepthZeroIsUnlimited(t *testing.T) {
+// Zero hops is zero hops: a bound of 0 admits the seeds and follows none of
+// their links, exactly as Depth 0 seeds a directory's own files and none of
+// its subdirectories. Both fields read the same way — a non-negative value
+// is the bound itself — so neither has a magic zero the other lacks.
+func TestCrawlLinkDepthZeroFollowsNothing(t *testing.T) {
 	root := writeTree(t, map[string]string{
-		"docs/index.md":        "[a](./a/one.md)",
-		"docs/a/one.md":        "[b](../b/two.md)",
-		"docs/b/two.md":        "[c](./deep/three.md)",
-		"docs/b/deep/three.md": "end",
+		"docs/index.md": "[a](./a.md)",
+		"docs/a.md":     "end",
 	})
 	res, err := Crawl(CrawlOptions{
 		Entries:   []string{filepath.Join(root, "docs/index.md")},
@@ -752,17 +751,20 @@ func TestCrawlLinkDepthZeroIsUnlimited(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
-	want := []string{"docs/a/one.md", "docs/b/deep/three.md", "docs/b/two.md", "docs/index.md"}
-	if got := srcNames(t, root, res.Docs); !eq(got, want) {
-		t.Errorf("got %v, want %v", got, want)
+	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
+		t.Errorf("got %v, want [docs/index.md]", got)
 	}
 }
 
-// A negative value follows nothing at all — seeds only.
-func TestCrawlLinkDepthNegativeFollowsNothing(t *testing.T) {
+// -1 is unlimited, the same spelling Depth uses: this is the same tree and
+// the same expectation as TestCrawlFollowsLinksAcrossDirectoriesUnbounded,
+// asserted through an explicit LinkDepth.
+func TestCrawlLinkDepthNegativeIsUnlimited(t *testing.T) {
 	root := writeTree(t, map[string]string{
-		"docs/index.md": "[a](./a.md)",
-		"docs/a.md":     "end",
+		"docs/index.md":        "[a](./a/one.md)",
+		"docs/a/one.md":        "[b](../b/two.md)",
+		"docs/b/two.md":        "[c](./deep/three.md)",
+		"docs/b/deep/three.md": "end",
 	})
 	res, err := Crawl(CrawlOptions{
 		Entries:   []string{filepath.Join(root, "docs/index.md")},
@@ -772,8 +774,9 @@ func TestCrawlLinkDepthNegativeFollowsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Crawl: %v", err)
 	}
-	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
-		t.Errorf("got %v, want [docs/index.md]", got)
+	want := []string{"docs/a/one.md", "docs/b/deep/three.md", "docs/b/two.md", "docs/index.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
 	}
 }
 

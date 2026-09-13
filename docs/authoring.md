@@ -73,7 +73,7 @@ source tree together keeps them working.
 the build, however far it is, including across directory boundaries. `--depth`
 bounds only how deep directory *seeding* goes — it never limits link
 following. `--link-depth` does, if set: it caps how many hops from a seed a
-link may travel, and left at its default (`0`) following stays unbounded. One
+link may travel, and left at its default (`-1`) following stays unbounded. One
 `../` link into a large repo pulls that repo's reachable docs in; the run
 prints a summary of everything it pulled in from outside.
 
