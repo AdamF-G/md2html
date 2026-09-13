@@ -34,9 +34,61 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
+// Two budgets, because they bound genuinely different things.
+//
+// stepTimeout is the diagnostic one: it turns a selector that never matches
+// into a named failure in seconds, instead of the ten-minute panic the Go
+// test binary would otherwise produce. Every assertion in this file is
+// comfortably inside it.
+//
+// startTimeout covers getting a browser at all, which is not this suite's
+// subject and is far less predictable — see TestMain.
+const (
+	stepTimeout  = 15 * time.Second
+	startTimeout = 90 * time.Second
+)
+
+// TestMain launches and discards one browser before any test runs.
+//
+// The first Chrome launch on a machine that has not run it recently pays to
+// fault the binary and its libraries in from cold page cache; later
+// launches in the same run reuse that and take a second or two. Without
+// this, that cost landed inside the first test's own stepTimeout, so the
+// first test in the file — and only ever that one — failed at exactly 15s
+// while the other ten passed. CI did precisely that on a fresh runner:
+// passed once, then failed twice on an unchanged tree.
+//
+// Warming here rather than widening stepTimeout keeps that deadline tight
+// enough to stay diagnostic, and keeps the cost where it belongs: paid
+// once, by nobody's assertion.
+func TestMain(m *testing.M) {
+	warmChrome()
+	os.Exit(m.Run())
+}
+
+// warmChrome starts a browser, waits for it to be ready, and throws it
+// away. Every error is deliberately discarded: this is cache warming, not
+// an assertion, and a genuinely unusable Chrome is reported by the first
+// real test with a test name attached — which is a far more legible
+// failure than one from a function that runs before the suite exists.
+func warmChrome() {
+	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("no-sandbox", true))
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer allocCancel()
+	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(func(string, ...any) {}))
+	defer cancel()
+	startCtx, startCancel := context.WithTimeout(ctx, startTimeout)
+	defer startCancel()
+	_ = chromedp.Run(startCtx)
+}
+
 // newBrowserCtx returns a context driving a headless, sandboxless Chrome
 // instance, torn down automatically at the end of the test. no-sandbox is
 // required in most CI containers, which run as root.
+//
+// The deadline is stepTimeout, and it covers this browser's launch as well
+// as the test's own steps — which is safe because TestMain has already paid
+// the expensive first launch for the whole package.
 //
 // It also installs filterChromedpNoise as chromedp's error sink, to drop
 // one specific chromedp-internal log line that would otherwise print on
@@ -47,7 +99,7 @@ func newBrowserCtx(t *testing.T) context.Context {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("no-sandbox", true))
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(filterChromedpNoise))
-	ctx, timeoutCancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, timeoutCancel := context.WithTimeout(ctx, stepTimeout)
 	t.Cleanup(func() {
 		timeoutCancel()
 		cancel()
