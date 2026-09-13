@@ -1,14 +1,15 @@
 # Changelog
 
-Notable changes to md2html, newest first. Versions are git tags; the same
-string is stamped into every generated file's provenance marker, so the
-version a page claims and the version that wrote it are always the same.
+Notable changes to md2html, newest first. A version is a git tag, and the
+same string is stamped into every generated file's provenance marker, so
+the version a page claims and the version that wrote it are always the
+same.
 
-Nothing has been released yet. Until the first tag, the entries below sit
-under Unreleased and the exported API is not stable — after it, a change
-marked **breaking** needs a new major version.
+This is 0.x: the exported API is not stable yet, and a change marked
+**breaking** can land in a minor release. From v1.0.0 on, one needs a new
+major version instead.
 
-## Unreleased
+## v0.2.0 — 2026-09-13
 
 ### Added
 
