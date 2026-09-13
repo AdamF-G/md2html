@@ -16,7 +16,64 @@ import (
 // brackets. The c: form is the escape hatch for a label outside the
 // vocabulary — explicit, so it can never fire by accident. The label is
 // capped and excludes newlines so a stray "[c:" cannot swallow a paragraph.
-var chipRe = regexp.MustCompile(`\[(proven|verified|designed|planned|draft|deprecated|c:[^\]\n]{0,60})\]`)
+var chipRe = regexp.MustCompile(
+	`\[([^\]\n]+)\]\{([^}\n]*)\}` +
+		`|\[(proven|verified|designed|planned|draft|deprecated|c:[^\]\n]{0,60})\]`)
+
+// statusWords is the closed vocabulary the bare form recognizes, and the
+// set that gives a bracketed span its chip-<word> modifier class.
+var statusWords = map[string]bool{
+	"proven": true, "verified": true, "designed": true,
+	"planned": true, "draft": true, "deprecated": true,
+}
+
+// spanNode builds the <span> for a bracketed span — Pandoc's
+// bracketed_spans — from its label and the contents of its attribute
+// block. It returns nil for a block that holds no attributes, so
+// "[thing]{}" stays literal rather than becoming an empty element.
+//
+// A chip earns its modifier class here rather than in the vocabulary
+// regex: [proven]{.chip} carries chip-proven, while [proven]{.lead} is
+// just a span the author classed themselves. The modifier is skipped when
+// the author already wrote a chip-* class of their own, so
+// [shipped]{.chip .chip-ok} keeps exactly the classes it names.
+func spanNode(label, block string) []*html.Node {
+	a, ok := parseAttrs(block)
+	if !ok {
+		return nil
+	}
+	classes := a.classes
+	if statusWords[label] && hasClassToken(classes, "chip") && !hasClassTokenPrefix(classes, "chip-") {
+		classes = append(classes, "chip-"+label)
+	}
+	span := &html.Node{Type: html.ElementNode, DataAtom: atom.Span, Data: "span"}
+	if a.id != "" {
+		span.Attr = append(span.Attr, html.Attribute{Key: "id", Val: a.id})
+	}
+	if len(classes) > 0 {
+		span.Attr = append(span.Attr, html.Attribute{Key: "class", Val: strings.Join(classes, " ")})
+	}
+	span.AppendChild(&html.Node{Type: html.TextNode, Data: label})
+	return []*html.Node{span}
+}
+
+func hasClassToken(classes []string, want string) bool {
+	for _, c := range classes {
+		if c == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasClassTokenPrefix(classes []string, prefix string) bool {
+	for _, c := range classes {
+		if strings.HasPrefix(c, prefix) {
+			return true
+		}
+	}
+	return false
+}
 
 // chipNodes splits s on chip tokens, returning the replacement nodes, or
 // nil when s carries none — which is almost every text node in almost every
@@ -30,7 +87,11 @@ var chipRe = regexp.MustCompile(`\[(proven|verified|designed|planned|draft|depre
 // matched text.
 func chipNodes(s string) []*html.Node {
 	return splitMatches(s, chipRe, func(loc []int) []*html.Node {
-		token := s[loc[2]:loc[3]]
+		if loc[2] >= 0 {
+			// Bracketed span: [label]{...}.
+			return spanNode(s[loc[2]:loc[3]], s[loc[4]:loc[5]])
+		}
+		token := s[loc[6]:loc[7]]
 		class, label := "chip", token
 		if strings.HasPrefix(token, "c:") {
 			label = strings.TrimSpace(token[2:])
@@ -86,7 +147,7 @@ func stripChipTokens(s string) string {
 	if !strings.ContainsRune(s, '[') {
 		return s
 	}
-	locs := chipRe.FindAllStringIndex(s, -1)
+	locs := chipRe.FindAllStringSubmatchIndex(s, -1)
 	if locs == nil {
 		return s
 	}
@@ -95,6 +156,17 @@ func stripChipTokens(s string) string {
 	for _, loc := range locs {
 		b.WriteString(s[last:loc[0]])
 		last = loc[1]
+		if loc[2] >= 0 {
+			// A bracketed span. Only a chip is a status marker that has no
+			// business in a browser tab; any other span is ordinary prose
+			// the author wrapped for styling, so its label survives with
+			// only the syntax removed.
+			label, block := s[loc[2]:loc[3]], s[loc[4]:loc[5]]
+			if a, ok := parseAttrs(block); !ok || !hasClassToken(a.classes, "chip") {
+				b.WriteString(label)
+				continue
+			}
+		}
 		if strings.HasSuffix(b.String(), " ") && last < len(s) && s[last] == ' ' {
 			last++ // merge the flanking single-space pair into one
 		}

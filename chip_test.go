@@ -128,3 +128,79 @@ func TestStripChipTokensAdjacentTokens(t *testing.T) {
 		}
 	}
 }
+
+// Pandoc's bracketed_spans, which md2html previously mangled: the chip
+// transform fired on the bracket and left the attribute block on the page
+// as literal text.
+func TestChipsBracketedSpanStatusWord(t *testing.T) {
+	got := apply(t, `<p>x [proven]{.chip} y</p>`, Chips())
+	if !strings.Contains(got, `<span class="chip chip-proven">proven</span>`) {
+		t.Errorf("bracketed span not rendered\ngot: %s", got)
+	}
+	if strings.Contains(got, "{.chip}") {
+		t.Errorf("attribute block left on the page\ngot: %s", got)
+	}
+}
+
+func TestChipsBracketedSpanFreeTextLabel(t *testing.T) {
+	got := apply(t, `<p>x [needs review]{.chip} y</p>`, Chips())
+	if !strings.Contains(got, `<span class="chip">needs review</span>`) {
+		t.Errorf("free-text bracketed span not rendered\ngot: %s", got)
+	}
+}
+
+func TestChipsBracketedSpanKeepsExplicitClasses(t *testing.T) {
+	got := apply(t, `<p>x [shipped]{.chip .chip-ok} y</p>`, Chips())
+	if !strings.Contains(got, `<span class="chip chip-ok">shipped</span>`) {
+		t.Errorf("explicit classes not preserved\ngot: %s", got)
+	}
+}
+
+// The general Pandoc form, not just chips: any class works.
+func TestChipsBracketedSpanArbitraryClass(t *testing.T) {
+	got := apply(t, `<p>x [lead in]{.lead} y</p>`, Chips())
+	if !strings.Contains(got, `<span class="lead">lead in</span>`) {
+		t.Errorf("arbitrary bracketed span not rendered\ngot: %s", got)
+	}
+}
+
+func TestChipsBracketedSpanCarriesID(t *testing.T) {
+	got := apply(t, `<p>x [tag]{#t .chip} y</p>`, Chips())
+	if !strings.Contains(got, `id="t"`) {
+		t.Errorf("id not emitted\ngot: %s", got)
+	}
+}
+
+// A bracketed span with no attributes at all is not a span; leave the
+// source text alone rather than emit an empty element.
+func TestChipsBracketedSpanEmptyBlockStaysLiteral(t *testing.T) {
+	got := apply(t, `<p>x [thing]{} y</p>`, Chips())
+	if !strings.Contains(got, "[thing]{}") {
+		t.Errorf("emitted a span for an empty attribute block\ngot: %s", got)
+	}
+}
+
+// Ordinary bracketed prose that happens to be followed by a brace-free
+// word must stay literal.
+func TestChipsBracketedSpanNeedsBraces(t *testing.T) {
+	got := apply(t, `<p>see [some note] here</p>`, Chips())
+	if strings.Contains(got, "<span") {
+		t.Errorf("rewrote a plain bracketed phrase\ngot: %s", got)
+	}
+}
+
+// A chip token in a page title is stripped before transforms run; the
+// bracketed form has to be stripped there too, or a title keeps the braces.
+func TestStripChipTokensRemovesBracketedSpan(t *testing.T) {
+	if got := stripChipTokens("Rollback [proven]{.chip}"); got != "Rollback" {
+		t.Errorf("stripChipTokens = %q, want Rollback", got)
+	}
+}
+
+// A span that is not a chip is ordinary prose the author wrapped for
+// styling. Its words belong in the page title; only the syntax goes.
+func TestStripChipTokensKeepsNonChipSpanLabel(t *testing.T) {
+	if got := stripChipTokens("Rollback [in depth]{.lead}"); got != "Rollback in depth" {
+		t.Errorf("stripChipTokens = %q, want %q", got, "Rollback in depth")
+	}
+}
