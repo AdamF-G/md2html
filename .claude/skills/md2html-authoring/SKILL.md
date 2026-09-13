@@ -75,6 +75,7 @@ script, so `## 日本語の見出し` yields `#日本語の見出し`.
 | Code caption | ` ```go caption="server.go" ` |
 | Stable anchor | `## Title {#my-id}` |
 | Diagram | `` ```mermaid `` fence |
+| Hand-laid-out figure | ` ```fig ` fence, YAML body |
 | Cross-document link | `[x](./other.md)` — never `.html` |
 | Artifact-shaped output | `--fragment` |
 

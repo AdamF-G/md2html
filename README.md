@@ -17,8 +17,10 @@ diagrams. Markdown also gets a few extras beyond CommonMark/GFM: fenced
 containers (`::: callout` … `:::`) for callouts, warnings, cards and
 collapsible asides/examples; `[proven]`-style status chips; `§4.2`
 cross-references that autolink to numbered headings; a `[[toc]]` marker for
-a per-page contents list; `title`/`subtitle`/`date` front matter; and a
-`caption="…"` attribute on code fences.
+a per-page contents list; `title`/`subtitle`/`date` front matter; a
+`caption="…"` attribute on code fences; and a `fig` fence for hand-laid-out
+diagrams — boxes, arrows and panels described in YAML, for layouts a
+mermaid graph cannot express.
 
 The one thing a generated page fetches at view time is MermaidJS, and only
 a page that actually contains a diagram: it loads a pinned build from a CDN.

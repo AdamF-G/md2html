@@ -59,9 +59,10 @@ type Options struct {
 	// file) would have the first rewrite turned into the second.
 	LinkMap map[string]string
 	// Warn, when non-nil, receives one message per non-fatal problem found
-	// while converting this document. Two things report so far: a front
-	// matter block that is not flat key: value, and a container naming a
-	// kind that does not exist.
+	// while converting this document. Three things report so far: a front
+	// matter block that is not flat key: value, a container naming a kind
+	// that does not exist, and a fig fence whose body does not parse or
+	// does not validate.
 	//
 	// Convert never writes to stderr itself: it is a library, and the CLI
 	// emits every document's output in parallel, so a transform printing
@@ -69,12 +70,13 @@ type Options struct {
 	// is invoked synchronously on the calling goroutine, so a caller may
 	// append to an unsynchronized per-document slice.
 	//
-	// The two sources reach it by different routes, which matters to a
-	// caller supplying Transforms. Convert raises the front matter warning
-	// itself, so that one always arrives. A transform's warning does not:
-	// it reaches transforms only through the default list, and a caller
-	// who builds Transforms themselves is responsible for passing the sink
-	// to the constructors that take one.
+	// The sources reach it by different routes, which matters to a caller
+	// supplying Transforms. Convert raises the front matter warning itself
+	// and the fig fence warning comes from the renderer, so those always
+	// arrive. A transform's warning does not: it reaches transforms only
+	// through the default list, and a caller who builds Transforms
+	// themselves is responsible for passing the sink to the constructors
+	// that take one.
 	Warn func(string)
 }
 

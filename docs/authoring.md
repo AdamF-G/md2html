@@ -362,6 +362,53 @@ theme the diagram yourself. Only pages that contain a diagram load it.
 With `--fragment` nothing is injected, because Artifacts render mermaid
 natively.
 
+### Structured figures
+
+A ```` ```fig ```` fence is a hand-laid-out diagram: boxes, arrows and
+panels you place yourself, for layouts a mermaid graph cannot express. The
+body is YAML.
+
+(The examples below are shown in `yaml` fences. In a real document they go
+in a `fig` fence — shown that way here, they would render as figures
+instead of showing you the syntax.)
+
+```yaml
+caption: Request path
+items:
+  - box: Client
+  - arrow: HTTP POST
+  - group: Server
+    items:
+      - box: "`auth` middleware"
+      - result: 200 OK
+```
+
+Every item is exactly one *kind*:
+
+| Kind | Value | What it is |
+|---|---|---|
+| `box` | label | a labeled box |
+| `arrow` | label, may be `""` | a connector; blank is decorative |
+| `result` | label | an emphasized outcome bar |
+| `rail` | label | a full-width accent rail |
+| `stats` | list of `value`/`label` | a row of stat tiles |
+| `defs` | list of `term`/`def` | a term/definition grid |
+| `group` | title, plus `items` | a labeled container |
+| `chain` | list of items | steps connected in sequence |
+| `lanes` | list of lists | parallel stacks |
+
+`layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
+top-level item may carry `weight` (1–12). Under `split`, exactly two items
+sit either side of a `boundary` label.
+
+Every text field takes inline Markdown, so code spans, links, chips and
+`§` references work in a label exactly as in prose. A `.md` link inside a
+figure is rewritten and crawled like any other.
+
+**A figure that does not parse renders as a code block and warns.** You see
+your own YAML, unstyled — the run says which item and why. An intentionally
+blank box is `box: ""`; a bare `box:` names no kind and is an error.
+
 ### Footnotes, definition lists, task lists
 
 ```markdown
