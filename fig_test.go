@@ -84,6 +84,16 @@ func TestFigValidationRejects(t *testing.T) {
 			src:     "```fig\nitems:\n  - box: A\n    weight: 2\n```\n",
 			wantMsg: "weight",
 		},
+		{
+			name:    "unrecognized layout",
+			src:     "```fig\nlayout: bogus\nitems:\n  - box: A\n```\n",
+			wantMsg: "not rows, cols or split",
+		},
+		{
+			name:    "split layout with wrong item count",
+			src:     "```fig\nlayout: split\nitems:\n  - box: A\n```\n",
+			wantMsg: "exactly 2 items",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
