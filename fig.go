@@ -52,6 +52,85 @@ type figItem struct {
 	Weight int       `yaml:"weight"`
 }
 
+// kinds reports every kind key set on an item. Exactly one is legal; the
+// slice is returned rather than a count so a diagnostic can name them.
+func (it figItem) kinds() []string {
+	var out []string
+	for _, k := range []struct {
+		name string
+		set  bool
+	}{
+		{"box", it.Box != nil},
+		{"arrow", it.Arrow != nil},
+		{"result", it.Result != nil},
+		{"rail", it.Rail != nil},
+		{"group", it.Group != nil},
+		{"stats", it.Stats != nil},
+		{"defs", it.Defs != nil},
+		{"chain", it.Chain != nil},
+		{"lanes", it.Lanes != nil},
+	} {
+		if k.set {
+			out = append(out, k.name)
+		}
+	}
+	return out
+}
+
+// validateFig enforces what the decoder cannot see. KnownFields rejects a
+// key no kind defines, but one struct carries every kind's fields, so only
+// validation knows whether a key is legal *here*: that an item names one
+// kind and not two, and that weight appears only on a panel of a cols
+// layout.
+//
+// Errors carry an item path (items[1].chain[0]) rather than a line number.
+// Retaining lines would need a custom UnmarshalYAML on figItem, and
+// yaml.v3 does not apply KnownFields inside one — the strictness is worth
+// more than the line.
+func validateFig(doc figDoc) error {
+	if doc.Layout != "" && doc.Layout != "rows" && doc.Layout != "cols" && doc.Layout != "split" {
+		return fmt.Errorf("layout %q is not rows, cols or split", doc.Layout)
+	}
+	if doc.Layout == "split" && len(doc.Items) != 2 {
+		return fmt.Errorf("a split layout needs exactly 2 items, got %d", len(doc.Items))
+	}
+	return validateItems(doc.Items, "items", doc.Layout == "cols")
+}
+
+// validateItems walks one level of items. weightOK is true only for the
+// top level of a cols layout, so nesting cannot smuggle a weight in.
+func validateItems(items []figItem, path string, weightOK bool) error {
+	for i, it := range items {
+		at := fmt.Sprintf("%s[%d]", path, i)
+		switch ks := it.kinds(); len(ks) {
+		case 1:
+		case 0:
+			return fmt.Errorf(`%s names no kind (a blank box is box: "")`, at)
+		default:
+			return fmt.Errorf("%s names %d kinds (%s); an item is exactly one",
+				at, len(ks), strings.Join(ks, ", "))
+		}
+		if it.Weight != 0 && !weightOK {
+			return fmt.Errorf("%s carries weight, which is only legal on a panel of a cols layout", at)
+		}
+		if it.Items != nil && it.Group == nil {
+			return fmt.Errorf("%s carries items, which only a group takes", at)
+		}
+		if err := validateItems(it.Items, at+".items", false); err != nil {
+			return err
+		}
+		if err := validateItems(it.Chain, at+".chain", false); err != nil {
+			return err
+		}
+		for j, lane := range it.Lanes {
+			if err := validateItems(lane, fmt.Sprintf("%s.lanes[%d]", at, j), false); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // parseFig decodes a fence body. KnownFields(true) is the point of using a
 // real decoder: a misspelled key is an error that degrades visibly rather
 // than an item that silently vanishes.
@@ -74,6 +153,10 @@ func renderFig(body []byte, warn func(string)) (string, bool) {
 	}
 	doc, err := parseFig(body)
 	if err != nil {
+		warn(fmt.Sprintf("fig fence: %v; rendering it as a code block", err))
+		return "", false
+	}
+	if err := validateFig(doc); err != nil {
 		warn(fmt.Sprintf("fig fence: %v; rendering it as a code block", err))
 		return "", false
 	}
