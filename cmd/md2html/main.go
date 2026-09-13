@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 
@@ -264,7 +263,7 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 	}
 }
 
-// installAuthoringSkill writes the embedded authoring skill into a Claude
+// installAuthoringSkill installs the embedded authoring skill into a Claude
 // Code skills directory: the user's own under ~/.claude, or the caller's
 // under ./.claude when project is set.
 //
@@ -272,12 +271,8 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 // is not a Claude Code workspace, or the caller is standing somewhere they
 // did not mean to be, and inventing it would leave the skill somewhere
 // nothing ever reads while still reporting success — the same failure the
-// install recipe in the justfile refuses for the binary. skills/ below it
-// is ours to create.
-//
-// Every destination is checked before anything is written, so a refusal
-// leaves no half-installed skill: one hand-edited file stops the install
-// rather than being stepped around.
+// install recipe in the justfile refuses for the binary. Everything below
+// it, skills/ included, is md2html.InstallSkill's to create.
 func installAuthoringSkill(project bool, stdout, stderr io.Writer) int {
 	base := ".claude"
 	if !project {
@@ -304,43 +299,14 @@ func installAuthoringSkill(project bool, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	dir := filepath.Join(base, "skills", md2html.SkillName)
-	files := md2html.SkillFiles()
-	names := make([]string, 0, len(files))
-	for name := range files {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	refused := false
-	for _, name := range names {
-		ours, err := md2html.IsOurs(filepath.Join(dir, name))
-		if err != nil {
-			fmt.Fprintf(stderr, "md2html: %s: %v\n", filepath.Join(dir, name), err)
-			return 1
-		}
-		if !ours {
-			if _, statErr := os.Stat(filepath.Join(dir, name)); statErr == nil {
-				fmt.Fprintf(stderr, "md2html: refusing to overwrite %s (not installed by md2html)\n",
-					filepath.Join(dir, name))
-				refused = true
-			}
-		}
-	}
-	if refused {
+	written, err := md2html.InstallSkill(filepath.Join(base, "skills"))
+	if err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 1
 	}
-
-	for _, name := range names {
-		p := filepath.Join(dir, name)
-		if _, err := md2html.SafeWrite(p, files[name]); err != nil {
-			fmt.Fprintf(stderr, "md2html: %s: %v\n", p, err)
-			return 1
-		}
-	}
-	fmt.Fprintf(stdout, "md2html: installed %s %s\n", md2html.SkillName, md2html.Version)
-	for _, name := range names {
-		fmt.Fprintf(stdout, "md2html:   %s\n", filepath.Join(dir, name))
+	fmt.Fprintf(stdout, "md2html: installed the authoring skill %s\n", md2html.Version)
+	for _, p := range written {
+		fmt.Fprintf(stdout, "md2html:   %s\n", p)
 	}
 	return 0
 }
