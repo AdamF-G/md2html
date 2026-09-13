@@ -10,8 +10,65 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// splitFenceInfo separates a fence info string into its language and an
-// optional caption:
+// fenceInfo is a parsed fence info string.
+type fenceInfo struct {
+	lang    string
+	caption string
+	id      string
+	// classes holds every class from a braced block except the one taken
+	// as the language, so an author's own styling hook reaches the element
+	// instead of being swallowed.
+	classes []string
+}
+
+// parseFenceInfo reads a fence info string in either supported form:
+//
+//	```go caption="server.go"        the original, space-separated
+//	```{.go caption="server.go"}     Pandoc's fenced_code_attributes
+//	```go {caption="server.go"}      a head word plus a braced block
+//
+// The braced form is the standard one and the reason this exists: it is
+// what a document written for Pandoc, kramdown or MyST will use, and
+// md2html used to mangle it into class="language-{.go" with a caption of
+// `server.go"}`. Both forms are accepted rather than one replacing the
+// other, so nothing written for the older spelling changes meaning.
+//
+// In the braced form the language is the first class, exactly as Pandoc
+// reads it. A head word outside the braces wins over that, because it is
+// where a reader looks first: `go {.wide}` is Go with a "wide" class, not
+// a "go"-classed block in the "wide" language.
+func parseFenceInfo(info string) fenceInfo {
+	var f fenceInfo
+	head, content, braced := splitBraced(info)
+	if !braced {
+		f.lang, f.caption = splitPlainFenceInfo(info)
+		return f
+	}
+	f.lang, f.caption = splitPlainFenceInfo(head)
+	a, ok := parseAttrs(content)
+	if !ok {
+		return f
+	}
+	f.id = a.id
+	if c, present := a.kv["caption"]; present {
+		f.caption = c
+	}
+	f.classes = a.classes
+	if f.lang == "" && len(f.classes) > 0 {
+		f.lang, f.classes = f.classes[0], f.classes[1:]
+	}
+	return f
+}
+
+// splitFenceInfo reports just the language and caption, the two things
+// most callers and tests care about.
+func splitFenceInfo(info string) (lang, caption string) {
+	f := parseFenceInfo(info)
+	return f.lang, f.caption
+}
+
+// splitPlainFenceInfo separates the brace-free form into its language and
+// an optional caption:
 //
 //	```go caption="cmd/md2html/main.go"
 //
@@ -25,7 +82,7 @@ import (
 // `caption="x.go" go` still yields the language: a caption may precede the
 // language in the info string, and the language must not be lost just
 // because it wasn't first.
-func splitFenceInfo(info string) (lang, caption string) {
+func splitPlainFenceInfo(info string) (lang, caption string) {
 	for _, tok := range fenceTokens(info) {
 		if v, ok := strings.CutPrefix(tok, "caption="); ok {
 			caption = strings.Trim(v, `"'`)
@@ -42,12 +99,16 @@ func splitFenceInfo(info string) (lang, caption string) {
 // together so a caption may contain spaces.
 //
 // There is no backslash-escape for a quote embedded inside a quoted run
-// (`caption="a \"b\" c"`): the backslash and the inner quote just end up
-// as literal characters in the token, and strings.Trim in splitFenceInfo
-// only trims a leading/trailing quote, so the embedded one survives into
-// the caption text. That degrades to literal, HTML-escaped source text
-// rather than broken markup or a truncated caption, which is an acceptable
-// fallback for a syntax this narrow — not worth a real escaping grammar.
+// (`caption="a \"b\" c"`) in this brace-free form: the backslash and the
+// inner quote end up as literal characters in the token, and strings.Trim
+// in splitPlainFenceInfo only trims a leading/trailing quote, so the
+// embedded one survives into the caption text. That degrades to literal,
+// HTML-escaped source text rather than broken markup or a truncated
+// caption.
+//
+// The braced form does support the escape, because it goes through
+// parseAttrs. An author who needs a quote inside a caption should write
+// ```{.go caption="has \"quote\" inside"}.
 func fenceTokens(s string) []string {
 	var out []string
 	var cur strings.Builder
@@ -92,11 +153,11 @@ func fenceTokens(s string) []string {
 // node during parsing and registers a renderer for that node, so a mermaid
 // fence never reaches this function.
 //
-// A trailing {...} attribute (e.g. `go {.wide}`) is left exactly as
-// unhandled as it is in goldmark's own fenced-code-block renderer: that
-// renderer never calls n.Attributes() either (CodeAttributeFilter is wired
-// up for inline code spans, not fenced blocks), so there is no existing
-// behavior here to preserve beyond "still does nothing with it".
+// A braced {...} block is parsed here rather than through goldmark, whose
+// own fenced-code-block renderer never calls n.Attributes()
+// (CodeAttributeFilter is wired up for inline code spans, not fenced
+// blocks). Handling it in the same place as the caption keeps one parser
+// for one grammar — see parseFenceInfo.
 type codeFenceRenderer struct{ warn func(string) }
 
 func newCodeFenceRenderer(warn func(string)) renderer.NodeRenderer {
@@ -122,7 +183,8 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 	if n.Info != nil {
 		info = string(n.Info.Segment.Value(source))
 	}
-	lang, caption := splitFenceInfo(info)
+	f := parseFenceInfo(info)
+	lang, caption := f.lang, f.caption
 
 	// A `fig` fence is a figure, not code. renderFig either returns markup
 	// or declines, in which case the body falls through to the ordinary
@@ -172,10 +234,18 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 		w.WriteString(gohtml.EscapeString(caption))
 		w.WriteString("</figcaption>")
 	}
-	w.WriteString("<pre><code")
-	if lang != "" {
-		w.WriteString(` class="language-`)
-		w.Write(util.EscapeHTML([]byte(lang)))
+	w.WriteString("<pre")
+	if f.id != "" {
+		// The id names the block, so it belongs on the block element
+		// rather than on the <code> inside it.
+		w.WriteString(` id="`)
+		w.Write(util.EscapeHTML([]byte(f.id)))
+		w.WriteString(`"`)
+	}
+	w.WriteString("><code")
+	if classes := codeClasses(lang, f.classes); classes != "" {
+		w.WriteString(` class="`)
+		w.Write(util.EscapeHTML([]byte(classes)))
 		w.WriteString(`"`)
 	}
 	w.WriteByte('>')
@@ -193,4 +263,17 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 	// A fenced code block's content is raw lines, not child nodes; skipping
 	// children matches what goldmark's own renderer does with it.
 	return ast.WalkSkipChildren, nil
+}
+
+// codeClasses renders the <code> element's class attribute: the language
+// in goldmark's language-<name> spelling, followed by whatever else the
+// author's attribute block named. An extra class is a styling hook they
+// wrote deliberately, so it reaches the element instead of being dropped.
+func codeClasses(lang string, extra []string) string {
+	var out []string
+	if lang != "" {
+		out = append(out, "language-"+lang)
+	}
+	out = append(out, extra...)
+	return strings.Join(out, " ")
 }

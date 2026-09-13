@@ -118,17 +118,78 @@ func TestCodeFenceOverrideLeavesMermaidAlone(t *testing.T) {
 // for inline code spans (renderCodeSpan), not for renderFencedCodeBlock —
 // confirmed by reading goldmark's source and by capturing this exact output
 // (byte for byte, via convert()) before this file's renderer override
-// existed. A braced attribute is silently swallowed, the same way an
-// unhandled caption is. want below is that captured output verbatim: a
-// substring check would also pass if the figure/caption wrapping changed
-// shape entirely, which defeats the point of a regression test for this
-// specific pre-existing behavior.
-func TestCodeFenceBracedAttributeIsUnaffected(t *testing.T) {
+// existed. A braced attribute used to be silently swallowed, the same way
+// an unhandled caption was.
+//
+// That is no longer the behavior: the braced block is Pandoc's
+// fenced_code_attributes and is now parsed, so .wide reaches the element.
+// The exact-output discipline is kept — a substring check would also pass
+// if the wrapping changed shape entirely — with want updated to the
+// rendering the braced form is now specified to produce.
+func TestCodeFenceBracedAttributeIsParsed(t *testing.T) {
 	got := convert(t, "```go {.wide}\nfoo()\n```\n", nil)
 	want := Marker() + "\n" +
 		"<title>Untitled</title>\n<style>\n/**/\n</style>\n" +
-		"<pre><code class=\"language-go\">foo()\n</code></pre>\n\n"
+		"<pre><code class=\"language-go wide\">foo()\n</code></pre>\n\n"
 	if got != want {
 		t.Errorf("braced-attribute fence rendering changed\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+// Pandoc's fenced_code_attributes, which md2html previously mangled: the
+// braced form yielded class="language-{.go" and a caption of `server.go"}`.
+func TestSplitFenceInfoBracedForm(t *testing.T) {
+	cases := []struct{ in, lang, caption string }{
+		{`{.go caption="server.go"}`, "go", "server.go"},
+		{`go {caption="server.go"}`, "go", "server.go"},
+		{`{.go}`, "go", ""},
+		{`{caption="just a caption"}`, "", "just a caption"},
+		{`{.go caption="a } brace inside"}`, "go", "a } brace inside"},
+		// The escape the old hand-rolled tokenizer could not express.
+		{`{.go caption="has \"quote\" inside"}`, "go", `has "quote" inside`},
+		// A head word wins over a class as the language, since that is
+		// where a reader looks first.
+		{`go {.wide}`, "go", ""},
+	}
+	for _, c := range cases {
+		lang, caption := splitFenceInfo(c.in)
+		if lang != c.lang || caption != c.caption {
+			t.Errorf("splitFenceInfo(%q) = (%q, %q), want (%q, %q)",
+				c.in, lang, caption, c.lang, c.caption)
+		}
+	}
+}
+
+func TestCodeFenceBracedCaptionRendersAsFigcaption(t *testing.T) {
+	got := convert(t, "```{.go caption=\"server.go\"}\nfoo()\n```\n", nil)
+	if !strings.Contains(got, "<figcaption>server.go</figcaption>") {
+		t.Errorf("braced caption not rendered\ngot: %s", got)
+	}
+	if !strings.Contains(got, `class="language-go"`) {
+		t.Errorf("language lost in braced form\ngot: %s", got)
+	}
+}
+
+// An extra class in the block is the author's own styling hook and must
+// reach the element, not be swallowed.
+func TestCodeFenceBracedExtraClassReachesElement(t *testing.T) {
+	got := convert(t, "```go {.wide}\nfoo()\n```\n", nil)
+	if !strings.Contains(got, `class="language-go wide"`) {
+		t.Errorf("extra class not emitted\ngot: %s", got)
+	}
+}
+
+func TestCodeFenceBracedIDReachesElement(t *testing.T) {
+	got := convert(t, "```{#snippet .go}\nfoo()\n```\n", nil)
+	if !strings.Contains(got, `id="snippet"`) {
+		t.Errorf("id not emitted\ngot: %s", got)
+	}
+}
+
+// A fig fence keeps working when its kind is written as a class.
+func TestFigFenceBracedForm(t *testing.T) {
+	got := convert(t, "```{.fig}\nitems:\n  - box: Client\n```\n", nil)
+	if !strings.Contains(got, `class="fig-box"`) {
+		t.Errorf("braced fig fence did not render as a figure\ngot: %s", got)
 	}
 }
