@@ -59,9 +59,14 @@ const (
 // while the other ten passed. CI did precisely that on a fresh runner:
 // passed once, then failed twice on an unchanged tree.
 //
-// Warming here rather than widening stepTimeout keeps that deadline tight
-// enough to stay diagnostic, and keeps the cost where it belongs: paid
-// once, by nobody's assertion.
+// Warming keeps that cost where it belongs — paid once, by nobody's
+// assertion — but on its own it was not enough: with it in place the first
+// test still exhausted a 15s budget, this time inside its own chromedp.Run
+// rather than at the launch. Both changes were needed, and only the pair
+// has been observed green. If a future reader is tempted to drop one,
+// widening stepTimeout is the half with direct evidence behind it; this
+// warm-up's evidence is narrower, that it changed the reported failure from
+// "chrome failed to start" to an ordinary deadline.
 func TestMain(m *testing.M) {
 	warmChrome()
 	os.Exit(m.Run())
@@ -274,6 +279,7 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 	})
 
 	ctx := newBrowserCtx(t)
+	var expandable bool
 	var width, height string
 	var widthOK, heightOK bool
 	// ByQuery is required on every selector below: chromedp's default query
@@ -288,17 +294,29 @@ func TestBrowserLargeImageExpandsOnClick(t *testing.T) {
 	// problem. ByQuery pins every lookup to DOM.querySelector instead.
 	err = chromedp.Run(ctx,
 		chromedp.Navigate(baseURL+"/index.html"),
-		// Waited for, not asserted with a bare Evaluate: the runtime wires
-		// an <img> only once it has loaded — the deferred branch the test
-		// below this one covers — so reading the class straight after
-		// Navigate races the wiring, and clicking on the same breath lands
-		// on an unwired image whose click opens nothing. The dialog wait
-		// further down then burns the whole deadline with no hint that a
-		// race was ever involved, which is exactly how this test failed on
-		// CI while passing locally. A timeout here instead says plainly
-		// that the image never became expandable, which is the assertion
-		// the Evaluate used to make.
-		chromedp.WaitVisible(`img.expandable`, chromedp.ByQuery),
+		chromedp.Evaluate(`document.querySelector("img").classList.contains("expandable")`, &expandable),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// Asserted before clicking, in its own Run, the way
+	// TestBrowserSlowImageExpandsAfterDeferredLoad does and for the same
+	// reason: an image that never got .expandable never got a click
+	// listener either, so clicking it below would hang until the deadline
+	// waiting for a dialog nothing is going to open — a timeout that looks
+	// nothing like the real problem. Reading it in the same Run as the
+	// click does not help, because the click's own wait expires first and
+	// the assertion is never reached.
+	//
+	// No wait is needed for the class itself: chromedp.Navigate blocks on
+	// the window load event, which fires after every image's own load event
+	// and therefore after mediaExpandRuntime's deferred branch has wired
+	// them.
+	if !expandable {
+		t.Fatal("a 2000x1500 image never got .expandable")
+	}
+
+	err = chromedp.Run(ctx,
 		chromedp.Click(`img`, chromedp.ByQuery, chromedp.NodeVisible),
 		chromedp.WaitVisible(`dialog.media-lightbox[open]`, chromedp.ByQuery),
 		chromedp.AttributeValue(`dialog.media-lightbox img`, "width", &width, &widthOK, chromedp.ByQuery),
