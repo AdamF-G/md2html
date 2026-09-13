@@ -38,11 +38,23 @@ func TestFigTransformsReachInsideFigures(t *testing.T) {
 	}
 }
 
-// A link that appears only inside a figure must still be crawlable.
+// A link that appears only inside a figure must still be crawlable, so the
+// claim is pinned against ExtractLinks itself rather than against the
+// presence of an <a href> in the HTML: the crawler is what decides whether
+// a document linked only from a figure label gets visited, and an anchor
+// the extractor happened not to classify would pass a markup assertion.
 func TestFigLinksAreExtracted(t *testing.T) {
 	out, _ := figConvert(t, "```fig\nitems:\n  - box: \"[api](./api.md)\"\n```\n")
 	if !strings.Contains(out, `href="./api.md"`) {
 		t.Errorf("want an anchor the crawler can see, got:\n%s", out)
+	}
+	root, err := parseFragment([]byte(out))
+	if err != nil {
+		t.Fatalf("parseFragment: %v", err)
+	}
+	got := kindsOf(ExtractLinks(root, "/docs"))
+	if k, ok := got["./api.md"]; !ok || k != LinkDoc {
+		t.Errorf("ExtractLinks should return ./api.md as a document link, got %v", got)
 	}
 }
 
@@ -165,8 +177,6 @@ func TestFigChainAndLanes(t *testing.T) {
 	}
 }
 
-// defs is a real <dl>, matching what the DefinitionList extension emits for
-// prose, so the same stylesheet rules and the same semantics apply.
 func TestFigColsWrapsPanelsWithWeights(t *testing.T) {
 	src := "```fig\nlayout: cols\nitems:\n  - box: Wide\n    weight: 3\n  - box: Narrow\n```\n"
 	out, warnings := figConvert(t, src)
@@ -217,6 +227,8 @@ func TestFigSplitPutsBoundaryBetweenPanels(t *testing.T) {
 	}
 }
 
+// defs is a real <dl>, matching what the DefinitionList extension emits for
+// prose, so the same stylesheet rules and the same semantics apply.
 func TestFigDefsGrid(t *testing.T) {
 	src := "```fig\nitems:\n  - defs:\n      - term: seed\n        def: an entry point\n```\n"
 	out, warnings := figConvert(t, src)

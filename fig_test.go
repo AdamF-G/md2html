@@ -76,8 +76,8 @@ func TestFigValidationRejects(t *testing.T) {
 			wantMsg: `box: ""`,
 		},
 		{
-			name:    "unknown key",
-			src:     "```fig\nitems:\n  - boxes: A\n```\n",
+			name: "unknown key",
+			src:  "```fig\nitems:\n  - boxes: A\n```\n",
 			// yaml.v3 phrases this as "field boxes not found in type
 			// md2html.figItem"; figFault rewrites it into the fence
 			// language's own vocabulary.
@@ -155,7 +155,7 @@ func TestFigGalleryRenders(t *testing.T) {
 	for _, want := range []string{
 		"fig-rail", "fig-box", "fig-arrow", "fig-result",
 		"fig-stat-value", "fig-defs", "fig-group", "fig-chain",
-		"fig-lane", "fig-cols", "fig-split", "fig-boundary",
+		"fig-lane", "fig-rows", "fig-cols", "fig-split", "fig-boundary",
 		"--fig-weight:3",
 	} {
 		if !strings.Contains(out, want) {

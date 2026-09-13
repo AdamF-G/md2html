@@ -471,6 +471,25 @@ func TestDefaultCSSStylesFigures(t *testing.T) {
 	if regexp.MustCompile(`\.fig-[a-z-]*\s*\{[^}]*#[0-9a-fA-F]{3,6}`).MatchString(defaultCSS) {
 		t.Error("a fig rule defines a literal color; use the existing tokens")
 	}
+
+	// A defs block sits among bordered boxes and tiles, so it needs a
+	// container of its own or it reads as body prose that leaked into the
+	// figure. It also has to undo the generic `dl dt { margin-top: 1rem }`
+	// earlier in this stylesheet, which otherwise stacks a full rem on top
+	// of the figure's own gap for every term.
+	defs := regexp.MustCompile(`\.fig-defs\s*\{[^}]*\}`).FindString(defaultCSS)
+	if defs == "" {
+		t.Fatal("default.css has no .fig-defs rule")
+	}
+	for _, prop := range []string{"border", "padding"} {
+		if !strings.Contains(defs, prop) {
+			t.Errorf(".fig-defs needs %s so it reads as part of the figure: %q", prop, defs)
+		}
+	}
+	dt := regexp.MustCompile(`\.fig-defs dt\s*\{[^}]*\}`).FindString(defaultCSS)
+	if !strings.Contains(dt, "margin-top: 0") {
+		t.Errorf(".fig-defs dt must reset the generic dl dt margin-top: %q", dt)
+	}
 }
 
 // The stylesheet has to travel with an Artifact fragment, not just with a

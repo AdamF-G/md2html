@@ -398,16 +398,23 @@ Every item is exactly one *kind*:
 | `lanes` | list of lists | parallel stacks |
 
 `layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
-top-level item may carry `weight` (1–12). Under `split`, exactly two items
-sit either side of a `boundary` label.
+top-level item may carry `weight` (1–12; out-of-range values are clamped,
+not rejected). Under `split`, exactly two items sit either side of a
+`boundary` label.
 
 Every text field takes inline Markdown, so code spans, links, chips and
 `§` references work in a label exactly as in prose. A `.md` link inside a
 figure is rewritten and crawled like any other.
 
-**A figure that does not parse renders as a code block and warns.** You see
-your own YAML, unstyled — the run says which item and why. An intentionally
-blank box is `box: ""`; a bare `box:` names no kind and is an error.
+**A figure that does not parse or validate renders as a code block and
+warns.** You see your own YAML, unstyled — the run says which item and why.
+An intentionally blank box is `box: ""`; a bare `box:` names no kind and is
+an error. Line numbers in a warning count from the first line of the fence
+body, not from the top of the file.
+
+A figure's caption is the `caption:` key in the body. The `caption="…"`
+info-string attribute that `code` fences take does nothing on a `fig` fence
+and warns.
 
 ### Footnotes, definition lists, task lists
 

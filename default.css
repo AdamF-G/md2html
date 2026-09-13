@@ -348,9 +348,34 @@ figure.fig > figcaption {
 }
 .fig-stat-label { display: block; font-size: 0.8rem; color: var(--muted); }
 
-.fig-defs { margin: 0; }
-.fig-defs dt { font-weight: 600; }
-.fig-defs dd { margin: 0 0 0.5rem; color: var(--muted); }
+/* A defs block is the one item kind whose markup is ordinary prose markup,
+   and inside a figure — where everything else is a bordered box or a tile —
+   flush-left bare text reads as body copy that leaked in. So it gets a
+   container of its own, rule-separated per term, in the same idiom as
+   .fig-stat.
+
+   The margin-top reset is not tidying: `dl dt { margin-top: 1rem }` earlier
+   in this stylesheet still applies here, and would stack a full rem on top
+   of the figure's own flex gap in front of every term. */
+.fig-defs {
+  margin: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.5rem 0.75rem;
+  background: var(--code-bg);
+}
+.fig-defs dt {
+  font-weight: 600;
+  margin-top: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+}
+.fig-defs dt:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.fig-defs dd { margin: 0.15rem 0 0.5rem; color: var(--muted); }
+.fig-defs dd:last-child { margin-bottom: 0; }
 
 .fig-group {
   border: 1px dashed var(--rule);
