@@ -300,9 +300,18 @@ figure.fig > figcaption {
   color: var(--muted);
   font-size: 0.85rem;
 }
+/* Arrow direction follows the container. The cols and split cases go through
+   .fig-panel because those layouts wrap every top-level item in one — a bare
+   `.fig-cols > .fig-arrow` never matches and silently renders a glyphless box.
+   Child combinators throughout, not descendants: an arrow nested inside a
+   column container within a cols panel must keep its down glyph, and a
+   descendant selector would both override that and tie with .fig-group on
+   specificity, making correctness depend on rule order. */
 .fig-rows > .fig-arrow::before,
-.fig-lane > .fig-arrow::before { content: "\2193"; }
-.fig-cols > .fig-arrow::before,
+.fig-lane > .fig-arrow::before,
+.fig-group > .fig-arrow::before { content: "\2193"; }
+.fig-cols > .fig-panel > .fig-arrow::before,
+.fig-split > .fig-panel > .fig-arrow::before,
 .fig-chain > .fig-arrow::before { content: "\2192"; }
 
 .fig-result {
@@ -371,6 +380,7 @@ figure.fig > figcaption {
 @media (max-width: 34rem) {
   .fig-cols, .fig-lanes, .fig-chain, .fig-split { flex-direction: column; }
   .fig-cols > .fig-panel, .fig-split > .fig-panel { flex: 1 1 auto; }
-  .fig-cols > .fig-arrow::before,
+  .fig-cols > .fig-panel > .fig-arrow::before,
+  .fig-split > .fig-panel > .fig-arrow::before,
   .fig-chain > .fig-arrow::before { content: "\2193"; }
 }

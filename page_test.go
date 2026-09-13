@@ -455,6 +455,19 @@ func TestDefaultCSSStylesFigures(t *testing.T) {
 	if !strings.Contains(defaultCSS, "@media (max-width") {
 		t.Error("figures need a narrow-width rule; default.css has no width query")
 	}
+	// A cols or split layout wraps every top-level item in .fig-panel, so an
+	// arrow-direction rule written as `.fig-cols > .fig-arrow` matches nothing
+	// and renders a glyphless box. Pin the panel-aware form so the selector
+	// cannot regress to the shape that silently does nothing.
+	for _, sel := range []string{
+		".fig-cols > .fig-panel > .fig-arrow::before",
+		".fig-split > .fig-panel > .fig-arrow::before",
+		".fig-group > .fig-arrow::before",
+	} {
+		if !strings.Contains(defaultCSS, sel) {
+			t.Errorf("default.css is missing the panel-aware rule %q", sel)
+		}
+	}
 	if regexp.MustCompile(`\.fig-[a-z-]*\s*\{[^}]*#[0-9a-fA-F]{3,6}`).MatchString(defaultCSS) {
 		t.Error("a fig rule defines a literal color; use the existing tokens")
 	}
