@@ -13,24 +13,30 @@ major version instead.
 
 ### Added
 
-- `--install-skill-user` and `--install-skill-project` install the Claude Code
-  authoring skill, which now travels inside the binary along with a copy of
-  `docs/authoring.md` it defers to. The guidance therefore always matches
-  the version installed, which a link to this repo's `main` would not.
-  Neither flag creates the `.claude` directory it writes under. Both files
-  carry the usual provenance marker, so a re-install replaces this tool's
-  own copy silently and refuses one you have edited — and refuses the whole
-  install rather than leaving half of it in place.
+- `md2html.InstallSkill` installs the Claude Code authoring skill into a
+  skills directory, and `--install-skill-user` / `--install-skill-project`
+  expose it. The skill now travels inside the binary along with a copy of
+  `docs/authoring.md` it defers to, so the guidance always matches the
+  version installed, which a link to this repo's `main` would not. Neither
+  flag creates the `.claude` directory it writes under, and the refusal
+  names that directory in full. Both files carry the usual provenance
+  marker, so a re-install replaces this tool's own copy silently and refuses
+  one you have edited — refusing the whole install rather than leaving half
+  of it in place, which is why the check lives with the files rather than in
+  the command.
 
 ### Fixed
 
-- The browser suite's first test no longer fails on a cold CI runner. It
-  clicked an image in the same breath as navigating, but the page's runtime
-  wires an image only once it has loaded, so on a slow machine the click
-  landed on an unwired image and the dialog wait burned the deadline. It now
-  waits for the wiring, which is also the assertion it used to make with a
-  bare evaluate. `TestMain` additionally pays Chrome's cold-start cost once,
-  outside any test's deadline, and the per-step budget went to 60s.
+- The browser suite's first test no longer fails on a cold CI runner. Its
+  15s per-step budget also had to cover launching Chrome, which on a fresh
+  runner left nothing for the test itself: the first test in the file, and
+  only ever that one, failed at exactly the deadline. `TestMain` now
+  launches and discards a browser before any test runs, so that cost is paid
+  once outside every deadline, and the per-step budget went to 60s.
+- That test asserts the image became expandable before clicking it, in its
+  own step, rather than reading the class alongside the click. A regression
+  in the wiring used to hang until the deadline waiting for a dialog nothing
+  would open; it now fails in under a second, by name.
 
 ### Repository
 
