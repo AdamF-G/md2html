@@ -337,3 +337,61 @@ func TestContainerBareTitleFormStillWorks(t *testing.T) {
 		t.Errorf("bare title form regressed\ngot: %s", got)
 	}
 }
+
+// Case D from the spec: a definition list as the first block used to make
+// the label form's whole fence line a <dt>.
+func TestContainerLabelFormBeforeDefinitionList(t *testing.T) {
+	var warns []string
+	got := convert(t, ":::card[Numbers]\nterm\n: def\n:::\n",
+		func(s string) { warns = append(warns, s) })
+	if len(warns) != 0 {
+		t.Errorf("warned: %v\ngot: %s", warns, got)
+	}
+	if !strings.Contains(got, `<div class="card">`) {
+		t.Errorf("no card class\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<p class="container-title">Numbers</p>`) {
+		t.Errorf("title missing\ngot: %s", got)
+	}
+	if strings.Contains(got, "<dt>card") {
+		t.Errorf("fence line was captured by the definition list\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<dt>term</dt>") {
+		t.Errorf("definition list lost\ngot: %s", got)
+	}
+}
+
+// The title is Markdown, parsed by goldmark rather than re-converted.
+func TestContainerLabelFormTitleKeepsInlineMarkup(t *testing.T) {
+	got := convert(t, ":::card[Why `code` matters]\nbody\n:::\n", nil)
+	if !strings.Contains(got, "<code>code</code>") {
+		t.Errorf("title inline markup lost\ngot: %s", got)
+	}
+}
+
+// A collapsible kind puts the parsed title in its summary.
+func TestContainerLabelFormSummaryUsesTitle(t *testing.T) {
+	got := convert(t, ":::aside[Why this matters]{#w .compact}\nbody\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("summary does not carry the title\ngot: %s", got)
+	}
+	if !strings.Contains(got, `id="w"`) || !strings.Contains(got, "compact") {
+		t.Errorf("label attributes lost\ngot: %s", got)
+	}
+}
+
+// The other half of TestParseFenceInfoUnclosedBracketIsNotALabel: a fence
+// line the grammar declines stays in the content stream, so the bare-word
+// path still names its first word in the existing warning and the author's
+// text still reaches the output rather than being silently consumed.
+func TestContainerUnclosedLabelBracketFallsThrough(t *testing.T) {
+	var warns []string
+	got := convert(t, ":::aside[Why this matters\nbody\n:::\n",
+		func(s string) { warns = append(warns, s) })
+	if len(warns) != 1 || !strings.Contains(warns[0], `unknown container kind "aside[Why"`) {
+		t.Errorf("warning changed: %v\ngot: %s", warns, got)
+	}
+	if !strings.Contains(got, "aside[Why this matters") {
+		t.Errorf("declined fence line was consumed\ngot: %s", got)
+	}
+}

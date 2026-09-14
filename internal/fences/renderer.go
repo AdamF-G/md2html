@@ -29,6 +29,20 @@ type Renderer struct {
 // RegisterFuncs implements NodeRenderer.RegisterFuncs .
 func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(KindFencedContainer, r.renderFencedContainer)
+	reg.Register(KindFencedContainerTitle, r.renderFencedContainerTitle)
+}
+
+// renderFencedContainerTitle emits a container's title. The class is the one
+// md2html's container transform already uses for a title paragraph, so a
+// non-collapsible container needs no further work and a collapsible one is
+// recognised by it.
+func (r *Renderer) renderFencedContainerTitle(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if entering {
+		_, _ = w.WriteString(`<p class="container-title">`)
+	} else {
+		_, _ = w.WriteString("</p>\n")
+	}
+	return ast.WalkContinue, nil
 }
 
 func (r *Renderer) renderFencedContainer(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {

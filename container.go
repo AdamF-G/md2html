@@ -136,6 +136,22 @@ func Containers(warn func(string)) Transform {
 		for _, div := range fenceDivs(root) {
 			removeAttr(div, "data-fence")
 
+			// The fence parser owns the label form end to end: its
+			// attributes are already on the div, its kind travelled as
+			// data-fence-kind, and its title is a first-child paragraph.
+			// There is nothing left to mine out of the body.
+			if kind, owned := attr(div, "data-fence-kind"); owned {
+				removeAttr(div, "data-fence-kind")
+				k, known := containerKinds[kind]
+				if !known {
+					warn(fmt.Sprintf("unknown container kind %q: emitting an unclassed div "+
+						"(known kinds: %s)", kind, knownKindList()))
+					continue
+				}
+				applyKindWithTitle(div, k, nil, detachParsedTitle(div))
+				continue
+			}
+
 			if cls, ok := attr(div, "class"); ok {
 				// Braced form. Normalize a shipped kind; leave anything
 				// else exactly as written. Fields, not a split on space: a
@@ -466,4 +482,35 @@ func applyLabelAttrs(div *html.Node, block string) {
 	if len(a.classes) > 0 {
 		setAttr(div, "class", strings.Join(a.classes, " "))
 	}
+}
+
+// detachParsedTitle removes the title element the fence parser emitted and
+// returns its inline children, for applyKindWithTitle to place as a title
+// paragraph or a summary.
+//
+// It returns nil when the fence line carried no title, which is the same
+// thing applyKindWithTitle already expects from a titleless container.
+func detachParsedTitle(div *html.Node) []*html.Node {
+	var tp *html.Node
+	for c := div.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) == "" {
+			continue
+		}
+		if c.Type == html.ElementNode && c.DataAtom == atom.P && hasClass(c, "container-title") {
+			tp = c
+		}
+		break
+	}
+	if tp == nil {
+		return nil
+	}
+	var out []*html.Node
+	for c := tp.FirstChild; c != nil; {
+		next := c.NextSibling
+		tp.RemoveChild(c)
+		out = append(out, c)
+		c = next
+	}
+	div.RemoveChild(tp)
+	return out
 }

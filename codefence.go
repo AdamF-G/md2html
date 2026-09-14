@@ -21,7 +21,7 @@ type fenceInfo struct {
 	classes []string
 }
 
-// parseFenceInfo reads a fence info string in either supported form:
+// parseCodeFenceInfo reads a fence info string in either supported form:
 //
 //	```go caption="server.go"        the original, space-separated
 //	```{.go caption="server.go"}     Pandoc's fenced_code_attributes
@@ -37,7 +37,7 @@ type fenceInfo struct {
 // reads it. A head word outside the braces wins over that, because it is
 // where a reader looks first: `go {.wide}` is Go with a "wide" class, not
 // a "go"-classed block in the "wide" language.
-func parseFenceInfo(info string) fenceInfo {
+func parseCodeFenceInfo(info string) fenceInfo {
 	var f fenceInfo
 	head, content, braced := splitBraced(info)
 	if !braced {
@@ -63,7 +63,7 @@ func parseFenceInfo(info string) fenceInfo {
 // splitFenceInfo reports just the language and caption, the two things
 // most callers and tests care about.
 func splitFenceInfo(info string) (lang, caption string) {
-	f := parseFenceInfo(info)
+	f := parseCodeFenceInfo(info)
 	return f.lang, f.caption
 }
 
@@ -157,7 +157,7 @@ func fenceTokens(s string) []string {
 // own fenced-code-block renderer never calls n.Attributes()
 // (CodeAttributeFilter is wired up for inline code spans, not fenced
 // blocks). Handling it in the same place as the caption keeps one parser
-// for one grammar — see parseFenceInfo.
+// for one grammar — see parseCodeFenceInfo.
 type codeFenceRenderer struct{ warn func(string) }
 
 func newCodeFenceRenderer(warn func(string)) renderer.NodeRenderer {
@@ -183,7 +183,7 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 	if n.Info != nil {
 		info = string(n.Info.Segment.Value(source))
 	}
-	f := parseFenceInfo(info)
+	f := parseCodeFenceInfo(info)
 	lang, caption := f.lang, f.caption
 
 	// A `fig` fence is a figure, not code. renderFig either returns markup

@@ -10,6 +10,7 @@ import (
 )
 
 type fencedContainerParser struct {
+	splitInfo func(info string) (Info, bool)
 }
 
 var defaultFencedContainerParser = &fencedContainerParser{}
@@ -37,7 +38,7 @@ func (b *fencedContainerParser) Trigger() []byte {
 }
 
 func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc parser.Context) (ast.Node, parser.State) {
-	line, _ := reader.PeekLine()
+	line, lineSeg := reader.PeekLine()
 	pos := pc.BlockOffset()
 	if pos < 0 || line[pos] != ':' {
 		return nil, parser.NoChildren
@@ -75,16 +76,41 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 	// ========================================================================== //
 	// 	With attributes we construct the node
 
-	reader.Advance(left)
-	node := NewFencedContainer()
+	info := string(line[left : right+1])
+	var parsed Info
+	owned := false
+	if b.splitInfo != nil {
+		parsed, owned = b.splitInfo(info)
+	}
 
+	node := NewFencedContainer()
 	fenceID := genRandomString(24)
 	node.SetAttributeString("data-fence", []byte(fenceID))
 
-	attrs, ok := parser.ParseAttributes(reader)
-	if ok {
-		for _, attr := range attrs {
-			node.SetAttribute(attr.Name, attr.Value)
+	if owned {
+		// The whole fence line belongs to the fence: consume it so that
+		// nothing on it can be reinterpreted as document content by a
+		// definition list marker or a setext underline on the next line.
+		reader.Advance(right + 1)
+		for _, a := range parsed.Attrs {
+			node.SetAttributeString(a.Name, []byte(a.Value))
+		}
+		if parsed.Kind != "" {
+			node.SetAttributeString("data-fence-kind", []byte(parsed.Kind))
+		}
+		if parsed.TitleEnd > parsed.TitleStart {
+			t := NewFencedContainerTitle()
+			base := lineSeg.Start + left
+			t.Lines().Append(text.NewSegment(base+parsed.TitleStart, base+parsed.TitleEnd))
+			node.AppendChild(node, t)
+		}
+	} else {
+		reader.Advance(left)
+		attrs, ok := parser.ParseAttributes(reader)
+		if ok {
+			for _, attr := range attrs {
+				node.SetAttribute(attr.Name, attr.Value)
+			}
 		}
 	}
 

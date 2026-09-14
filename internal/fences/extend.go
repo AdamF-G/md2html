@@ -26,6 +26,16 @@ import (
 // :::
 type Extender struct {
 	priority int // optional int != 0. the priority value for parser and renderer. Defaults to 100.
+
+	// SplitInfo splits a fence line's remainder — everything after the
+	// colons, trimmed — into a kind word, attributes and the source range
+	// of a title. It reports false to leave the line in the content
+	// stream, which is what upstream always did.
+	//
+	// The hook exists so this package stays free of md2html's container
+	// vocabulary: the grammar lives in md2html, beside the shared
+	// attribute parser it needs.
+	SplitInfo func(info string) (Info, bool)
 }
 
 // This implements the Extend method for goldmark-fences.Extender
@@ -37,7 +47,7 @@ func (e *Extender) Extend(md goldmark.Markdown) {
 	}
 	md.Parser().AddOptions(
 		parser.WithBlockParsers(
-			util.Prioritized(&fencedContainerParser{}, priority),
+			util.Prioritized(&fencedContainerParser{splitInfo: e.SplitInfo}, priority),
 		),
 	)
 	md.Renderer().AddOptions(
