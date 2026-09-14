@@ -85,6 +85,33 @@ syntax safely.
 
 ## Features, with the syntax that actually works
 
+### Choosing between forms
+
+Six constructs accept more than one spelling. None of the alternatives is
+deprecated and none is a dialect of ours that others must learn: each exists
+because a different ecosystem already writes it that way, and a document
+written for that ecosystem should not have to be rewritten to pass through
+this tool.
+
+Which one to write depends on where the file is *read*, which is usually not
+only here.
+
+| Construct | Forms | Choose by |
+|---|---|---|
+| Warning, note | `> [!WARNING]` — `::: warning` | **Where it is read.** The alert renders natively on GitHub, Obsidian and Typora, and degrades to an ordinary blockquote with a visible marker anywhere else. `::: warning` shows up on GitHub as literal text. In a repository file the alert is almost always right. |
+| Container kind | `::: callout` — `::: {.callout}` | **Who else parses it.** The braced form is Pandoc's `fenced_divs`, so a document shared with Pandoc, kramdown or MyST keeps its class there. The bare form is easier to read and is what most of this repo writes. Neither renders on GitHub. |
+| Container title | `::: aside Why` — `:::aside[Why]` | **Whether it also needs an id or classes.** Only the label form carries both; see Containers. The label form is the CommonMark generic directives syntax, which remark-directive and Docusaurus implement. |
+| Chip, span | `[proven]` — `[proven]{.chip}` — `[c:proven]` | **Vocabulary.** The bare form only works for the six status words. The attribute form is Pandoc's `bracketed_spans`, works for any label or class, and is the form to prefer in new writing. `[c:…]` predates it and still parses. |
+| Code caption | `` ```go caption="x" `` — `` ```{.go caption="x"} `` | **Syntax highlighting elsewhere, and quoting.** GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there; the braced form does not highlight on GitHub but is what Pandoc and MyST read, and is the only one that can escape a `"` inside the caption. |
+| Contents list | `[[toc]]` — `[TOC]` | **Neither travels.** No other renderer produces a list from either, so pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
+| Title, subtitle | front matter — an italic line under the `<h1>` | **Whether the metadata is data.** Front matter is machine-readable and hidden by GitHub; the italic line is visible prose everywhere and cannot carry a date. |
+
+Two rules cut across all of them. A form that another renderer does not
+understand should still *degrade* to something readable rather than to
+noise — which is the whole argument for the alert syntax over `::: warning`.
+And nothing here is exclusive: the forms mix freely within a document, so
+there is no need to convert a file wholesale to one style.
+
 ### Tables
 
 Plain GFM. Wrapped in `<div class="table-scroll">` automatically — do not wrap
@@ -297,6 +324,10 @@ exist — `[[toc]]` is markdown-it and VitePress, `[TOC]` is
 Python-Markdown and so MkDocs, as well as Typora and StackEdit — and a
 document written for one should not have to be rewritten for this tool.
 
+Neither spelling travels — no other renderer builds a list from either — so
+the choice is about the humans reading the source. This repo writes
+`[[toc]]`.
+
 GitLab's `[[_TOC_]]` is **not** recognized: its underscores are emphasis
 delimiters, so the marker never arrives as the single unbroken run of text
 this feature requires.
@@ -371,6 +402,11 @@ The caption may come before the language — `` ```caption="x.go" go `` still
 yields `class="language-go"` — since only the caption token is stripped
 out; the language is whatever token is left, not whatever is first.
 
+Prefer this brace-free form in a file that is also read on GitHub: GitHub
+takes the first word of an info string as the language and ignores whatever
+follows, so the block still gets syntax highlighting there even though the
+caption itself does nothing.
+
 **The braced form works too**, and is what a document written for Pandoc,
 kramdown or MyST will use:
 
@@ -383,6 +419,10 @@ In the braced form the language is the first class, as Pandoc reads it,
 unless a word outside the braces names one — so `` ```go {.wide} `` is Go
 with a `wide` class. An `id` reaches the `<pre>` and any further class
 reaches the `<code>`, rather than being dropped.
+
+The cost is the highlighting: `{.go …}` is not a language name to GitHub,
+so a braced block renders there unhighlighted. Choose by which matters more
+for the file in hand — and note the one thing only the braced form can do.
 
 There is no escaping for a quote embedded in the caption's value in the
 brace-free form — `caption="has \"quote\""` does not produce a caption

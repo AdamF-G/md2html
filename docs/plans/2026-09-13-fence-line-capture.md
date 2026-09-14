@@ -1434,6 +1434,8 @@ EOF
 
 In `docs/authoring.md`, find the container section and the claim that the label form is the only spelling that can carry both a title and attributes. Both halves of that are now wrong: every form takes a title, and the braced form takes attributes and a title together. State the spellings and what each is for, and say that a title is inline Markdown.
 
+The `### Choosing between forms` table near the top of that file needs the same correction: its **Container title** row says "Only the label form can also carry an id or classes", which Task 4 makes false, and its **Container kind** row should gain the kind-outside-braces spelling with its trade-off — clearer to read, but Pandoc will not understand it, where `::: {.callout}` will.
+
 Add the spelling Task 4 made real — `::: kind {#id .class}`, the kind outside the braces — and say why the braced form's first class still selects the kind: it is the bridge that makes a document written for Pandoc's `fenced_divs` pick up md2html's styling instead of an unclassed div. The positional rule at `docs/authoring.md:171` stays true and stays documented; it is no longer the only way to combine a kind with attributes.
 
 Check the Traps section too. Nothing about the definition-list or setext interaction belongs there — it is fixed, not documented — but if the branch added anything about needing a blank line after a fence, remove it.
@@ -1465,7 +1467,11 @@ Under `### Changed`, note that `github.com/stefanfritsch/goldmark-fences` is ven
 
 - [ ] **Step 4: Update the shipped skill**
 
-In `.claude/skills/md2html-authoring/SKILL.md`, the container section says two forms carry a title and names the label form as the only one that can also carry an id or classes. Replace with: every form carries a title, and both the label form and the braced form carry attributes too. The silent-failures section needs no new entry — this change removes one and adds none.
+In `.claude/skills/md2html-authoring/SKILL.md`, the container section says two forms carry a title and names the label form as the only one that can also carry an id or classes. Replace with: every form carries a title, and the label, braced and kind-outside forms all carry attributes too.
+
+Its `## Choosing between forms` table carries the same two rows as the human guide and needs the same correction — the **Container title** row's "only the label form" claim, and a **Container kind** row that now has three spellings to choose between rather than two. Keep the reasons attached: an agent picks by where the file is read, so the row must say that the kind-outside form is the clearest and the braced form the one Pandoc understands.
+
+The silent-failures section needs no new entry, and its count stays at two: this change fixes the braced-title absorption, which was never listed there, and the two that are listed — the nested fence and the unstyled braced class — are untouched.
 
 - [ ] **Step 5: Check the README**
 

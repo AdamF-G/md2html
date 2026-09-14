@@ -46,11 +46,6 @@ Two forms carry a title: `::: aside Why this matters`, and the label form
 needs an id or classes — `:::aside[Why]{#w .compact}` — because it is the
 only one that can carry both.
 
-**In a file that lives in a repository, prefer a GitHub alert to a `:::`
-callout.** `> [!WARNING]` renders natively on GitHub, Obsidian and Typora
-and produces exactly `::: warning` here; `::: warning` shows up on GitHub as
-the literal text `::: warning`.
-
 **A link to `.html` is never rewritten.**
 
 ```markdown
@@ -60,6 +55,27 @@ the literal text `::: warning`.
 
 Link to the `.md` source. The crawler resolves it and computes the relative
 path to the emitted page.
+
+## Choosing between forms
+
+Six constructs accept more than one spelling. None is deprecated, and the
+right one depends on **where the file is read**, which is usually not only
+through md2html. Ask that before picking.
+
+| Construct | Forms | Choose by |
+|---|---|---|
+| Warning, note | `> [!WARNING]` / `::: warning` | The alert renders natively on GitHub, Obsidian and Typora and degrades to a readable blockquote elsewhere; `::: warning` shows on GitHub as literal text. In a repository file, use the alert. |
+| Container kind | `::: callout` / `::: {.callout}` | The braced form is Pandoc's `fenced_divs`, so it survives in a document shared with Pandoc, kramdown or MyST. The bare form reads better. Neither renders on GitHub. |
+| Container title | `::: aside Why` / `:::aside[Why]` | Only the label form can also carry an id or classes. |
+| Chip, span | `[proven]` / `[proven]{.chip}` | The bare form covers only the six status words; the attribute form is Pandoc's `bracketed_spans` and takes any label or class. Prefer the attribute form in new writing. |
+| Code caption | `` ```go caption="x" `` / `` ```{.go caption="x"} `` | GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there. The braced form does not highlight on GitHub, but is what Pandoc reads and the only one that can escape a `"` in the caption. |
+| Contents list | `[[toc]]` / `[TOC]` | Neither travels to any other renderer, so choose for the reader of the source. `[[toc]]` is markdown-it and VitePress; `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. |
+| Title, subtitle | front matter / italic line under the `<h1>` | Front matter is machine-readable and hidden by GitHub, and is the only one that can carry a date. The italic line is visible prose everywhere. |
+
+A form another renderer does not understand should still degrade to
+something readable rather than to noise — that is the whole argument for the
+alert syntax. Forms mix freely in one document; there is no need to convert a
+file wholesale.
 
 ## Don't hand-write what you get for free
 
@@ -77,7 +93,7 @@ not for images.
 ## What has no shortcut
 
 There is no sidebar or site index, and no cross-document navigation. A
-per-page contents list does exist — `[[toc]]` or `[TOC]` alone on a line —
+per-page contents list does exist — `[[toc]]` alone on a line —
 but heading slugs are still worth knowing: they are stable and keep letters
 from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 
@@ -86,18 +102,17 @@ from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 | Need | Write |
 |---|---|
 | Callout | `::: callout` … `:::` |
-| Warning | `::: warning` … `:::`, or `> [!WARNING]` |
-| Warning, in a repo file | `> [!WARNING]` — renders on GitHub too |
+| Warning | `> [!WARNING]` in a repo file; `::: warning` otherwise |
 | Collapsible aside | `::: aside Title` … `:::` |
 | Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
 | Worked example | `::: example Title` … `:::` |
-| Status marker | `[proven]`, or `[any label]{.chip}` |
+| Status marker | `[proven]` for the six status words; `[any label]{.chip}` otherwise |
 | Any classed span | `[text]{.cls}` |
 | Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |
-| Contents list | `[[toc]]` or `[TOC]` alone on a line |
-| Title/subtitle/date | `---` front matter, or an italic line under the H1 |
-| Code caption | ` ```go caption="server.go" ` |
-| Code caption, Pandoc form | ` ```{.go caption="server.go"} ` |
+| Contents list | `[[toc]]` alone on a line (`[TOC]` also accepted) |
+| Title/subtitle/date | `---` front matter; an italic line under the H1 shows elsewhere but carries no date |
+| Code caption | ` ```go caption="server.go" ` — keeps GitHub highlighting |
+| Code caption, Pandoc form | ` ```{.go caption="server.go"} ` — needed to escape a `"` |
 | Stable anchor | `## Title {#my-id}` |
 | Diagram | `` ```mermaid `` fence |
 | Hand-laid-out figure | ` ```fig ` fence, YAML body |
