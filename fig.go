@@ -16,6 +16,7 @@ type figDoc struct {
 	Caption  string    `yaml:"caption"`
 	Layout   string    `yaml:"layout"`
 	Boundary string    `yaml:"boundary"`
+	Wide     bool      `yaml:"wide"`
 	Items    []figItem `yaml:"items"`
 }
 
@@ -272,7 +273,11 @@ func renderFig(body []byte, warn func(string)) (string, bool) {
 
 	r := newFigRenderer()
 	var b strings.Builder
-	b.WriteString(`<figure class="fig">`)
+	figClass := "fig"
+	if doc.Wide {
+		figClass += " fig-wide"
+	}
+	b.WriteString(`<figure class="` + figClass + `">`)
 	switch doc.Layout {
 	case "cols":
 		b.WriteString(`<div class="fig-cols">`)

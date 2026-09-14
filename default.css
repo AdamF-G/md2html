@@ -273,6 +273,21 @@ figure.fig > figcaption {
   font-size: 0.9rem;
 }
 
+/* A figure that breaks out of the measure column.
+   The width is clamped to the viewport, so under --fragment — where there
+   is no measure column to break out of — it degrades to no visible change
+   rather than to a figure wider than its host. That clamp is the whole
+   mechanism; there is no second code path.
+   The breakout distance is a custom property so a caller's --css
+   replacement can reinterpret it, as --fig-weight already is. */
+figure.fig-wide {
+  --fig-breakout: 4rem;
+  width: min(calc(100% + 2 * var(--fig-breakout)), calc(100vw - 2rem));
+  position: relative;
+  left: 50%;
+  translate: -50%;
+}
+
 .fig-rows, .fig-cols, .fig-lanes, .fig-chain, .fig-split, .fig-lane {
   display: flex;
   gap: 0.5rem;
@@ -453,4 +468,5 @@ figure.fig > figcaption {
   .fig-cols > .fig-panel > .fig-arrow::before,
   .fig-split > .fig-panel > .fig-arrow::before,
   .fig-chain > .fig-arrow::before { content: "\2193"; }
+  figure.fig-wide { width: 100%; left: auto; translate: none; }
 }

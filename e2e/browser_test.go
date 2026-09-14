@@ -1169,3 +1169,71 @@ func TestBrowserFigColsStackWhenNarrow(t *testing.T) {
 			narrowLeft[0], narrowLeft[1])
 	}
 }
+
+// A breakout is not observable from markup: the class is there either way
+// and only the live layout says whether the figure is actually wider than
+// the column it sits in. This is the second thing in fig that nothing but a
+// browser can see, so it rides the harness the stacking test already built.
+func TestBrowserFigWideBreaksOutOfTheMeasure(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"Body text.\n\n```fig\nwide: true\nitems:\n  - box: Wide\n```\n\n"+
+			"```fig\nitems:\n  - box: Normal\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"wide.html": page})
+
+	ctx := newBrowserCtx(t)
+
+	const widths = `(() => {
+		const w = document.querySelector("figure.fig-wide").getBoundingClientRect().width;
+		const n = document.querySelector("figure.fig:not(.fig-wide)").getBoundingClientRect().width;
+		const v = document.documentElement.clientWidth;
+		return [w, n, v].join(",");
+	})()`
+
+	var wide, narrow string
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/wide.html"),
+		chromedp.WaitVisible("figure.fig-wide", chromedp.ByQuery),
+		chromedp.Evaluate(widths, &wide),
+		chromedp.EmulateViewport(390, 800),
+		chromedp.Evaluate(widths, &narrow),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	parse := func(t *testing.T, s string) (w, n, v float64) {
+		t.Helper()
+		parts := strings.Split(s, ",")
+		if len(parts) != 3 {
+			t.Fatalf("want three widths, got %q", s)
+		}
+		for i, dst := range []*float64{&w, &n, &v} {
+			f, err := strconv.ParseFloat(parts[i], 64)
+			if err != nil {
+				t.Fatalf("parsing %q: %v", parts[i], err)
+			}
+			*dst = f
+		}
+		return w, n, v
+	}
+
+	w, n, v := parse(t, wide)
+	if w <= n {
+		t.Errorf("a wide figure should be wider than a normal one, got %v vs %v", w, n)
+	}
+	if w > v {
+		t.Errorf("a wide figure must never exceed the viewport, got %v > %v", w, v)
+	}
+
+	w, n, v = parse(t, narrow)
+	if w > v {
+		t.Errorf("a wide figure must never exceed a narrow viewport, got %v > %v", w, v)
+	}
+	if w != n {
+		t.Errorf("the breakout should collapse when narrow, got %v vs %v", w, n)
+	}
+}

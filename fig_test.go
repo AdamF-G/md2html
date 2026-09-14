@@ -405,3 +405,36 @@ func TestFigFootRejectedOffAGroup(t *testing.T) {
 		t.Errorf("warning %q should name the rule", warnings[0])
 	}
 }
+
+func TestFigWideFlag(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig\nwide: true\nitems:\n  - box: A\n```\n")
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if !strings.Contains(out, `<figure class="fig fig-wide">`) {
+		t.Errorf("want a wide figure, got:\n%s", out)
+	}
+}
+
+func TestFigWithoutWideFlagIsUnchanged(t *testing.T) {
+	out, _ := figConvert(t, "```fig\nitems:\n  - box: A\n```\n")
+	if !strings.Contains(out, `<figure class="fig">`) {
+		t.Errorf("a figure without wide should be unchanged, got:\n%s", out)
+	}
+}
+
+// wide is a property of the figure, not of an item.
+func TestFigWideRejectedOnAnItem(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig\nitems:\n  - box: A\n    wide: true\n```\n")
+	if !strings.Contains(out, `class="language-fig"`) {
+		t.Errorf("want a code-block fallback, got:\n%s", out)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 warning, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], `unknown key "wide"`) {
+		t.Errorf("warning %q should name the unknown key", warnings[0])
+	}
+}
