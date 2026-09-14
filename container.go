@@ -172,7 +172,7 @@ func Containers(warn func(string)) Transform {
 				if f := strings.Fields(cls); len(f) > 0 {
 					if k, known := containerKinds[f[0]]; known {
 						removeClassToken(div, f[0])
-						applyKind(div, k, nil)
+						applyKindWithTitle(div, k, nil, detachParsedTitle(div, titled))
 					}
 					continue
 				}

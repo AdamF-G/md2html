@@ -528,3 +528,56 @@ func TestContainerForgedFenceIdDoesNotPanic(t *testing.T) {
 		}
 	}
 }
+
+// The spec's silent failure: a title on a braced fence was absorbed into
+// the body, and a collapsible kind showed its fallback instead.
+func TestContainerBracedFormTakesATitle(t *testing.T) {
+	got := convert(t, "::: {.card} Why this matters\nbody\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title">Why this matters</p>`) {
+		t.Errorf("title not recognized\ngot: %s", got)
+	}
+	if strings.Contains(got, "Why this matters\nbody") {
+		t.Errorf("title still absorbed into the body\ngot: %s", got)
+	}
+}
+
+func TestContainerBracedCollapsibleTakesATitle(t *testing.T) {
+	got := convert(t, "::: {.aside} Why this matters\nbody\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("summary shows the fallback, not the title\ngot: %s", got)
+	}
+	if strings.Contains(got, "<summary>Aside</summary>") {
+		t.Errorf("fallback label still used\ngot: %s", got)
+	}
+}
+
+// Case G stays correct, and an unknown braced class stays inert and silent.
+func TestContainerBracedUnknownClassStillInert(t *testing.T) {
+	var warns []string
+	got := convert(t, "::: {.house-style}\nterm\n: def\n:::\n",
+		func(s string) { warns = append(warns, s) })
+	if len(warns) != 0 {
+		t.Errorf("warned on a deliberate custom class: %v", warns)
+	}
+	if !strings.Contains(got, `<div class="house-style">`) {
+		t.Errorf("custom class lost\ngot: %s", got)
+	}
+}
+
+// The braced form creates titleless owned containers in quantity for the
+// first time. The data-fence-title gate exists precisely so a raw
+// <p class="container-title"> the author wrote as a braced container's
+// first block is never mistaken for a parser-emitted title — see
+// TestContainerDoesNotAdoptAuthorWrittenTitleParagraph for the label-form
+// counterpart. This is the braced-form exercise of that same guard.
+func TestContainerBracedFormDoesNotAdoptAuthorWrittenTitleParagraph(t *testing.T) {
+	got := convert(t, "::: {.card}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title" id="keepme">mine</p>`) {
+		t.Errorf("author's own title paragraph was adopted and rebuilt\ngot: %s", got)
+	}
+	for _, internal := range []string{"data-fence", "data-fence-kind", "data-fence-title"} {
+		if strings.Contains(got, internal) {
+			t.Errorf("%s reached the output\ngot: %s", internal, got)
+		}
+	}
+}

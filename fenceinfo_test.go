@@ -144,3 +144,55 @@ func TestParseFenceInfoKeepsSafeDataAttribute(t *testing.T) {
 		t.Errorf("data-sort dropped\ngot: %v", got.Attrs)
 	}
 }
+
+func TestParseFenceInfoBracedWithTitle(t *testing.T) {
+	const info = "{.card} Why this matters"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "" {
+		t.Errorf("kind = %q, want empty — the kind comes from the class", got.Kind)
+	}
+	if s := title(info, got); s != "Why this matters" {
+		t.Errorf("title = %q, want %q", s, "Why this matters")
+	}
+	if len(got.Attrs) != 1 || got.Attrs[0].Name != "class" || got.Attrs[0].Value != "card" {
+		t.Errorf("attrs = %v, want class=card", got.Attrs)
+	}
+}
+
+func TestParseFenceInfoBracedWithoutTitle(t *testing.T) {
+	const info = "{#note .callout .compact}"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if s := title(info, got); s != "" {
+		t.Errorf("title = %q, want none", s)
+	}
+	var id, class string
+	for _, a := range got.Attrs {
+		switch a.Name {
+		case "id":
+			id = a.Value
+		case "class":
+			class = a.Value
+		}
+	}
+	if id != "note" || class != "callout compact" {
+		t.Errorf("id = %q, class = %q; want note / \"callout compact\"", id, class)
+	}
+}
+
+// A brace inside a quoted value must not end the block early.
+func TestParseFenceInfoBracedQuotedBrace(t *testing.T) {
+	const info = `{.card data-x="a } b"} Title`
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if s := title(info, got); s != "Title" {
+		t.Errorf("title = %q, want %q", s, "Title")
+	}
+}

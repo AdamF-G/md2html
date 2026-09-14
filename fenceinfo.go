@@ -26,6 +26,21 @@ type fenceInfoResult = fences.Info
 func parseFenceInfo(info string) (fenceInfoResult, bool) {
 	out := fenceInfoResult{TitleStart: -1, TitleEnd: -1}
 
+	// Braced form: {#id .class key=value} with an optional trailing title
+	// running to the end of the line.
+	if strings.HasPrefix(info, "{") {
+		content, rest, ok := readBracedPrefix(info)
+		if !ok {
+			return out, false
+		}
+		out.Attrs = fenceAttrs(content)
+		if t := strings.TrimLeft(rest, " \t"); t != "" {
+			out.TitleStart = len(info) - len(t)
+			out.TitleEnd = len(info)
+		}
+		return out, true
+	}
+
 	// Label form: kind[Title] with an optional trailing attribute block.
 	open := strings.IndexByte(info, '[')
 	if open <= 0 || strings.ContainsAny(info[:open], " \t{") {
@@ -51,6 +66,37 @@ func parseFenceInfo(info string) (fenceInfoResult, bool) {
 		}
 	}
 	return out, true
+}
+
+// readBracedPrefix reads a leading {...} attribute block, returning its
+// contents and whatever followed it.
+//
+// The scan tracks quotes and backslash escapes rather than searching for
+// the first "}", so a brace inside a quoted value — data-x="a } b" — does
+// not end the block early. It is splitBraced's discipline applied to a
+// leading block rather than a trailing one.
+func readBracedPrefix(s string) (content, rest string, ok bool) {
+	if len(s) == 0 || s[0] != '{' {
+		return "", s, false
+	}
+	for i := 1; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '"', '\'':
+			quote := s[i]
+			i++
+			for i < len(s) && s[i] != quote {
+				if s[i] == '\\' {
+					i++
+				}
+				i++
+			}
+		case '}':
+			return s[1:i], s[i+1:], true
+		}
+	}
+	return "", s, false
 }
 
 // fenceAttrs turns an attribute block's contents into the attributes a
