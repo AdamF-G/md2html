@@ -73,6 +73,10 @@ major version instead.
   into the body, with collapsible kinds showing their fallback label
   instead. A title is now accepted on every container form. See
   [docs/specs/2026-09-13-fence-line-capture.md](./docs/specs/2026-09-13-fence-line-capture.md).
+- A container's braced attribute block now accepts a bare key with no
+  value and a single-quoted value — `::: {.callout data-flag}` and
+  `::: {.callout data-x='single'}` were previously rejected outright and
+  fell through to an "unknown container kind" warning.
 - `::: {.elem-nav}` no longer emits a `<nav>` carrying the fence library's
   internal `data-fence` attribute.
 - A forged `data-fence` attribute — `::: {.card data-fence="x"}` or

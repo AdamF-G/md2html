@@ -266,7 +266,21 @@ silently, since the author supplies their own CSS for it.
 goldmark's global attribute list, and any `data-` or `aria-` name reach the
 element; anything else — an event handler, most obviously — is dropped,
 and an attribute name outside `[A-Za-z][A-Za-z0-9_.:-]*` is dropped
-whatever prefix it carries:
+whatever prefix it carries. The braced grammar itself also accepts a bare
+key with no value and a single-quoted value, not just `key="value"`:
+
+```markdown
+::: {.callout data-flag}
+Because.
+:::
+
+::: {.callout data-x='single'}
+Because.
+:::
+```
+
+render `<div class="callout" data-flag="">` and `<div class="callout"
+data-x="single">`.
 
 ```markdown
 ::: card {onclick="alert(1)" data-tracking="x"}
@@ -275,9 +289,11 @@ Because.
 ```
 
 renders `<div data-tracking="x" class="card">` — the tracking attribute
-survives, the handler does not. `data-fence`, `data-fence-kind` and
-`data-fence-title` are reserved for the parser's own bookkeeping, so
-writing one yourself gets it dropped rather than honored.
+survives, the handler does not. `data-fence` is a reserved *namespace*, not
+three literal names: any attribute whose name **begins with** `data-fence`
+is dropped, with no hyphen required at the boundary — `data-fence-kind`,
+`data-fence-title` and an unrelated `data-fencepost` are all dropped alike,
+so writing one yourself gets it silently dropped rather than honored.
 
 Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
 to write and it drops you out of Markdown for the enclosed content.

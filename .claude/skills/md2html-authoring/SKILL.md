@@ -59,8 +59,13 @@ attributes rather than words.
 
 A container also passes through a fixed attribute set: `id`, `class`,
 goldmark's global attributes, and any `data-` or `aria-` name. Anything
-else — an event handler, most obviously — is dropped, and `data-fence`,
-`data-fence-kind` and `data-fence-title` are reserved for the parser itself.
+else — an event handler, most obviously — is dropped. The braced
+attribute grammar accepts a bare key with no value and a single-quoted
+value too — `{.callout data-flag}` and `{.callout data-x='single'}` both
+parse, not just `key="value"`. `data-fence` is a reserved *namespace*, not
+three literal names: any name **beginning with** `data-fence` is dropped,
+no hyphen required at the boundary, so `data-fence-kind` and an unrelated
+`data-fencepost` are both silently dropped rather than honored.
 
 **A link to `.html` is never rewritten.**
 
