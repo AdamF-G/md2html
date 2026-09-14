@@ -146,17 +146,21 @@ md2html --fragment -- writes a bare fragment
 Both collisions are live for this repo's own documentation, not
 hypothetical.
 
-### 2.3 Escaping, and the property that makes it cheap
+### 2.3 Escaping, and why it costs no code at all
 
-A backslash before a sigil suppresses it: `\-- ` is a literal separator,
-`\* ` a literal marker.
+A backslash before a sigil suppresses it: `\--` is a literal separator, `\*`
+a literal marker.
 
-We recognise the backslash but never strip it. CommonMark escapes any ASCII
-punctuation, and every author-facing field already renders through a real
-goldmark inline pass, so `\--` and `\*` are unescaped downstream by
-machinery that already exists. The escape rule costs one lookbehind and zero
-unescaping code, and an author who knows Markdown's escape already knows
-ours.
+The rule needs no implementation. Both sigils are matched as literal strings
+— `" -- "` and a `"* "` prefix — and a backslash breaks those strings by
+sitting inside them, so an escaped sigil simply fails to match. Nothing has
+to look behind, and nothing has to strip anything: CommonMark escapes any
+ASCII punctuation, and every author-facing field already renders through a
+real goldmark inline pass, so the backslash is removed downstream by
+machinery that already exists.
+
+The escape therefore costs zero lines in the grammar, and an author who
+knows Markdown's escape already knows ours.
 
 ### 2.4 Markup
 
