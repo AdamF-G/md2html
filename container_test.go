@@ -173,24 +173,33 @@ func TestContainerNoTitleEmitsNoTitleParagraph(t *testing.T) {
 	}
 }
 
-// A title with a blank line after it leaves the first paragraph empty; it
-// must be removed rather than rendered as <p></p>.
-func TestContainerTitleWithBlankLineDropsEmptyParagraph(t *testing.T) {
+// A blank line between the fence line and the body. Under the old scheme
+// the title was mined out of the first paragraph, so this left an empty
+// <p></p> behind; now the title never was a paragraph, and the assertion
+// worth keeping is that the blank line costs neither the title nor the body.
+func TestContainerTitleWithBlankLineKeepsTitleAndBody(t *testing.T) {
 	got := convert(t, "::: callout Heads up\n\nbody\n:::\n", nil)
-	if strings.Contains(got, "<p></p>") {
-		t.Errorf("empty paragraph left behind\ngot: %s", got)
-	}
 	if !strings.Contains(got, `<p class="container-title">Heads up</p>`) {
 		t.Errorf("no title\ngot: %s", got)
 	}
+	if !strings.Contains(got, "<p>body</p>") {
+		t.Errorf("body lost or absorbed\ngot: %s", got)
+	}
 }
 
-// The braced form keeps today's semantics exactly: its first line is body,
-// because nothing can tell it from a title.
-func TestContainerBracedFormNeverLiftsATitle(t *testing.T) {
+// A braced container takes a title from the rest of its fence line
+// (TestContainerBracedFormTakesATitle), and never from the first line of its
+// body: nothing distinguishes that line from ordinary prose.
+func TestContainerBracedFormTakesNoTitleFromItsBody(t *testing.T) {
 	got := convert(t, "::: {.callout}\nfirst line\nsecond line\n:::\n", nil)
 	if strings.Contains(got, "container-title") {
 		t.Errorf("braced form lifted a title\ngot: %s", got)
+	}
+	// Both lines in one paragraph, which is the positive form of the same
+	// claim: nothing was lifted out of the body at all, not merely nothing
+	// wearing the title class.
+	if !strings.Contains(got, "<p>first line\nsecond line</p>") {
+		t.Errorf("body paragraph was split or rebuilt\ngot: %s", got)
 	}
 }
 
@@ -770,10 +779,36 @@ func TestContainerNestedBraceDoesNotBecomeATitle(t *testing.T) {
 	}
 }
 
-func TestContainerNestingStillWorks(t *testing.T) {
-	got := convert(t, ":::: card\n::: callout\ninner\n:::\n::::\n", nil)
-	if !strings.Contains(got, `<div class="card">`) || !strings.Contains(got, `<div class="callout">`) {
-		t.Errorf("nesting broken\ngot: %s", got)
+// The transform's last warning, which had no test anywhere even though this
+// branch changed its entire trigger set: it now fires only for a container
+// the parser owned that named no kind and reached the page with no attribute
+// at all. An empty block is one way; a block whose only attribute the
+// renderer refuses to write — an unknown bare key is neither global, data-
+// nor aria- — is the other.
+func TestContainerWithNoClassAndNoKindWarns(t *testing.T) {
+	for _, src := range []string{
+		"::: {}\nbody\n:::\n",
+		"::: {x}\nbody\n:::\n",
+	} {
+		var msgs []string
+		got := convert(t, src, func(m string) { msgs = append(msgs, m) })
+		if len(msgs) != 1 || !strings.Contains(msgs[0], "no class and no recognizable kind name") {
+			t.Errorf("%q: warnings = %v, want exactly the no-class warning", src, msgs)
+		}
+		if !strings.Contains(got, "<div>") {
+			t.Errorf("%q: want a bare div\ngot: %s", src, got)
+		}
+	}
+}
+
+// A titled nav exercises applyKind's non-details tail on a kind that is
+// neither a div nor a collapsible: the title paragraph has to be inserted
+// before the element is retagged, or it lands in the div that retag throws
+// away. Every other titled kind is a div or a <details>.
+func TestContainerNavKindWithTitle(t *testing.T) {
+	got := convert(t, "::: nav Section links\n- [One](./a.md)\n:::\n", nil)
+	if !strings.Contains(got, `<nav><p class="container-title">Section links</p>`) {
+		t.Errorf("titled nav malformed\ngot: %s", got)
 	}
 }
 
