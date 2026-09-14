@@ -242,6 +242,11 @@ Promotion is additive: the `fig` kinds keep working. A `stats` block that
 does not sit inside a diagram gains a form where each label is real
 Markdown.
 
+Panel metadata resolved onto `group` rather than onto the layout primitive
+— see
+[the fig vocabulary extensions design](./2026-09-14-fig-vocabulary-extensions-design.md)
+§1. `lanes` therefore keeps its shipped `[][]figItem` shape.
+
 ### 4.2 What not to do
 
 Do not make diagram items composable. A `box` containing a bulleted list

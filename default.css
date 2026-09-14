@@ -305,7 +305,7 @@ figure.fig-wide {
   border-radius: 4px;
   background: var(--code-bg);
   padding: 0.5rem 0.75rem;
-  text-align: center;
+  text-align: left;
 }
 .fig-arrow {
   display: flex;

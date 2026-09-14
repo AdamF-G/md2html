@@ -611,11 +611,52 @@ Every item is exactly one *kind*:
 | `group` | title, plus `items` | a labeled container |
 | `chain` | list of items | steps connected in sequence |
 | `lanes` | list of lists | parallel stacks |
+| `tree` | an indented block scalar | a file or config hierarchy |
 
 `layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
 top-level item may carry `weight` (1–12; out-of-range values are clamped,
 not rejected). Under `split`, exactly two items sit either side of a
 `boundary` label.
+
+Some kinds take **modifiers** alongside their value:
+
+| Modifier | On | What it does |
+|---|---|---|
+| `note` | `box`, `result`, `rail`, `group` | a quieter gloss beside the label |
+| `accent` | `box`, `result`, `rail`, `group` | marks this item out from its siblings |
+| `foot` | `group` | a trailing line below the group's items |
+
+A modifier used anywhere else is an error, not a silent no-op.
+
+`note` and `foot` are different positions on a `group`, not alternatives. A
+`note` follows the title and glosses it — the reader meets it before the
+group's items. A `foot` follows those items. A group may carry both.
+
+**A panel that needs a title, an accent or a footnote is a `group`.** There
+is no panel-level metadata: put a `group` inside the panel and use its
+title, `accent` and `foot`. The same goes for a lane of a `lanes` item.
+
+Set `wide: true` at the top level to let a figure break out of the text
+column.
+
+A `tree` is an indented listing, one node per line:
+
+```yaml
+items:
+  - tree: |
+      fig.go -- the fence branch
+        * figtree.go -- the line grammar
+      - testdata/ -- not shipped
+```
+
+Leading spaces carry the nesting — any consistent width works. On each line,
+` -- ` (with a space on both sides) splits the label from a trailing note,
+`* ` marks the line as accented and `- ` as de-emphasized.
+
+Every sigil needs its space, which is what keeps `*_test.go` a literal glob
+and splits `md2html --fragment -- writes a fragment` at the second `--` and
+not the first. To write one literally anyway, escape it as you would in
+Markdown: `go run \-- args`.
 
 Every text field takes inline Markdown, so code spans, links, chips and
 `§` references work in a label exactly as in prose. A `.md` link inside a

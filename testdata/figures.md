@@ -112,6 +112,98 @@ items:
       - box: Cache
 ```
 
+## Modifiers
+
+```fig
+caption: Notes and accents
+items:
+  - box: Client
+    note: retries twice, then gives up
+  - result: 200 OK
+    accent: true
+  - rail: Phase one
+    note: everything below ships together
+```
+
+## Panel metadata rides on a group
+
+```fig
+caption: A panel's title, accent and footnote all live on its group
+layout: cols
+items:
+  - group: Before
+    weight: 2
+    foot: the usual pattern today
+    items:
+      - box: Handler
+      - arrow: ""
+      - box: Store
+  - group: After
+    accent: true
+    foot: one new layer
+    items:
+      - box: Handler
+      - arrow: ""
+      - box: Cache
+```
+
+## Stat tiles with a detail line
+
+```fig
+items:
+  - stats:
+      - value: 3 / 3
+        label: unit
+        detail: parse · render · write
+      - value: 12
+        label: suites
+```
+
+## Trees
+
+```fig
+caption: This repo's fig implementation
+items:
+  - tree: |
+      fig.go -- the fence branch, the YAML model, validation
+      figrender.go -- per-kind HTML emitters
+      * figtree.go -- the tree line grammar
+      - testdata/ -- fixtures, not shipped
+        figures.md -- this gallery
+      *_test.go -- a literal glob, not an accented line
+      md2html --fragment -- splits at the second separator
+```
+
+## A tree inside a panel
+
+```fig
+layout: cols
+items:
+  - group: Library
+    items:
+      - tree: |
+          fig.go
+            figtree.go
+  - group: Command
+    items:
+      - tree: |
+          cmd/md2html/
+            main.go
+```
+
+## A wide figure
+
+```fig
+wide: true
+caption: This one breaks out of the measure column
+layout: cols
+items:
+  - box: One
+  - box: Two
+  - box: Three
+  - box: Four
+```
+
 ## Degradation
 
 An unknown key falls back to the source, visibly, and warns:

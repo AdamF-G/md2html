@@ -38,6 +38,7 @@ var conformanceChecks = []struct {
 	{name: "heading attributes applied", want: regexp.MustCompile(`<h2[^>]*id="custom-id"[^>]*>`)},
 	{name: "heading class applied", want: regexp.MustCompile(`<h2[^>]*class="[^"]*lead[^"]*"`)},
 	{name: "fenced container becomes div", want: regexp.MustCompile(`<div[^>]*class="[^"]*callout[^"]*"`)},
+	{name: "fig tree becomes a nested list", want: regexp.MustCompile(`(?s)<ul class="fig-tree">.*?<span class="fig-tree-label">`)},
 	{name: "fig becomes a figure", want: regexp.MustCompile(`(?s)<figure class="fig">.*?<div class="fig-box">In</div>`)},
 }
 

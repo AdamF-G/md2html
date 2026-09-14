@@ -59,4 +59,7 @@ items:
   - box: In
   - arrow: ""
   - box: Out
+  - tree: |
+      docs/ -- the corpus
+        authoring.md -- the guide
 ```

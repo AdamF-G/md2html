@@ -140,6 +140,7 @@ from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 | Stable anchor | `## Title {#my-id}` |
 | Diagram | `` ```mermaid `` fence |
 | Hand-laid-out figure | ` ```fig ` fence, YAML body |
+| File or config hierarchy | `tree:` item in a ` ```fig ` fence, one node per line |
 | Cross-document link | `[x](./other.md)` — never `.html` |
 | Artifact-shaped output | `--fragment` |
 

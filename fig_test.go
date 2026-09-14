@@ -153,10 +153,19 @@ func TestFigGalleryRenders(t *testing.T) {
 	out := string(got)
 
 	for _, want := range []string{
-		"fig-rail", "fig-box", "fig-arrow", "fig-result",
-		"fig-stat-value", "fig-defs", "fig-group", "fig-chain",
-		"fig-lane", "fig-rows", "fig-cols", "fig-split", "fig-boundary",
+		`<div class="fig-rows">`, `<div class="fig-cols">`,
+		`<div class="fig-split">`, `<div class="fig-boundary">`,
+		`<div class="fig-box`, `<div class="fig-arrow`,
+		`<div class="fig-result`, `<div class="fig-rail`,
+		`<div class="fig-group`, `<div class="fig-chain">`,
+		`<div class="fig-lane">`,
+		`<span class="fig-stat-value">`, `<dl class="fig-defs">`,
 		"--fig-weight:3",
+		// added by this plan
+		`<span class="fig-note">`, `<li class="fig-accent">`,
+		`<div class="fig-group-foot">`, `<span class="fig-stat-detail">`,
+		`<ul class="fig-tree">`, `<span class="fig-tree-label">`,
+		`<li class="fig-muted">`, `<figure class="fig fig-wide">`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("gallery is missing %q", want)
