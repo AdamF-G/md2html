@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"fmt"
 
-	fences "github.com/stefanfritsch/goldmark-fences"
+	fences "github.com/AdamF-G/md2html/internal/fences"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
