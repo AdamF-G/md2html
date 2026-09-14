@@ -7,11 +7,16 @@ import (
 	fences "github.com/AdamF-G/md2html/internal/fences"
 )
 
-// fenceInfoResult is the vendored package's Info under a local name, so
+// containerInfo is the vendored package's Info under a local name, so
 // tests and helpers in this package need not import it.
-type fenceInfoResult = fences.Info
+//
+// Not to be confused with fenceInfo in codefence.go, which is a fenced CODE
+// block's info string. Both files parse something called a fence line, so
+// each name says which fence it means: containerInfo and parseContainerInfo
+// here, fenceInfo and parseCodeFenceInfo there.
+type containerInfo = fences.Info
 
-// parseFenceInfo splits a container's fence-line remainder — everything
+// parseContainerInfo splits a container's fence-line remainder — everything
 // after the colons, already trimmed — into its kind word, its attributes
 // and the source range of its title.
 //
@@ -24,8 +29,8 @@ type fenceInfoResult = fences.Info
 // the range so goldmark parses the title's inline markup natively, which is
 // what lets a title hold code spans and emphasis without this package
 // converting Markdown a second time.
-func parseFenceInfo(info string) (fenceInfoResult, bool) {
-	out := fenceInfoResult{TitleStart: -1, TitleEnd: -1}
+func parseContainerInfo(info string) (containerInfo, bool) {
+	out := containerInfo{TitleStart: -1, TitleEnd: -1}
 
 	if strings.HasPrefix(info, "{") {
 		content, rest, ok := readBracedPrefix(info)

@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// title extracts what parseFenceInfo marked as the title, so a test can
+// title extracts what parseContainerInfo marked as the title, so a test can
 // assert on the string rather than on two offsets.
-func title(info string, i fenceInfoResult) string {
+func title(info string, i containerInfo) string {
 	if i.TitleEnd <= i.TitleStart {
 		return ""
 	}
@@ -16,9 +16,9 @@ func title(info string, i fenceInfoResult) string {
 
 func TestParseFenceInfoLabelForm(t *testing.T) {
 	const info = "aside[Why this matters]{#w .compact}"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "aside" {
 		t.Errorf("kind = %q, want %q", got.Kind, "aside")
@@ -40,9 +40,9 @@ func TestParseFenceInfoLabelForm(t *testing.T) {
 
 func TestParseFenceInfoLabelFormNoAttrs(t *testing.T) {
 	const info = "aside[Why]"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "aside" {
 		t.Errorf("kind = %q, want %q", got.Kind, "aside")
@@ -59,9 +59,9 @@ func TestParseFenceInfoLabelFormNoAttrs(t *testing.T) {
 // path as one unusable kind word, so the unknown-kind warning fires on it.
 func TestParseFenceInfoUnclosedBracketIsNotALabel(t *testing.T) {
 	const info = "aside[Why"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "aside[Why" {
 		t.Errorf("kind = %q, want the whole word %q", got.Kind, "aside[Why")
@@ -90,9 +90,9 @@ func TestParseFenceInfoRejectsUnsafeAttributeNames(t *testing.T) {
 		`card[T]{aria-x"onmouseover="alert(1)}`,
 		`card[T]{<script>=1}`,
 	} {
-		got, ok := parseFenceInfo(info)
+		got, ok := parseContainerInfo(info)
 		if !ok {
-			t.Fatalf("parseFenceInfo(%q) reported false", info)
+			t.Fatalf("parseContainerInfo(%q) reported false", info)
 		}
 		for _, a := range got.Attrs {
 			if strings.ContainsAny(a.Name, unsafeAttrNameBytes) {
@@ -125,7 +125,7 @@ func TestContainerLabelFormAttributesCannotInjectAHandler(t *testing.T) {
 // A legitimate data attribute still passes, so the guard is not a blanket ban.
 func TestParseFenceInfoKeepsSafeDataAttribute(t *testing.T) {
 	const info = `card[T]{data-sort="name"}`
-	got, _ := parseFenceInfo(info)
+	got, _ := parseContainerInfo(info)
 	var found bool
 	for _, a := range got.Attrs {
 		if a.Name == "data-sort" && a.Value == "name" {
@@ -139,9 +139,9 @@ func TestParseFenceInfoKeepsSafeDataAttribute(t *testing.T) {
 
 func TestParseFenceInfoBracedWithTitle(t *testing.T) {
 	const info = "{.card} Why this matters"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "" {
 		t.Errorf("kind = %q, want empty — the kind comes from the class", got.Kind)
@@ -156,9 +156,9 @@ func TestParseFenceInfoBracedWithTitle(t *testing.T) {
 
 func TestParseFenceInfoBracedWithoutTitle(t *testing.T) {
 	const info = "{#note .callout .compact}"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if s := title(info, got); s != "" {
 		t.Errorf("title = %q, want none", s)
@@ -180,9 +180,9 @@ func TestParseFenceInfoBracedWithoutTitle(t *testing.T) {
 // A brace inside a quoted value must not end the block early.
 func TestParseFenceInfoBracedQuotedBrace(t *testing.T) {
 	const info = `{.card data-x="a } b"} Title`
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if s := title(info, got); s != "Title" {
 		t.Errorf("title = %q, want %q", s, "Title")
@@ -191,9 +191,9 @@ func TestParseFenceInfoBracedQuotedBrace(t *testing.T) {
 
 func TestParseFenceInfoBareKind(t *testing.T) {
 	const info = "callout"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "callout" {
 		t.Errorf("kind = %q, want %q", got.Kind, "callout")
@@ -205,9 +205,9 @@ func TestParseFenceInfoBareKind(t *testing.T) {
 
 func TestParseFenceInfoBareKindWithTitle(t *testing.T) {
 	const info = "aside Why this matters"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "aside" {
 		t.Errorf("kind = %q, want %q", got.Kind, "aside")
@@ -222,9 +222,9 @@ func TestParseFenceInfoBareKindWithTitle(t *testing.T) {
 // that, so making it work breaks nothing.
 func TestParseFenceInfoKindThenAttrs(t *testing.T) {
 	const info = "aside {#id .compact}"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "aside" {
 		t.Errorf("kind = %q, want %q", got.Kind, "aside")
@@ -252,9 +252,9 @@ func TestParseFenceInfoKindThenAttrs(t *testing.T) {
 // the title loses as many bytes as the space occupies.
 func TestParseFenceInfoTrailingNoBreakSpaceKeepsTheWholeTitle(t *testing.T) {
 	const info = "aside Why this matters {#w} "
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if s := title(info, got); s != "Why this matters" {
 		t.Errorf("title = %q, want %q", s, "Why this matters")
@@ -268,9 +268,9 @@ func TestParseFenceInfoTrailingNoBreakSpaceKeepsTheWholeTitle(t *testing.T) {
 // a shorter one with "{a" left in front of it to become a title.
 func TestParseFenceInfoNestedBraceStaysInsideTheBlock(t *testing.T) {
 	const info = "card {a{b}}"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "card" {
 		t.Errorf("kind = %q, want %q", got.Kind, "card")
@@ -284,9 +284,9 @@ func TestParseFenceInfoNestedBraceStaysInsideTheBlock(t *testing.T) {
 // early and leave the rest of it to be read as a title.
 func TestParseFenceInfoBracedPrefixKeepsANestedBrace(t *testing.T) {
 	const info = "{.card data-x={y}} Title"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if s := title(info, got); s != "Title" {
 		t.Errorf("title = %q, want %q", s, "Title")
@@ -295,9 +295,9 @@ func TestParseFenceInfoBracedPrefixKeepsANestedBrace(t *testing.T) {
 
 func TestParseFenceInfoKindThenTitleThenAttrs(t *testing.T) {
 	const info = "aside Why this matters {#w}"
-	got, ok := parseFenceInfo(info)
+	got, ok := parseContainerInfo(info)
 	if !ok {
-		t.Fatalf("parseFenceInfo(%q) reported false", info)
+		t.Fatalf("parseContainerInfo(%q) reported false", info)
 	}
 	if got.Kind != "aside" {
 		t.Errorf("kind = %q, want %q", got.Kind, "aside")

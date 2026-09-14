@@ -105,7 +105,7 @@ func newParser(warn func(string)) goldmark.Markdown {
 			// NoScript: artifacts render mermaid natively, so the extension
 			// must not inject its own MermaidJS <script> tag.
 			&mermaid.Extender{RenderMode: mermaid.RenderModeClient, NoScript: true},
-			&fences.Extender{SplitInfo: parseFenceInfo},
+			&fences.Extender{SplitInfo: parseContainerInfo},
 		),
 		goldmark.WithParserOptions(parser.WithAttribute()),
 		goldmark.WithRendererOptions(

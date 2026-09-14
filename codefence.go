@@ -10,7 +10,10 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// fenceInfo is a parsed fence info string.
+// fenceInfo is a parsed fenced CODE block info string — the text after the
+// backticks. A container's fence line is a different grammar in a different
+// file: see containerInfo and parseContainerInfo in containerinfo.go. The two
+// share only the attribute block, through parseAttrs.
 type fenceInfo struct {
 	lang    string
 	caption string
