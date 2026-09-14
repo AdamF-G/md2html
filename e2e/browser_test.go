@@ -1250,3 +1250,331 @@ func TestBrowserFigWideBreaksOutOfTheMeasure(t *testing.T) {
 		t.Errorf("the breakout should collapse when narrow, got %v vs %v", w, n)
 	}
 }
+
+// The fig tests below assert what markup cannot: that a note actually reads
+// as secondary, that the accent ring is not clipped away by an ancestor, and
+// that a tree's indentation and per-line emphasis survive the cascade.
+//
+// Colour assertions run under both themes, because every colour in the fig
+// stylesheet comes from a token that flips with data-theme — asserting one
+// theme would leave the other untested and it is the one nobody looks at.
+// Geometry is asserted once: it does not depend on the palette.
+//
+// None of these assert a literal colour. They assert that an element's
+// colour IS its token's value, resolved by the browser, so restyling the
+// palette does not break them but detaching a rule from its token does.
+
+// figResolveVar asks the browser what a custom property paints as, rather
+// than parsing hex out of the stylesheet: the comparison target has to be
+// the same rgb() string getComputedStyle returns for the element under test.
+const figResolveVar = `
+	function resolveVar(name) {
+		const p = document.createElement("span");
+		p.style.color = "var(" + name + ")";
+		document.body.appendChild(p);
+		const v = getComputedStyle(p).color;
+		p.remove();
+		return v;
+	}`
+
+// figSetTheme stamps an explicit theme on the root element. The stylesheet
+// defines :root[data-theme="dark"], so this is the same switch a reader's
+// toggle throws, not a test-only back door.
+func figSetTheme(theme string) chromedp.Action {
+	var ok bool
+	return chromedp.Evaluate(
+		fmt.Sprintf(`(document.documentElement.setAttribute("data-theme", %q), true)`, theme), &ok)
+}
+
+func TestBrowserFigNoteIsSecondary(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nitems:\n  - box: Client\n    note: retries twice, then gives up\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"note.html": page})
+	ctx := newBrowserCtx(t)
+
+	const probe = figResolveVar + `
+	(() => {
+		const box = document.querySelector(".fig-box");
+		const note = box.querySelector(".fig-note");
+		return {
+			boxSize:  parseFloat(getComputedStyle(box).fontSize),
+			noteSize: parseFloat(getComputedStyle(note).fontSize),
+			boxColor:  getComputedStyle(box).color,
+			noteColor: getComputedStyle(note).color,
+			muted:     resolveVar("--muted"),
+		};
+	})()`
+
+	type sample struct {
+		BoxSize, NoteSize          float64
+		BoxColor, NoteColor, Muted string
+	}
+	var light, dark sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/note.html"),
+		chromedp.WaitVisible(".fig-note", chromedp.ByQuery),
+		figSetTheme("light"),
+		chromedp.Evaluate(probe, &light),
+		figSetTheme("dark"),
+		chromedp.Evaluate(probe, &dark),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	for _, c := range []struct {
+		theme string
+		got   sample
+	}{{"light", light}, {"dark", dark}} {
+		if c.got.NoteSize >= c.got.BoxSize {
+			t.Errorf("%s: a note should be smaller than its label, got %v vs %v",
+				c.theme, c.got.NoteSize, c.got.BoxSize)
+		}
+		if c.got.NoteColor != c.got.Muted {
+			t.Errorf("%s: a note should paint in --muted (%s), got %s",
+				c.theme, c.got.Muted, c.got.NoteColor)
+		}
+		if c.got.NoteColor == c.got.BoxColor {
+			t.Errorf("%s: a note should not share its label's colour (%s)", c.theme, c.got.BoxColor)
+		}
+	}
+	// If the palette did not actually change, both themes could pass above
+	// while the dark case went untested.
+	if light.Muted == dark.Muted {
+		t.Errorf("--muted did not change between themes (%s); the theme switch is not taking effect", light.Muted)
+	}
+}
+
+func TestBrowserFigAccentRingNotClipped(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nitems:\n  - box: Accented\n    accent: true\n  - box: Neighbour\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"ring.html": page})
+	ctx := newBrowserCtx(t)
+
+	// The ring is drawn OUTSIDE the box's border box, so it is the one fig
+	// decoration an ancestor's overflow can silently erase and a sibling can
+	// silently sit on top of. Both are checked here because neither is
+	// visible in the markup.
+	const probe = figResolveVar + `
+	(() => {
+		const boxes = [...document.querySelectorAll(".fig-box")];
+		const accented = boxes[0], neighbour = boxes[1];
+		let clipper = null;
+		for (let el = accented.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+			const s = getComputedStyle(el);
+			if (s.overflowX !== "visible" || s.overflowY !== "visible") {
+				clipper = (el.tagName + "." + (el.className || "")).trim();
+				break;
+			}
+		}
+		return {
+			shadow:   getComputedStyle(accented).boxShadow,
+			plain:    getComputedStyle(neighbour).boxShadow,
+			clipper:  clipper || "",
+			gap:      neighbour.getBoundingClientRect().top - accented.getBoundingClientRect().bottom,
+			bg:       resolveVar("--bg"),
+			accent:   resolveVar("--accent"),
+		};
+	})()`
+
+	type sample struct {
+		Shadow, Plain, Clipper string
+		Gap                    float64
+		Bg, Accent             string
+	}
+	var light, dark sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/ring.html"),
+		chromedp.WaitVisible(".fig-accent", chromedp.ByQuery),
+		figSetTheme("light"),
+		chromedp.Evaluate(probe, &light),
+		figSetTheme("dark"),
+		chromedp.Evaluate(probe, &dark),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	// Geometry does not depend on the palette, so it is asserted once.
+	if light.Clipper != "" {
+		t.Errorf("an ancestor clips the accent ring: %s", light.Clipper)
+	}
+	// The ring extends 3px beyond the border box; a neighbour closer than
+	// that overlaps it.
+	const ringOuter = 3.0
+	if light.Gap < ringOuter {
+		t.Errorf("the ring needs %vpx of clearance, the next box is %vpx away", ringOuter, light.Gap)
+	}
+	if light.Plain != "none" {
+		t.Errorf("an unaccented box should carry no ring, got %q", light.Plain)
+	}
+
+	for _, c := range []struct {
+		theme string
+		got   sample
+	}{{"light", light}, {"dark", dark}} {
+		if c.got.Shadow == "none" || c.got.Shadow == "" {
+			t.Fatalf("%s: the accented box has no ring at all", c.theme)
+		}
+		for _, want := range []struct{ name, val string }{{"--bg", c.got.Bg}, {"--accent", c.got.Accent}} {
+			if !strings.Contains(c.got.Shadow, want.val) {
+				t.Errorf("%s: the ring should be drawn from %s (%s), got %q",
+					c.theme, want.name, want.val, c.got.Shadow)
+			}
+		}
+	}
+	if light.Accent == dark.Accent {
+		t.Errorf("--accent did not change between themes (%s)", light.Accent)
+	}
+}
+
+func TestBrowserFigTreeIndentationAligns(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nitems:\n  - tree: |\n      one -- first root\n"+
+			"        child-a -- nested\n        child-b -- also nested\n      two -- second root\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"tree.html": page})
+	ctx := newBrowserCtx(t)
+
+	// A tree's whole purpose is that the eye can read depth off the left
+	// edge. That is a rendered fact: the markup says "nested" but only the
+	// layout says "indented", and a lost padding-left would flatten the tree
+	// while every markup assertion kept passing.
+	const probe = `
+	(() => {
+		const li = [...document.querySelectorAll(".fig-tree li")];
+		return li.map(e => {
+			const label = e.querySelector(":scope > .fig-tree-label");
+			const note = e.querySelector(":scope > .fig-note");
+			const lr = label.getBoundingClientRect();
+			return {
+				text: label.textContent,
+				left: lr.left,
+				labelBottom: lr.bottom,
+				noteTop: note ? note.getBoundingClientRect().top : lr.top,
+			};
+		});
+	})()`
+
+	type node struct {
+		Text                       string
+		Left, LabelBottom, NoteTop float64
+	}
+	var nodes []node
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/tree.html"),
+		chromedp.WaitVisible(".fig-tree", chromedp.ByQuery),
+		chromedp.Evaluate(probe, &nodes),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	byText := map[string]node{}
+	for _, n := range nodes {
+		byText[n.Text] = n
+	}
+	for _, want := range []string{"one", "two", "child-a", "child-b"} {
+		if _, ok := byText[want]; !ok {
+			t.Fatalf("tree node %q did not render; got %v", want, nodes)
+		}
+	}
+	const epsilon = 0.5
+	if math.Abs(byText["one"].Left-byText["two"].Left) > epsilon {
+		t.Errorf("roots should share a left edge, got %v and %v",
+			byText["one"].Left, byText["two"].Left)
+	}
+	if math.Abs(byText["child-a"].Left-byText["child-b"].Left) > epsilon {
+		t.Errorf("siblings should share a left edge, got %v and %v",
+			byText["child-a"].Left, byText["child-b"].Left)
+	}
+	if byText["child-a"].Left <= byText["one"].Left {
+		t.Errorf("a child should be indented past its parent, got %v vs %v",
+			byText["child-a"].Left, byText["one"].Left)
+	}
+	// A tree note sits on its label's line; if it wrapped to its own line the
+	// column of names the indentation exists to align would be broken up.
+	//
+	// The test is vertical overlap, not equal top edges: a note is set smaller
+	// than its label and the two align on their shared baseline, so on one
+	// line the note's top edge sits a pixel or so BELOW the label's. Only a
+	// wrap pushes it past the label's bottom.
+	for _, n := range nodes {
+		if n.NoteTop >= n.LabelBottom {
+			t.Errorf("%q: its note wrapped off the label's line (note top %v, label bottom %v)",
+				n.Text, n.NoteTop, n.LabelBottom)
+		}
+	}
+}
+
+func TestBrowserFigTreeEmphasisFollowsTheme(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nitems:\n  - tree: |\n      plain\n      * accented\n      - muted\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"emph.html": page})
+	ctx := newBrowserCtx(t)
+
+	const probe = figResolveVar + `
+	(() => {
+		const li = [...document.querySelectorAll(".fig-tree > li")];
+		const colorOf = e => getComputedStyle(e).color;
+		return {
+			plain:    colorOf(li[0]),
+			accented: colorOf(li[1]),
+			muted:    colorOf(li[2]),
+			accentVar: resolveVar("--accent"),
+			mutedVar:  resolveVar("--muted"),
+		};
+	})()`
+
+	type sample struct {
+		Plain, Accented, Muted, AccentVar, MutedVar string
+	}
+	var light, dark sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/emph.html"),
+		chromedp.WaitVisible(".fig-tree", chromedp.ByQuery),
+		figSetTheme("light"),
+		chromedp.Evaluate(probe, &light),
+		figSetTheme("dark"),
+		chromedp.Evaluate(probe, &dark),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	for _, c := range []struct {
+		theme string
+		got   sample
+	}{{"light", light}, {"dark", dark}} {
+		if c.got.Accented != c.got.AccentVar {
+			t.Errorf("%s: an accented tree line should paint in --accent (%s), got %s",
+				c.theme, c.got.AccentVar, c.got.Accented)
+		}
+		if c.got.Muted != c.got.MutedVar {
+			t.Errorf("%s: a muted tree line should paint in --muted (%s), got %s",
+				c.theme, c.got.MutedVar, c.got.Muted)
+		}
+		if c.got.Accented == c.got.Plain || c.got.Muted == c.got.Plain {
+			t.Errorf("%s: emphasis should distinguish a line from a plain one (plain %s, accented %s, muted %s)",
+				c.theme, c.got.Plain, c.got.Accented, c.got.Muted)
+		}
+	}
+	if light.AccentVar == dark.AccentVar {
+		t.Errorf("--accent did not change between themes (%s)", light.AccentVar)
+	}
+}

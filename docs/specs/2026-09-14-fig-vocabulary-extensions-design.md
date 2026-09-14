@@ -377,6 +377,25 @@ TDD throughout, as everywhere else in this repo.
   in this feature observable only in a browser, and it rides the harness
   that already exists rather than adding a test of its own.
 
+::: card
+**Amended after implementation.** The §7 plan left the rest of the rendered
+review to a human, on the inherited rule that the browser suite exists for
+JavaScript and `fig` ships none. That drew the line in the wrong place. Of
+the eight items on that checklist, one was a markup assertion misfiled as a
+visual one, two were already automated, four turned out to be mechanically
+checkable, and exactly one — whether a paragraph inside a `box` reads
+acceptably — was a genuine aesthetic judgement.
+
+Three further browser tests now cover the four: `fig-note` is smaller than
+its label and painted in `--muted`; the accent ring is not clipped by an
+ancestor and keeps a neighbour's clearance; a tree's siblings share a left
+edge, children are indented past their parents, and a note stays on its
+label's line. Every colour assertion runs under both `data-theme` values,
+because every colour here comes from a token that flips — and each asserts
+that an element's colour *is* its token's resolved value, so restyling the
+palette does not break the tests but detaching a rule from its token does.
+:::
+
 ## 9. Documentation
 
 - `docs/authoring.md`'s "Structured figures" section gains `tree` and the
