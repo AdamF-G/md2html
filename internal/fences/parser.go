@@ -1,7 +1,6 @@
 package fences
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -57,8 +56,16 @@ const fenceAttrPrefix = "data-fence"
 // invariants are this parser's, and it has to hold them against any hook —
 // and against the braced attribute block, which never passes through a hook
 // at all.
+//
+// The comparison ignores case because HTML attribute names do: an author
+// who writes data-Fence-Title means the same attribute the renderer writes,
+// and x/net/html lowercases it anyway when md2html re-parses the rendered
+// document for its transform pass. A case-sensitive prefix test therefore
+// reserved nothing — one capital letter handed author text the marker, the
+// kind, or the fence id.
 func reservedFenceAttr(name string) bool {
-	return strings.HasPrefix(name, fenceAttrPrefix)
+	return len(name) >= len(fenceAttrPrefix) &&
+		strings.EqualFold(name[:len(fenceAttrPrefix)], fenceAttrPrefix)
 }
 
 func (b *fencedContainerParser) Trigger() []byte {
@@ -158,7 +165,11 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 		attrs, ok := parser.ParseAttributes(reader)
 		if ok {
 			for _, attr := range attrs {
-				if bytes.HasPrefix(attr.Name, []byte(fenceAttrPrefix)) {
+				// The same reservation as the owned path above, and by the
+				// same predicate: a braced block reaches the node without
+				// passing through the hook, so testing the prefix a second
+				// way here is how the two paths drifted apart on case.
+				if reservedFenceAttr(string(attr.Name)) {
 					continue
 				}
 				node.SetAttribute(attr.Name, attr.Value)

@@ -133,31 +133,94 @@ func isAttrSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' }
 // well-formed trailing block, in which case the caller leaves the string
 // exactly as written.
 //
-// The scan runs forward tracking quotes rather than searching backward for
-// "}", so a closing brace inside a quoted value — caption="a } b" — does
-// not end the block early.
+// It is braceBlock with the head text in place of the brace's index. A
+// caller that needs the index instead — a container fence line, which has
+// to know where the title in front of the block ends — calls braceBlock.
 func splitBraced(s string) (head, content string, ok bool) {
-	open := -1
+	open, content, ok := braceBlock(s)
+	if !ok {
+		return s, "", false
+	}
+	return strings.TrimSpace(s[:open]), content, true
+}
+
+// braceBlock finds a trailing {...} attribute block, reporting the index of
+// its opening brace along with the block's contents. open is -1 when it
+// reports false.
+//
+// This is the one place the boundary of an attribute block is decided, so a
+// container's fence line, a fenced code block's info string and a bracketed
+// span cannot disagree about it — and the position is reported here rather
+// than recomputed by a caller. Deriving it from len(content) instead is what
+// silently truncated a container's title when the fence line ended in a
+// non-ASCII space: goldmark's own trimmer is ASCII-only, so those bytes
+// reach the grammar and shift every length-derived index.
+func braceBlock(s string) (open int, content string, ok bool) {
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
 		case '\\':
 			i++
 		case '"', '\'':
-			quote := s[i]
-			i++
-			for i < len(s) && s[i] != quote {
-				if s[i] == '\\' {
-					i++
-				}
-				i++
-			}
+			i = skipQuoted(s, i)
 		case '{':
-			open = i
+			end := braceSpan(s, i)
+			if end < 0 {
+				// The block is never closed, and no later "{" can open
+				// one that is: this one would have to close first.
+				return -1, "", false
+			}
+			if strings.TrimSpace(s[end+1:]) == "" {
+				return i, s[i+1 : end], true
+			}
+			i = end
+		}
+	}
+	return -1, "", false
+}
+
+// braceSpan reports the index of the "}" that closes the "{" at s[open], or
+// -1 if s[open] is not a "{" or is never closed.
+//
+// The scan runs forward rather than searching backward for "}", tracking
+// quotes and backslash escapes so a brace inside a value — caption="a } b"
+// — does not end the block early, and tracking nesting so a brace inside
+// the block's own content — {a{b}} — belongs to the block rather than
+// opening a shorter one, which would leave the text in front of it to leak
+// out as a title.
+func braceSpan(s string, open int) int {
+	if open < 0 || open >= len(s) || s[open] != '{' {
+		return -1
+	}
+	depth := 0
+	for i := open; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '"', '\'':
+			i = skipQuoted(s, i)
+		case '{':
+			depth++
 		case '}':
-			if open >= 0 && strings.TrimSpace(s[i+1:]) == "" {
-				return strings.TrimSpace(s[:open]), s[open+1 : i], true
+			depth--
+			if depth == 0 {
+				return i
 			}
 		}
 	}
-	return s, "", false
+	return -1
+}
+
+// skipQuoted returns the index of the quote closing the run that opens at
+// s[i], or one past the end of s if it is never closed. A backslash makes
+// the next byte literal, so a value can contain a quote of its own.
+func skipQuoted(s string, i int) int {
+	quote := s[i]
+	i++
+	for i < len(s) && s[i] != quote {
+		if s[i] == '\\' {
+			i++
+		}
+		i++
+	}
+	return i
 }

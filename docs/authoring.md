@@ -293,7 +293,11 @@ survives, the handler does not. `data-fence` is a reserved *namespace*, not
 three literal names: any attribute whose name **begins with** `data-fence`
 is dropped, with no hyphen required at the boundary — `data-fence-kind`,
 `data-fence-title` and an unrelated `data-fencepost` are all dropped alike,
-so writing one yourself gets it silently dropped rather than honored.
+so writing one yourself gets it silently dropped rather than honored. Case
+does not matter either, because an HTML attribute name has none:
+`data-Fence-Title` is the same reserved name as `data-fence-title`. The
+`data-` and `aria-` allowlist above is case-insensitive for the same reason,
+so `ARIA-label` is honored exactly like `aria-label`.
 
 Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
 to write and it drops you out of Markdown for the enclosed content.

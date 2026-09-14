@@ -21,6 +21,19 @@ type Config struct {
 // container elements can have.
 var FencedContainerAttributeFilter = html.GlobalAttributeFilter
 
+// The two prefixes renderContainerAttributes admits beyond that filter,
+// hoisted so the test allocates nothing per attribute.
+var (
+	dataAttrPrefix = []byte("data-")
+	ariaAttrPrefix = []byte("aria-")
+)
+
+// hasFoldedPrefix reports whether an attribute name begins with prefix,
+// ignoring ASCII case as HTML attribute names do.
+func hasFoldedPrefix(name, prefix []byte) bool {
+	return len(name) >= len(prefix) && bytes.EqualFold(name[:len(prefix)], prefix)
+}
+
 // A Renderer struct is an implementation of renderer.NodeRenderer that renders
 // nodes as (X)HTML.
 type Renderer struct {
@@ -60,11 +73,18 @@ func (r *Renderer) renderFencedContainerTitle(w util.BufWriter, source []byte, n
 // Values are escaped and names are not, exactly as goldmark does it. Names
 // therefore have to arrive already validated; md2html's safeAttrName is
 // what does that, at the point where author text becomes attributes.
+//
+// Both prefixes are matched without regard to case, because an HTML
+// attribute name has none: ARIA-label is aria-label, and dropping it would
+// leave the landmark unnamed for exactly the reason above. The parser's own
+// data-fence reservation is case-insensitive for the same reason, and the
+// two have to agree — a name this test admits on a fold that the
+// reservation refuses on a fold would be a hole in the namespace.
 func renderContainerAttributes(w util.BufWriter, n ast.Node) {
 	for _, attr := range n.Attributes() {
 		if !FencedContainerAttributeFilter.Contains(attr.Name) &&
-			!bytes.HasPrefix(attr.Name, []byte("data-")) &&
-			!bytes.HasPrefix(attr.Name, []byte("aria-")) {
+			!hasFoldedPrefix(attr.Name, dataAttrPrefix) &&
+			!hasFoldedPrefix(attr.Name, ariaAttrPrefix) {
 			continue
 		}
 		_, _ = w.WriteString(" ")

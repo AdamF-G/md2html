@@ -84,7 +84,9 @@ major version instead.
   an index-out-of-range inside the (now-vendored) fence parser. This bug
   predates this change and was already reachable on `main`; it is fixed
   here because fixing it is one guard on code this work already owns. The
-  attribute is now silently dropped instead.
+  attribute is now silently dropped instead, whatever its case: the whole
+  `data-fence` namespace is reserved, and an HTML attribute name does not
+  distinguish `data-Fence` from `data-fence`.
 - `[proven]{.chip}` no longer renders broken. The chip transform fired on
   the bracket and left `{.chip}` on the page as literal text; a
   non-vocabulary label such as `[needs review]{.chip}` stayed literal in

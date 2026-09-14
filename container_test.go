@@ -488,13 +488,67 @@ func TestContainerDoesNotAdoptAuthorWrittenTitleParagraph(t *testing.T) {
 // The same, with the marker spelled out in the document. The parser reserves
 // the data-fence namespace, so an author cannot hand themselves the flag
 // that makes a container adopt their paragraph.
+// The case variants are not decoration. An HTML attribute name is
+// case-insensitive and x/net/html lowercases it when the rendered document
+// is re-parsed for the transform pass, so data-Fence-Title is the marker —
+// and a case-sensitive prefix test let it through, adopting the author's
+// paragraph and rebuilding it without its id.
 func TestContainerForgedTitleMarkerDoesNotAdoptAParagraph(t *testing.T) {
-	got := convert(t, ":::card[]{data-fence-title=\"1\"}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n", nil)
-	if !strings.Contains(got, `<p class="container-title" id="keepme">mine</p>`) {
-		t.Errorf("forged marker made the container adopt the paragraph\ngot: %s", got)
+	for _, src := range []string{
+		":::card[]{data-fence-title=\"1\"}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n",
+		":::card[]{data-Fence-Title=\"1\"}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n",
+		":::card[]{DATA-FENCE-TITLE=\"1\"}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n",
+		"::: {.card data-Fence-Title=\"1\"}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n",
+	} {
+		got := convert(t, src, nil)
+		if !strings.Contains(got, `<p class="container-title" id="keepme">mine</p>`) {
+			t.Errorf("%q: forged marker made the container adopt the paragraph\ngot: %s", src, got)
+		}
+		if strings.Contains(strings.ToLower(got), "data-fence") {
+			t.Errorf("%q: forged data-fence attribute reached the output\ngot: %s", src, got)
+		}
 	}
-	if strings.Contains(got, "data-fence") {
-		t.Errorf("forged data-fence attribute reached the output\ngot: %s", got)
+}
+
+// A forged data-fence-kind is the parser's "this line named a kind" signal.
+// A fence line that named none must not acquire one, however the attribute
+// is capitalized: with a case-sensitive reservation, "::: {.house
+// data-Fence-Kind=\"nav\"}" rendered <nav class="house"> — an element the
+// author never asked for, from a class the transform is supposed to leave
+// inert.
+func TestContainerForgedFenceKindCannotChooseTheElement(t *testing.T) {
+	for _, src := range []string{
+		"::: {.house data-fence-kind=\"nav\"}\nbody\n:::\n",
+		"::: {.house data-Fence-Kind=\"nav\"}\nbody\n:::\n",
+		"::: {.house DATA-FENCE-KIND=\"nav\"}\nbody\n:::\n",
+	} {
+		got := convert(t, src, nil)
+		if strings.Contains(got, "<nav") {
+			t.Errorf("%q: forged kind chose the element\ngot: %s", src, got)
+		}
+		if !strings.Contains(got, `<div class="house">`) {
+			t.Errorf("%q: class not left inert on a div\ngot: %s", src, got)
+		}
+	}
+}
+
+// data-fence is a reserved namespace rather than three literal names, and
+// docs/authoring.md and the skill both say so. That claim is only true if
+// the prefix test ignores case: data-Fencepost used to survive while
+// data-fencepost was dropped.
+func TestContainerReservedNamespaceIgnoresCase(t *testing.T) {
+	for _, src := range []string{
+		"::: card {data-fencepost=\"b\"}\nbody\n:::\n",
+		"::: card {data-Fencepost=\"b\"}\nbody\n:::\n",
+		"::: card {DATA-FENCEPOST=\"b\"}\nbody\n:::\n",
+	} {
+		got := convert(t, src, nil)
+		if strings.Contains(strings.ToLower(got), "fencepost") {
+			t.Errorf("%q: reserved namespace escaped on a case variant\ngot: %s", src, got)
+		}
+		if !strings.Contains(got, `<div class="card">`) {
+			t.Errorf("%q: container lost its kind\ngot: %s", src, got)
+		}
 	}
 }
 
@@ -511,9 +565,15 @@ func TestContainerForgedFenceIdDoesNotPanic(t *testing.T) {
 		":::card[T]{data-fence=\"x\"}\nbody\n:::\n",          // owned label path
 		"::: {.card data-fence=\"x\"}\nbody\n:::\n",          // braced path, via ParseAttributes
 		":::card[T]{data-fence-kind=\"aside\"}\nbody\n:::\n", // forged kind
+		// The same three spelled in mixed case. The reservation has to
+		// hold on a fold, because HTML attribute names do not distinguish
+		// case and neither does Continue's lookup of the id.
+		":::card[T]{data-Fence=\"x\"}\nbody\n:::\n",
+		"::: {.card DATA-FENCE=\"x\"}\nbody\n:::\n",
+		":::card[T]{data-Fence-Kind=\"aside\"}\nbody\n:::\n",
 	} {
 		got := convert(t, src, nil)
-		if strings.Contains(got, "data-fence") {
+		if strings.Contains(strings.ToLower(got), "data-fence") {
 			t.Errorf("%q: reserved attribute reached the output\ngot: %s", src, got)
 		}
 		if !strings.Contains(got, `class="card"`) {
@@ -683,6 +743,33 @@ func TestContainerKindThenTitleThenAttrs(t *testing.T) {
 	}
 }
 
+// The same line with a trailing no-break space. goldmark's fence-line trim
+// is ASCII-only, so U+00A0 reaches the grammar and every index derived from
+// the string's length is two bytes out: the title came back as "Why {#"
+// while the id was still applied, so nothing downstream could notice.
+func TestContainerTitleSurvivesATrailingNoBreakSpace(t *testing.T) {
+	got := convert(t, "::: card Why {#w} \nbody\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title">Why</p>`) {
+		t.Errorf("title truncated by the attribute block\ngot: %s", got)
+	}
+	if !strings.Contains(got, `id="w"`) {
+		t.Errorf("id not applied\ngot: %s", got)
+	}
+}
+
+// A brace inside the attribute block's own content belongs to the block.
+// Pairing the last "{" with the last "}" instead made the block "{b}}" and
+// left "{a" in front of it to be lifted as the container's title.
+func TestContainerNestedBraceDoesNotBecomeATitle(t *testing.T) {
+	got := convert(t, "::: card {a{b}}\nbody\n:::\n", nil)
+	if strings.Contains(got, "container-title") {
+		t.Errorf("a fragment of the attribute block became a title\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<div class="card">`) {
+		t.Errorf("kind lost\ngot: %s", got)
+	}
+}
+
 func TestContainerNestingStillWorks(t *testing.T) {
 	got := convert(t, ":::: card\n::: callout\ninner\n:::\n::::\n", nil)
 	if !strings.Contains(got, `<div class="card">`) || !strings.Contains(got, `<div class="callout">`) {
@@ -704,6 +791,17 @@ func TestContainerTakesAnAriaLabel(t *testing.T) {
 	got := convert(t, "::: card {aria-label=\"Primary\"}\nbody\n:::\n", nil)
 	if !strings.Contains(got, `aria-label="Primary"`) {
 		t.Errorf("aria-label dropped\ngot: %s", got)
+	}
+}
+
+// And an accessible name written in the case HTML itself does not
+// distinguish. The renderer's prefix test used to be case-sensitive, so
+// ARIA-label was dropped and the landmark went unnamed — the very failure
+// the prefix widening exists to prevent.
+func TestContainerAriaPrefixIgnoresCase(t *testing.T) {
+	got := convert(t, "::: card {ARIA-label=\"Primary\"}\nbody\n:::\n", nil)
+	if !strings.Contains(got, `aria-label="Primary"`) {
+		t.Errorf("ARIA-label dropped\ngot: %s", got)
 	}
 }
 
@@ -733,6 +831,30 @@ func TestContainerNavKind(t *testing.T) {
 	// mistake for meaning something.
 	if strings.Contains(got, `class=""`) {
 		t.Errorf("nav kind wrote an empty class attribute\ngot: %s", got)
+	}
+}
+
+// The braced spelling of the same kind, which is the one that reproduces
+// the empty-class bug: removeClassToken empties the class attribute of its
+// only token, so applyKind meets a class attribute that already exists and
+// has to remove it rather than merely decline to write one. "::: nav {…}"
+// above never had the attribute at all, so it could not have caught this.
+func TestContainerBracedNavKind(t *testing.T) {
+	got := convert(t, "::: {.nav}\n- [One](./a.md)\n:::\n", nil)
+	if !strings.Contains(got, "<nav>") {
+		t.Errorf("no bare nav element\ngot: %s", got)
+	}
+	if strings.Contains(got, `class=""`) {
+		t.Errorf("braced nav kind wrote an empty class attribute\ngot: %s", got)
+	}
+}
+
+// A braced nav that also carries a class of its own keeps it: the attribute
+// is removed only when nothing is left in it.
+func TestContainerBracedNavKindKeepsExtraClass(t *testing.T) {
+	got := convert(t, "::: {.nav .sidebar}\n- [One](./a.md)\n:::\n", nil)
+	if !strings.Contains(got, `<nav class="sidebar">`) {
+		t.Errorf("extra class lost\ngot: %s", got)
 	}
 }
 

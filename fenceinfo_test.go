@@ -246,6 +246,53 @@ func TestParseFenceInfoKindThenAttrs(t *testing.T) {
 	}
 }
 
+// The fence line as goldmark hands it over when it ends in a non-ASCII
+// space: util.TrimRightSpaceLength does not trim one, so the grammar sees
+// it. The attribute block's position has to come from the brace scan, or
+// the title loses as many bytes as the space occupies.
+func TestParseFenceInfoTrailingNoBreakSpaceKeepsTheWholeTitle(t *testing.T) {
+	const info = "aside Why this matters {#w} "
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if s := title(info, got); s != "Why this matters" {
+		t.Errorf("title = %q, want %q", s, "Why this matters")
+	}
+	if len(got.Attrs) != 1 || got.Attrs[0].Name != "id" || got.Attrs[0].Value != "w" {
+		t.Errorf("attrs = %v, want id=w", got.Attrs)
+	}
+}
+
+// A brace inside the block's content is part of the block, not the start of
+// a shorter one with "{a" left in front of it to become a title.
+func TestParseFenceInfoNestedBraceStaysInsideTheBlock(t *testing.T) {
+	const info = "card {a{b}}"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "card" {
+		t.Errorf("kind = %q, want %q", got.Kind, "card")
+	}
+	if s := title(info, got); s != "" {
+		t.Errorf("title = %q, want none — it is all attribute block", s)
+	}
+}
+
+// A leading block reads by the same scan, so a nested brace does not end it
+// early and leave the rest of it to be read as a title.
+func TestParseFenceInfoBracedPrefixKeepsANestedBrace(t *testing.T) {
+	const info = "{.card data-x={y}} Title"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if s := title(info, got); s != "Title" {
+		t.Errorf("title = %q, want %q", s, "Title")
+	}
+}
+
 func TestParseFenceInfoKindThenTitleThenAttrs(t *testing.T) {
 	const info = "aside Why this matters {#w}"
 	got, ok := parseFenceInfo(info)

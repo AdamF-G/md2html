@@ -94,6 +94,38 @@ func TestSplitBracedWholeStringIsBlock(t *testing.T) {
 	}
 }
 
+// braceBlock is splitBraced's scanner, and it reports where the block
+// starts. That index is what tells a container fence line where the title in
+// front of the block ends; deriving it from len(content) instead was two
+// bytes out here, because a trailing no-break space is whitespace to
+// strings.TrimSpace (so the block is still accepted) but not to any
+// ASCII-only trim.
+func TestBraceBlockReportsTheOpeningIndex(t *testing.T) {
+	open, in, ok := braceBlock("card Why {#w} ")
+	if !ok || in != "#w" {
+		t.Fatalf("in=%q ok=%v, want #w / true", in, ok)
+	}
+	if open != 9 {
+		t.Errorf("open = %d, want 9 (the index of the brace itself)", open)
+	}
+}
+
+// A brace inside the block's own content belongs to the block, so the text
+// in front of it is not shortened by the inner one.
+func TestBraceBlockKeepsANestedBraceInsideTheBlock(t *testing.T) {
+	open, in, ok := braceBlock("card {a{b}}")
+	if !ok || open != 5 || in != "a{b}" {
+		t.Errorf("open=%d in=%q ok=%v; want 5 / a{b} / true", open, in, ok)
+	}
+}
+
+// An unclosed block is no block at all: the string stays exactly as written.
+func TestBraceBlockRejectsAnUnclosedBrace(t *testing.T) {
+	if open, in, ok := braceBlock("card {a"); ok {
+		t.Errorf("open=%d in=%q ok=%v; want no block", open, in, ok)
+	}
+}
+
 // A closing brace inside a quoted value must not end the block early.
 func TestSplitBracedIgnoresBraceInsideQuotes(t *testing.T) {
 	_, in, ok := splitBraced(`{caption="a } b"}`)

@@ -64,7 +64,7 @@ func parseFenceInfo(info string) (fenceInfoResult, bool) {
 	// Bare form: a kind word, then an optional undelimited title, then an
 	// optional trailing attribute block.
 	body := info
-	if start, content, ok := trailingBlock(info); ok && start > 0 {
+	if start, content, ok := braceBlock(info); ok && start > 0 {
 		out.Attrs = fenceAttrs(content)
 		body = strings.TrimRight(info[:start], " \t")
 	}
@@ -80,57 +80,18 @@ func parseFenceInfo(info string) (fenceInfoResult, bool) {
 	return out, true
 }
 
-// trailingBlock locates a trailing {...} attribute block, returning the index
-// of its opening brace along with its contents.
-//
-// The decision of what counts as a block is splitBraced's, so a container's
-// fence line, a fenced code block's info string and a bracketed span cannot
-// disagree about it. Only the position is computed here, and by length rather
-// than by a second scan: the block is the final "{" + content + "}" of the
-// trimmed string, so its brace sits len(content)+2 bytes from the end. The
-// trim set here covers the ASCII whitespace splitBraced's own trailing-
-// whitespace check (strings.TrimSpace) accepts, but not TrimSpace's full
-// Unicode range; a caller that hands in a string with trailing whitespace
-// outside this set that splitBraced still accepts will get a start index
-// shifted by the untrimmed bytes.
-func trailingBlock(s string) (start int, content string, ok bool) {
-	_, content, ok = splitBraced(s)
-	if !ok {
-		return -1, "", false
-	}
-	end := len(strings.TrimRight(s, " \t\n\r\v\f"))
-	return end - len(content) - 2, content, true
-}
-
 // readBracedPrefix reads a leading {...} attribute block, returning its
 // contents and whatever followed it.
 //
-// The scan tracks quotes and backslash escapes rather than searching for
-// the first "}", so a brace inside a quoted value — data-x="a } b" — does
-// not end the block early. It is splitBraced's discipline applied to a
-// leading block rather than a trailing one.
+// The boundary is braceSpan's — the same scan braceBlock uses for a trailing
+// block — so a leading and a trailing block cannot disagree about where a
+// quoted or a nested brace leaves off.
 func readBracedPrefix(s string) (content, rest string, ok bool) {
-	if len(s) == 0 || s[0] != '{' {
+	end := braceSpan(s, 0)
+	if end < 0 {
 		return "", s, false
 	}
-	for i := 1; i < len(s); i++ {
-		switch s[i] {
-		case '\\':
-			i++
-		case '"', '\'':
-			quote := s[i]
-			i++
-			for i < len(s) && s[i] != quote {
-				if s[i] == '\\' {
-					i++
-				}
-				i++
-			}
-		case '}':
-			return s[1:i], s[i+1:], true
-		}
-	}
-	return "", s, false
+	return s[1:end], s[end+1:], true
 }
 
 // fenceAttrs turns an attribute block's contents into the attributes a

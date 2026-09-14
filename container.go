@@ -76,6 +76,14 @@ func removeAttr(n *html.Node, key string) {
 // out in full, not an independent class the author also wants, so keeping
 // it verbatim would leave a redundant token (e.g. "callout callout-warning
 // warning") rather than the normalized result.
+//
+// Removing the last token leaves class="" rather than removing the
+// attribute, deliberately: applyKind runs immediately after and is the one
+// place that decides whether a container has a class attribute at all, and
+// it removes an empty one. Removing it here instead would make applyKind's
+// setAttr append the merged class, moving it behind every other attribute
+// the author wrote on a braced kind — a rendered-output change to every
+// such container, for nothing.
 func removeClassToken(n *html.Node, tok string) {
 	v, ok := attr(n, "class")
 	if !ok {
@@ -186,6 +194,14 @@ func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 	}
 	if len(tokens) > 0 {
 		setAttr(div, "class", strings.Join(tokens, " "))
+	} else {
+		// No tokens at all: a kind that contributes no class of its own
+		// (nav), on a container whose only class token was the kind name
+		// itself. The attribute has to go rather than merely not be
+		// written — "::: {.nav}" arrives here with the class attribute
+		// already present and emptied out by removeClassToken, and
+		// skipping the write left <nav class=""> in the output.
+		removeAttr(div, "class")
 	}
 
 	if k.tag == "details" {

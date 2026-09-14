@@ -64,8 +64,10 @@ attribute grammar accepts a bare key with no value and a single-quoted
 value too — `{.callout data-flag}` and `{.callout data-x='single'}` both
 parse, not just `key="value"`. `data-fence` is a reserved *namespace*, not
 three literal names: any name **beginning with** `data-fence` is dropped,
-no hyphen required at the boundary, so `data-fence-kind` and an unrelated
-`data-fencepost` are both silently dropped rather than honored.
+no hyphen required at the boundary and no regard for case, so
+`data-fence-kind`, `data-Fence-Title` and an unrelated `data-fencepost` are
+all silently dropped rather than honored. The `data-`/`aria-` allowlist
+ignores case too: `ARIA-label` is honored like `aria-label`.
 
 **A link to `.html` is never rewritten.**
 
