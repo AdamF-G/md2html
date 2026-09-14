@@ -24,7 +24,7 @@
 
 ## Two accepted deviations from "behaviour-preserving" — DECIDED
 
-**1. `isNav` is dropped (Task 5).** The vendored renderer turns a container into `<nav>` when its class matches `elem-nav`. md2html documents no such feature, `grep` finds the string nowhere in the repo outside the vendored code, deriving an element from a class name is surprising, and it is the cause of a real leak: `fenceDivs` only collects `<div>`, so `::: {.elem-nav}` emits `<nav data-fence="1" class="elem-nav">` with the library's internal attribute still on it. Dropping `isNav` makes every container a div and closes the leak.
+**1. `elem-nav` stops producing a `<nav>`; a `nav` kind replaces it (Task 5).** The vendored renderer turns a container into `<nav>` when its class matches `elem-nav`. md2html documents no such feature and `grep` finds the string nowhere in the repo outside the vendored code. Worse, it silently disables everything else: `fenceDivs` collects only `<div>`, so `::: {.aside .elem-nav}` skips the whole transform — no `<details>`, no summary, and the library's internal `data-fence` attribute reaches the output. Task 5 makes `nav` a shipped kind instead, applied after the transform has done its work, and `.elem-nav` becomes an ordinary inert class.
 
 **2. An unknown bare kind with a title keeps its title element.** `::: notakind Some title` warns today and renders `notakind Some title` as body text. Afterwards it still warns, and the title renders as `<p class="container-title">Some title</p>` inside the unclassed div. This is a warned error path, not a working input.
 
@@ -227,6 +227,43 @@ func TestParseFenceInfoUnclosedBracketIsNotALabel(t *testing.T) {
 		t.Errorf("title = %q, want none", s)
 	}
 }
+
+// An attribute name reaches the output unescaped, so a key carrying a quote
+// would close the attribute and make the rest of it an event handler.
+// goldmark's own ParseAttributes used to reject such a block; this package's
+// parser does not, so the guard lives here.
+func TestParseFenceInfoRejectsUnsafeAttributeNames(t *testing.T) {
+	for _, info := range []string{
+		`card[T]{data-y"onmouseover="alert(1)}`,
+		`card[T]{aria-x"onmouseover="alert(1)}`,
+		`card[T]{<script>=1}`,
+	} {
+		got, ok := parseFenceInfo(info)
+		if !ok {
+			t.Fatalf("parseFenceInfo(%q) reported false", info)
+		}
+		for _, a := range got.Attrs {
+			if !safeAttrName(a.Name) {
+				t.Errorf("%s: unsafe attribute name survived: %q", info, a.Name)
+			}
+		}
+	}
+}
+
+// A legitimate data attribute still passes, so the guard is not a blanket ban.
+func TestParseFenceInfoKeepsSafeDataAttribute(t *testing.T) {
+	const info = `card[T]{data-sort="name"}`
+	got, _ := parseFenceInfo(info)
+	var found bool
+	for _, a := range got.Attrs {
+		if a.Name == "data-sort" && a.Value == "name" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("data-sort dropped\ngot: %v", got.Attrs)
+	}
+}
 ```
 
 `fenceInfoResult` is a local alias so this test does not depend on the `internal/fences` import path; define it in `fenceinfo.go` in Step 3 as `type fenceInfoResult = fences.Info`.
@@ -418,6 +455,7 @@ Create `fenceinfo.go`:
 package md2html
 
 import (
+	"sort"
 	"strings"
 
 	fences "github.com/AdamF-G/md2html/internal/fences"
@@ -485,12 +523,57 @@ func fenceAttrs(content string) []fences.Attr {
 	if len(a.classes) > 0 {
 		out = append(out, fences.Attr{Name: "class", Value: strings.Join(a.classes, " ")})
 	}
-	for k, v := range a.kv {
-		out = append(out, fences.Attr{Name: k, Value: v})
+	keys := make([]string, 0, len(a.kv))
+	for k := range a.kv {
+		if safeAttrName(k) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		out = append(out, fences.Attr{Name: k, Value: a.kv[k]})
 	}
 	return out
 }
+
+// safeAttrName reports whether name can be written into an HTML attribute
+// list verbatim.
+//
+// The renderer escapes attribute *values* and writes *names* as they are —
+// goldmark's does too — so a name is the one piece of author text that
+// reaches the output unescaped. attrTokens accepts any byte in a key except
+// whitespace and "=", so `data-x"onmouseover="alert(1)` parses as a single
+// key, and writing it out would close the attribute and turn the remainder
+// into an event handler. Until now goldmark's own ParseAttributes stood in
+// the way and rejected such a block; this package's parser is deliberately
+// more permissive, so the guard has to move here with it.
+//
+// A whitelist rather than a blacklist: an HTML attribute name has no
+// business containing anything outside this set.
+func safeAttrName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+			// A letter is legal anywhere, including first.
+		case c >= '0' && c <= '9', c == '-', c == '_', c == '.', c == ':':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
 ```
+
+`sort` joins the imports. The keys are sorted because Go randomizes map
+iteration order, and an unsorted range would emit a container's attributes
+in a different order on every run — the same reason `knownKindList` sorts.
 
 - [ ] **Step 7: Wire the hook in**
 
@@ -1333,21 +1416,55 @@ EOF
 
 ---
 
-### Task 5: Drop `isNav`, and with it a leaked attribute
+### Task 5: Replace `elem-nav` with a `nav` kind, and let a container be labelled
+
+The inherited magic class becomes a shipped kind, which needs one thing the
+renderer cannot currently express: an accessible name.
 
 **Files:**
-- Modify: `internal/fences/renderer.go`
+- Modify: `internal/fences/renderer.go`, `container.go`
 - Test: `container_test.go`
 
-- [ ] **Step 1: Write the failing test**
+**Interfaces:**
+- Produces: `retag(n *html.Node, tag string) *html.Node` in `container.go`; `containerKinds["nav"]`.
+
+- [ ] **Step 1: Write the failing tests**
 
 Append to `container_test.go`:
 
 ```go
-// The vendored renderer used to turn a container into <nav> when its class
-// matched elem-nav — undocumented here, used nowhere, and the cause of a
-// real leak: fenceDivs only collects <div>, so the library's internal
-// data-fence attribute survived into the output.
+// A landmark that cannot be named is noise in a screen reader's landmark
+// list, and aria-label is not in goldmark's global attribute allowlist.
+func TestContainerTakesAnAriaLabel(t *testing.T) {
+	got := convert(t, "::: card {aria-label=\"Primary\"}\nbody\n:::\n", nil)
+	if !strings.Contains(got, `aria-label="Primary"`) {
+		t.Errorf("aria-label dropped\ngot: %s", got)
+	}
+}
+
+// An event handler must not survive, whatever else is allowed through.
+func TestContainerDropsEventHandlerAttribute(t *testing.T) {
+	got := convert(t, "::: card {onmouseover=\"alert(1)\"}\nbody\n:::\n", nil)
+	if strings.Contains(got, "onmouseover") {
+		t.Errorf("event handler survived\ngot: %s", got)
+	}
+}
+
+// nav becomes a shipped kind rather than a class the renderer sniffs for.
+func TestContainerNavKind(t *testing.T) {
+	got := convert(t, "::: nav {aria-label=\"Section\"}\n- [One](./a.md)\n:::\n", nil)
+	if !strings.Contains(got, "<nav") {
+		t.Errorf("no nav element\ngot: %s", got)
+	}
+	if !strings.Contains(got, `aria-label="Section"`) {
+		t.Errorf("nav cannot be named\ngot: %s", got)
+	}
+	if strings.Contains(got, "data-fence") {
+		t.Errorf("internal attribute leaked\ngot: %s", got)
+	}
+}
+
+// The old magic class is now an ordinary, inert class.
 func TestContainerElemNavIsAnOrdinaryDiv(t *testing.T) {
 	got := convert(t, "::: {.elem-nav}\nbody\n:::\n", nil)
 	if strings.Contains(got, "<nav") {
@@ -1362,14 +1479,51 @@ func TestContainerElemNavIsAnOrdinaryDiv(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [ ] **Step 2: Run to verify they fail**
 
-Run: `go test ./... -run TestContainerElemNav -v`
-Expected: FAIL — the output contains `<nav data-fence="1" class="elem-nav">`.
+Run: `go test ./... -run 'TestContainerTakesAnAriaLabel|TestContainerDropsEventHandler|TestContainerNavKind|TestContainerElemNav' -v`
+Expected: the aria-label test FAILS (attribute silently dropped), the nav-kind test FAILS (`unknown container kind "nav"`), the elem-nav test FAILS (`<nav data-fence="1" …>`). The event-handler test should already PASS — it is a guard, not a fix.
 
-- [ ] **Step 3: Remove `isNav`**
+- [ ] **Step 3: Allow `aria-` in the vendored renderer, and delete `isNav`**
 
-In `internal/fences/renderer.go`, delete `isNav`, the `navChk` regexp and the `regexp` import, and reduce the element choice to a constant:
+In `internal/fences/renderer.go`, delete `isNav` and the `navChk` regexp, drop the `regexp` import, add `bytes`, and render attributes through a local writer:
+
+```go
+// renderContainerAttributes writes a container's attributes, allowing the
+// aria- prefix alongside goldmark's global attribute list and the data-
+// prefix its own renderer already permits.
+//
+// An accessible name is what a landmark most needs, and aria-label is not
+// in that list — so without this a <nav> or a labelled region could be
+// emitted but never named, which is worse than not emitting it at all.
+//
+// Values are escaped and names are not, exactly as goldmark does it. Names
+// therefore have to arrive already validated; md2html's safeAttrName is
+// what does that, at the point where author text becomes attributes.
+func renderContainerAttributes(w util.BufWriter, n ast.Node) {
+	for _, attr := range n.Attributes() {
+		if !FencedContainerAttributeFilter.Contains(attr.Name) &&
+			!bytes.HasPrefix(attr.Name, []byte("data-")) &&
+			!bytes.HasPrefix(attr.Name, []byte("aria-")) {
+			continue
+		}
+		_, _ = w.WriteString(" ")
+		_, _ = w.Write(attr.Name)
+		_, _ = w.WriteString(`="`)
+		var value []byte
+		switch typed := attr.Value.(type) {
+		case []byte:
+			value = typed
+		case string:
+			value = util.StringToReadOnlyBytes(typed)
+		}
+		_, _ = w.Write(util.EscapeHTML(value))
+		_ = w.WriteByte('"')
+	}
+}
+```
+
+and reduce the container renderer to a single element:
 
 ```go
 func (r *Renderer) renderFencedContainer(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -1378,7 +1532,7 @@ func (r *Renderer) renderFencedContainer(w util.BufWriter, source []byte, node a
 		n.element = "div"
 		if n.Attributes() != nil {
 			_, _ = w.WriteString("<" + n.element)
-			html.RenderAttributes(w, n, FencedContainerAttributeFilter)
+			renderContainerAttributes(w, n)
 			_, _ = w.WriteString(">\n")
 		} else {
 			_, _ = w.WriteString("<" + n.element + ">\n")
@@ -1390,12 +1544,90 @@ func (r *Renderer) renderFencedContainer(w util.BufWriter, source []byte, node a
 }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+The renderer now always emits a `<div>`. That is what makes the `nav` kind
+safe where `elem-nav` was not: `fenceDivs` collects divs, so the transform
+still sees every container, and the element is changed afterwards by code
+that has already done the kind mapping and the `data-fence` cleanup.
 
-Run: `go test ./... -run TestContainerElemNav -v`
-Expected: PASS.
+- [ ] **Step 4: Generalize the element rebuild**
 
-- [ ] **Step 5: Run everything**
+`toDetails` exists because x/net/html keys rendering off `DataAtom` and
+`Data`, so an element cannot be relabelled in place. A `nav` kind needs the
+same rebuild without the `<summary>`. In `container.go`, extract it:
+
+```go
+// retag rebuilds n as the same content and attributes under a different tag
+// name, returning the replacement.
+//
+// The element has to be replaced rather than relabelled: x/net/html keys
+// rendering off DataAtom and Data, and setting one without the other leaves
+// the node half-converted. n's Attr slice is reused as-is, so a merged class
+// and anything else the author wrote survive the rebuild.
+func retag(n *html.Node, tag string) *html.Node {
+	out := &html.Node{
+		Type: html.ElementNode, DataAtom: atom.Lookup([]byte(tag)),
+		Data: tag, Attr: n.Attr,
+	}
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		n.RemoveChild(c)
+		out.AppendChild(c)
+		c = next
+	}
+	n.Parent.InsertBefore(out, n)
+	n.Parent.RemoveChild(n)
+	return out
+}
+```
+
+Rewrite `toDetails` to build its `<summary>` and then call `retag`, and give
+`applyKind` a general tail:
+
+```go
+	if k.tag == "details" {
+		toDetails(div, k, title)
+		return
+	}
+	if len(title) > 0 {
+		tp := &html.Node{Type: html.ElementNode, DataAtom: atom.P, Data: "p",
+			Attr: []html.Attribute{{Key: "class", Val: "container-title"}}}
+		for _, n := range title {
+			tp.AppendChild(n)
+		}
+		div.InsertBefore(tp, div.FirstChild)
+	}
+	if k.tag != "div" {
+		retag(div, k.tag)
+	}
+```
+
+- [ ] **Step 5: Add the kind**
+
+In `container.go`, add to `containerKinds`:
+
+```go
+	"nav": {tag: "nav", class: ""},
+```
+
+It is the one kind that adds no class of its own: the element *is* the
+payload, `nav.toc` already occupies the styled-nav niche in the stylesheet,
+and an author who wants to style theirs writes `::: nav {.sidebar}`.
+
+That empty class needs a guard in `applyKind`, which currently always writes
+the attribute — a container with no classes must not gain `class=""`:
+
+```go
+	if len(tokens) > 0 {
+		setAttr(div, "class", strings.Join(tokens, " "))
+	}
+```
+
+- [ ] **Step 6: Run the tests**
+
+Run: `go test ./... -run TestContainer -v`
+Expected: PASS, including the four new ones.
+
+- [ ] **Step 7: Run everything**
 
 ```bash
 gofmt -l . && go vet ./... && go test ./...
@@ -1405,20 +1637,28 @@ cd compat && go test -count=1 ./... && cd ..
 
 Expected: all three PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add internal/fences/renderer.go container_test.go
+git add internal/fences/renderer.go container.go container_test.go
 git commit -m "$(cat <<'EOF'
-fix: drop the elem-nav element switch
+feat: add a nav container kind, and let a container be labelled
 
 The vendored renderer turned a container into <nav> when its class matched
-elem-nav. md2html documents no such feature and nothing in the repo uses
-it; deriving an element from a class name is surprising on its own, and it
-leaked: fenceDivs collects only <div>, so such a container kept the
-library's internal data-fence attribute all the way into the output.
+elem-nav. Nothing documented it, nothing used it, and it silently disabled
+every shipped kind for such a container: fenceDivs collects only <div>, so
+the transform skipped it entirely and the library's internal data-fence
+attribute reached the output.
 
-Every container is a div again, and the leak has nowhere to hide.
+nav becomes an ordinary kind instead. The renderer always emits a div and
+the element is changed afterwards, by code that has already applied the kind
+and cleaned up — which is exactly what the magic class bypassed.
+
+A landmark also has to be nameable, and aria-label is in neither goldmark's
+global attribute list nor its data- escape hatch, so a container could never
+carry one. The container renderer now passes the aria- prefix too. Names
+still reach the output unescaped, so they are validated where author text
+becomes attributes rather than here.
 EOF
 )"
 ```
@@ -1473,7 +1713,15 @@ Its `## Choosing between forms` table carries the same two rows as the human gui
 
 The silent-failures section needs no new entry, and its count stays at two: this change fixes the braced-title absorption, which was never listed there, and the two that are listed — the nested fence and the unstyled braced class — are untouched.
 
-- [ ] **Step 5: Check the README**
+- [ ] **Step 5: Document the nav kind and the accessible name**
+
+`nav` joins the shipped vocabulary, so every place that lists the five kinds now lists six: `docs/authoring.md`'s Containers section, its `### Choosing between forms` table, the skill's silent-failures section (which names the set), the skill's Quick reference, and the README if it enumerates them.
+
+Say what `nav` is for and what it is not: it emits a `<nav>` landmark and adds no class, and a page with more than one landmark needs each one named — `::: nav {aria-label="Section"}`. Note that `[[toc]]` already emits `<nav class="toc">`, so a hand-written nav is usually the *second* on the page, which is exactly when the name stops being optional.
+
+Record the new attribute rule beside it: a container passes `id`, `class`, goldmark's global attribute list, and any `data-` or `aria-` name. Anything else — an event handler, most obviously — is dropped, and an attribute name outside `[A-Za-z][A-Za-z0-9_.:-]*` is dropped whatever its prefix.
+
+- [ ] **Step 6: Check the README**
 
 ```bash
 grep -n "goldmark-fences\|fenced div\|container" README.md
@@ -1481,7 +1729,7 @@ grep -n "goldmark-fences\|fenced div\|container" README.md
 
 Fix any dependency list that still names the external package, and any container description that repeats the title restriction.
 
-- [ ] **Step 6: Verify the docs render**
+- [ ] **Step 7: Verify the docs render**
 
 ```bash
 go run ./cmd/md2html docs/ -o /tmp/fence-docs
@@ -1489,7 +1737,7 @@ go run ./cmd/md2html docs/ -o /tmp/fence-docs
 
 Expected: `0 warning(s)`. A warning here means a doc now contains a container spelling that does not parse.
 
-- [ ] **Step 7: Run everything one last time**
+- [ ] **Step 8: Run everything one last time**
 
 ```bash
 gofmt -l . && go vet ./... && go test ./...
@@ -1497,7 +1745,7 @@ cd e2e && go test -count=1 ./... && cd ..
 cd compat && go test -count=1 ./... && cd ..
 ```
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add docs CHANGELOG.md README.md .claude/skills/md2html-authoring/SKILL.md
@@ -1520,6 +1768,10 @@ EOF
 **Spec coverage.** §2's mechanism is what Tasks 2 to 4 replace. §3.1's cases A and B/C are covered by `TestContainerBareKindBeforeDefinitionList` and `TestContainerBareKindBeforeSetextHeading` in Task 4, case D by `TestContainerLabelFormBeforeDefinitionList` in Task 2, and the working controls E through K by the existing suites plus `TestContainerNestingStillWorks` and `TestContainerInsideCodeFenceStaysLiteral`. §4's two silent cases are covered in Task 3. §5.1 is Tasks 1 and 2, §5.2 is the grammar built across Tasks 2 to 4, §5.3 is Task 2's Steps 3 to 5, §5.4's deletions are Task 4's Step 5 and its ordering note is Step 7. §6's test plan is distributed across tasks as listed. §7's "what we keep" items are the Global Constraints.
 
 One task goes beyond the spec: Task 4 accepts `::: kind {#id .class}`, which the spec's §5.2 table did not list. It was added after the plan was first written, on the grounds that the spelling produces nonsense today — the attribute block becomes title text — so making it work breaks nothing, and it gives the undelimited form the same kind-outside-braces shape the label form already has. The spec's table was updated to match.
+
+Task 5 also grew beyond the spec. It was "drop `isNav`"; it is now "replace `elem-nav` with a `nav` kind, and let a container carry an accessible name". The reason is that dropping the magic class removes the only route from Markdown to a `<nav>`, and re-adding it as a kind is one map entry — but a landmark that cannot be named is worse than none, and `aria-label` is in neither goldmark's allowlist nor its `data-` escape hatch. The two are therefore one change, not two.
+
+That widening also surfaced a defect in this plan's own Task 2, now fixed there: routing container attributes through `parseAttrs` rather than goldmark's `ParseAttributes` would have let an attribute *name* carrying a quote reach the output unescaped, since `RenderAttributes` writes names verbatim and exempts any `data-` prefix. `safeAttrName` and its tests close that before Task 5 widens the prefix set further.
 
 One item in the spec has no task by design: it says the fix "dissolves the whole family" including the title forms, which Task 4 does, but the spec does not mention `isNav` or the `data-fence` leak — those were found while writing this plan and are Task 5, declared as a deviation above.
 

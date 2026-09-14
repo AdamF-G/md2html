@@ -235,6 +235,39 @@ standards alignment spec: the note explaining why the ordering is
 load-bearing for two reasons becomes a note on why it is load-bearing for
 neither.
 
+## 5.5 Two things the rewrite makes possible
+
+Neither is fence-line capture, and both were found while planning it. They
+are recorded here because they land in the same change.
+
+**`nav` becomes a shipped kind.** The vendored renderer emits `<nav>` when a
+container's class matches `elem-nav` — upstream behaviour, undocumented
+here, used nowhere. It is not merely surplus: `fenceDivs` collects only
+`<div>`, so `::: {.aside .elem-nav}` skips the container transform entirely,
+losing the `<details>` and the summary and leaking the internal `data-fence`
+attribute into the output. Replacing the magic class with an ordinary kind
+fixes that by construction, because the renderer then always emits a `<div>`
+and the element is changed afterwards, by code that has already applied the
+kind and cleaned up.
+
+**A container can carry an accessible name.** `aria-label` appears in
+neither goldmark's global attribute list nor the `data-` prefix its renderer
+exempts, so it is dropped silently today. A landmark that cannot be named is
+noise in a screen reader's landmark list rather than help — and since
+`[[toc]]` already emits `<nav class="toc">`, a hand-written nav is usually
+the second on the page, which is precisely when a name stops being optional.
+The container renderer passes the `aria-` prefix too.
+
+> [!WARNING]
+> Attribute *names* reach the output unescaped — goldmark writes them
+> verbatim and escapes only values. `attrTokens` accepts any byte in a key
+> except whitespace and `=`, so `data-x"onmouseover="alert(1)` parses as one
+> key. goldmark's own `ParseAttributes` rejects such a block today, which is
+> the only reason it is not already reachable; moving container attributes
+> onto this package's more permissive parser removes that accident. Names
+> must therefore be validated where author text becomes attributes, before
+> either prefix is honoured.
+
 ## 6. Test plan
 
 Test-driven, and the three existing suites are the behaviour-preservation
