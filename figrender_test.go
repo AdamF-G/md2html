@@ -349,3 +349,58 @@ func TestFigLeafMarkupUnchangedWithoutModifiers(t *testing.T) {
 		}
 	}
 }
+
+// The panel-metadata rule: a panel's title, accent and footnote all live on
+// the group inside it, so .fig-panel stays a bare weight carrier.
+func TestFigGroupCarriesPanelMetadata(t *testing.T) {
+	src := "```fig\nlayout: cols\nitems:\n" +
+		"  - group: Before\n    accent: true\n    foot: the usual pattern\n" +
+		"    items:\n      - box: Handler\n" +
+		"  - group: After\n    items:\n      - box: Handler\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-group fig-accent">`,
+		`<div class="fig-group-title">Before</div>`,
+		`<div class="fig-group-foot">the usual pattern</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	// The foot is a trailing line, so it must follow the group's items.
+	if strings.Index(out, `<div class="fig-group-foot">`) < strings.Index(out, `>Handler<`) {
+		t.Errorf("the foot should come after the group's items:\n%s", out)
+	}
+}
+
+// A lane is a list with nowhere to hang a flag. A lane that needs one is a
+// group — the same rule as the panel case, and the reason lanes keeps its
+// shipped shape rather than being respelled as a list of maps.
+func TestFigLaneAccentRidesOnAGroup(t *testing.T) {
+	src := "```fig\nitems:\n  - lanes:\n" +
+		"      - - group: new\n          accent: true\n          items:\n            - box: A\n" +
+		"      - - box: B\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if !strings.Contains(out, `<div class="fig-lane"><div class="fig-group fig-accent">`) {
+		t.Errorf("an accented lane should be a group inside the lane:\n%s", out)
+	}
+}
+
+// A group with neither modifier is unchanged, the same promise Task 1 made
+// for the leaves.
+func TestFigGroupMarkupUnchangedWithoutModifiers(t *testing.T) {
+	out, _ := figConvert(t,
+		"```fig\nitems:\n  - group: Server\n    items:\n      - box: A\n```\n")
+	want := `<div class="fig-group"><div class="fig-group-title">Server</div><div class="fig-box">A</div></div>`
+	if !strings.Contains(out, want) {
+		t.Errorf("missing unchanged markup %q in:\n%s", want, out)
+	}
+}

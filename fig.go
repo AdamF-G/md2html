@@ -60,6 +60,7 @@ type figItem struct {
 	// same thing and render the same way.
 	Note   string `yaml:"note"`
 	Accent bool   `yaml:"accent"`
+	Foot   string `yaml:"foot"`
 }
 
 // kinds reports every kind key set on an item. Exactly one is legal; the
@@ -131,6 +132,9 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 		}
 		if it.Accent && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
 			return fmt.Errorf("%s carries accent, which only a box, result, rail or group takes", at)
+		}
+		if it.Foot != "" && it.Group == nil {
+			return fmt.Errorf("%s carries foot, which only a group takes", at)
 		}
 		if it.Items != nil && it.Group == nil {
 			return fmt.Errorf("%s carries items, which only a group takes", at)

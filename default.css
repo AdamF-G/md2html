@@ -411,6 +411,26 @@ figure.fig > figcaption {
   letter-spacing: 0.04em;
 }
 
+/* A trailing line under a group's items, distinct from them: the panel
+   footnote. Quieter than the content, but not as quiet as the uppercase
+   title above it. */
+.fig-group-foot {
+  margin-top: 0.1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* A group's note glosses its title, so it sits on the title line instead of
+   breaking below it the way a box's note does. The title is uppercase and
+   letter-spaced; a gloss is prose, so both are reset rather than inherited. */
+.fig-group-title .fig-note {
+  display: inline;
+  margin-top: 0;
+  margin-left: 0.4rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .fig-boundary {
   color: var(--muted);
   font-size: 0.8rem;

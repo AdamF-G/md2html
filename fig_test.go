@@ -366,3 +366,42 @@ func TestFigModifierPlacementRejected(t *testing.T) {
 		})
 	}
 }
+
+// note and foot are different positions on a group, not two spellings of
+// one: the note glosses the title and precedes the items, the foot follows
+// them. A test that only checked both were present would pass with them
+// swapped.
+func TestFigGroupNoteGlossesTheTitle(t *testing.T) {
+	src := "```fig\nitems:\n  - group: retry loop\n    note: N attempts, exponential backoff\n" +
+		"    foot: the only caller\n    items:\n      - box: request\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	want := `<div class="fig-group-title">retry loop<span class="fig-note">N attempts, exponential backoff</span></div>`
+	if !strings.Contains(out, want) {
+		t.Errorf("missing %q in:\n%s", want, out)
+	}
+	if strings.Index(out, `class="fig-note"`) > strings.Index(out, ">request<") {
+		t.Errorf("a group's note must precede its items:\n%s", out)
+	}
+	if strings.Index(out, `<div class="fig-group-foot">`) < strings.Index(out, ">request<") {
+		t.Errorf("a group's foot must follow its items:\n%s", out)
+	}
+}
+
+func TestFigFootRejectedOffAGroup(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig\nitems:\n  - box: A\n    foot: trailing\n```\n")
+
+	if !strings.Contains(out, `class="language-fig"`) {
+		t.Errorf("want a code-block fallback, got:\n%s", out)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 warning, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], "carries foot, which only a group takes") {
+		t.Errorf("warning %q should name the rule", warnings[0])
+	}
+}

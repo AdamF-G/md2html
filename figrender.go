@@ -152,8 +152,26 @@ func (r *figRenderer) item(it figItem) string {
 		b.WriteString(`</dl>`)
 		return b.String()
 	case it.Group != nil:
-		return `<div class="fig-group"><div class="fig-group-title">` +
-			r.inline(*it.Group) + `</div>` + r.items(it.Items) + `</div>`
+		// A panel or lane that needs a title, an accent, a gloss or a
+		// footnote is a group; this is the only place any of the four is
+		// rendered, so .fig-panel stays a bare weight carrier.
+		class := "fig-group"
+		if it.Accent {
+			class += " fig-accent"
+		}
+		title := r.inline(*it.Group)
+		if it.Note != "" {
+			// Inside the title line, before the items. A note glosses the
+			// label it follows, so the reader must meet it before the
+			// content it explains; foot is the slot that comes after.
+			title += `<span class="fig-note">` + r.inline(it.Note) + `</span>`
+		}
+		s := `<div class="` + class + `"><div class="fig-group-title">` +
+			title + `</div>` + r.items(it.Items)
+		if it.Foot != "" {
+			s += `<div class="fig-group-foot">` + r.inline(it.Foot) + `</div>`
+		}
+		return s + `</div>`
 	case it.Chain != nil:
 		return `<div class="fig-chain">` + r.items(it.Chain) + `</div>`
 	case it.Lanes != nil:
