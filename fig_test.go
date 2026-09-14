@@ -11,6 +11,7 @@ import (
 func figConvert(t *testing.T, src string) (out string, warnings []string) {
 	t.Helper()
 	got, err := Convert([]byte(src), Options{
+		CSS:  "/**/",
 		Warn: func(msg string) { warnings = append(warnings, msg) },
 	})
 	if err != nil {
