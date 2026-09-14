@@ -120,6 +120,30 @@ func TestParseFigTreeBlankLinesAndEmpty(t *testing.T) {
 	}
 }
 
+// When a tree body's first line is already indented, that indent becomes
+// level 0 rather than a child of an implicit root at column 0 — there is no
+// such root. This is surprising enough that someone could "fix" it into a
+// bug, so pin it: a body indented throughout parses as two roots, and a
+// later line back at column 0 is a fault, not a dedent to a root level.
+func TestParseFigTreeFirstLineSetsLevelZero(t *testing.T) {
+	got, err := parseFigTree("  a\n  b\n")
+	if err != nil {
+		t.Fatalf("parseFigTree: %v", err)
+	}
+	want := []figTreeNode{{Label: "a"}, {Label: "b"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("an indented-throughout body should parse as two roots: got %+v, want %+v", got, want)
+	}
+
+	_, err = parseFigTree("  a\nb\n")
+	if err == nil {
+		t.Fatal("want a fault when a later line dedents past the first line's level")
+	}
+	if !strings.Contains(err.Error(), "line 2: indented to no enclosing level") {
+		t.Errorf("error %q should say line 2 has no enclosing level", err)
+	}
+}
+
 func TestParseFigTreeFaults(t *testing.T) {
 	cases := []struct{ name, in, wantMsg string }{
 		{

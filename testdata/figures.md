@@ -118,11 +118,13 @@ items:
 caption: Notes and accents
 items:
   - box: Client
+    accent: true
     note: retries twice, then gives up
   - result: 200 OK
     accent: true
     note: after one retry
   - rail: Phase one
+    accent: true
     note: everything below ships together
 ```
 

@@ -92,6 +92,12 @@ func (it figItem) kinds() []string {
 	return out
 }
 
+// takesLabelModifier reports whether it has a label to hang note or accent
+// beside: a box, result and rail have their value; a group has its title.
+func (it figItem) takesLabelModifier() bool {
+	return it.Box != nil || it.Result != nil || it.Rail != nil || it.Group != nil
+}
+
 // validateFig enforces what the decoder cannot see. KnownFields rejects a
 // key no kind defines, but one struct carries every kind's fields, so only
 // validation knows whether a key is legal *here*: that an item names one
@@ -131,10 +137,10 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 		// note and accent share a predicate: both are legal on any kind
 		// that has a label to hang them beside. A group's label is its
 		// title, so a group takes both; Task 2 renders them.
-		if it.Note != "" && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
+		if it.Note != "" && !it.takesLabelModifier() {
 			return fmt.Errorf("%s carries note, which only a box, result, rail or group takes", at)
 		}
-		if it.Accent && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
+		if it.Accent && !it.takesLabelModifier() {
 			return fmt.Errorf("%s carries accent, which only a box, result, rail or group takes", at)
 		}
 		if it.Foot != "" && it.Group == nil {

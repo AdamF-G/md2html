@@ -628,6 +628,9 @@ Some kinds take **modifiers** alongside their value:
 
 A modifier used anywhere else is an error, not a silent no-op.
 
+`detail` is not in that table because it belongs to a `stats` entry, not
+to an item kind: it is a third, quieter line beneath a stat tile's label.
+
 `note` and `foot` are different positions on a `group`, not alternatives. A
 `note` follows the title and glosses it — the reader meets it before the
 group's items. A `foot` follows those items. A group may carry both.

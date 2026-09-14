@@ -393,10 +393,18 @@ func TestFigGroupNoteGlossesTheTitle(t *testing.T) {
 	if !strings.Contains(out, want) {
 		t.Errorf("missing %q in:\n%s", want, out)
 	}
-	if strings.Index(out, `class="fig-note"`) > strings.Index(out, ">request<") {
+	noteIdx, requestIdx := strings.Index(out, `class="fig-note"`), strings.Index(out, ">request<")
+	if noteIdx < 0 || requestIdx < 0 {
+		t.Fatalf("missing an anchor for the ordering check: note=%d request=%d in:\n%s", noteIdx, requestIdx, out)
+	}
+	if noteIdx > requestIdx {
 		t.Errorf("a group's note must precede its items:\n%s", out)
 	}
-	if strings.Index(out, `<div class="fig-group-foot">`) < strings.Index(out, ">request<") {
+	footIdx := strings.Index(out, `<div class="fig-group-foot">`)
+	if footIdx < 0 {
+		t.Fatalf("missing an anchor for the ordering check: foot=%d in:\n%s", footIdx, out)
+	}
+	if footIdx < requestIdx {
 		t.Errorf("a group's foot must follow its items:\n%s", out)
 	}
 }

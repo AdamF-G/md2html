@@ -372,7 +372,11 @@ func TestFigGroupCarriesPanelMetadata(t *testing.T) {
 		}
 	}
 	// The foot is a trailing line, so it must follow the group's items.
-	if strings.Index(out, `<div class="fig-group-foot">`) < strings.Index(out, `>Handler<`) {
+	footIdx, handlerIdx := strings.Index(out, `<div class="fig-group-foot">`), strings.Index(out, `>Handler<`)
+	if footIdx < 0 || handlerIdx < 0 {
+		t.Fatalf("missing an anchor for the ordering check: foot=%d handler=%d in:\n%s", footIdx, handlerIdx, out)
+	}
+	if footIdx < handlerIdx {
 		t.Errorf("the foot should come after the group's items:\n%s", out)
 	}
 }
