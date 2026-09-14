@@ -47,6 +47,7 @@ type figItem struct {
 	Result *string `yaml:"result"`
 	Rail   *string `yaml:"rail"`
 	Group  *string `yaml:"group"`
+	Tree   *string `yaml:"tree"`
 
 	Stats []figStat   `yaml:"stats"`
 	Defs  []figDef    `yaml:"defs"`
@@ -78,6 +79,7 @@ func (it figItem) kinds() []string {
 		{"result", it.Result != nil},
 		{"rail", it.Rail != nil},
 		{"group", it.Group != nil},
+		{"tree", it.Tree != nil},
 		{"stats", it.Stats != nil},
 		{"defs", it.Defs != nil},
 		{"chain", it.Chain != nil},
@@ -137,6 +139,14 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 		}
 		if it.Foot != "" && it.Group == nil {
 			return fmt.Errorf("%s carries foot, which only a group takes", at)
+		}
+		// Parsed here so a malformed tree degrades the fence before any
+		// markup is written. The renderer parses it again; see the comment
+		// on the Tree case in figrender.go.
+		if it.Tree != nil {
+			if _, err := parseFigTree(*it.Tree); err != nil {
+				return fmt.Errorf("%s.tree %w", at, err)
+			}
 		}
 		if it.Items != nil && it.Group == nil {
 			return fmt.Errorf("%s carries items, which only a group takes", at)

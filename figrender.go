@@ -111,6 +111,37 @@ func (r *figRenderer) items(list []figItem) string {
 	return b.String()
 }
 
+// treeNodes renders a node forest as nested lists. Real <ul>/<li> rather
+// than a pile of divs, following the precedent that defs emits a real <dl>:
+// a tree is a list, and a screen reader should be able to walk it as one.
+func (r *figRenderer) treeNodes(nodes []figTreeNode) string {
+	var b strings.Builder
+	for _, n := range nodes {
+		b.WriteString("<li")
+		switch {
+		case n.Accent:
+			b.WriteString(` class="fig-accent"`)
+		case n.Muted:
+			b.WriteString(` class="fig-muted"`)
+		}
+		b.WriteString(`><span class="fig-tree-label">`)
+		b.WriteString(r.inline(n.Label))
+		b.WriteString(`</span>`)
+		if n.Note != "" {
+			b.WriteString(`<span class="fig-note">`)
+			b.WriteString(r.inline(n.Note))
+			b.WriteString(`</span>`)
+		}
+		if len(n.Kids) > 0 {
+			b.WriteString("<ul>")
+			b.WriteString(r.treeNodes(n.Kids))
+			b.WriteString("</ul>")
+		}
+		b.WriteString("</li>")
+	}
+	return b.String()
+}
+
 // item renders one item. Kinds arrive here already validated, so an item
 // that matches nothing renders as nothing rather than as a diagnostic.
 func (r *figRenderer) item(it figItem) string {
@@ -178,6 +209,13 @@ func (r *figRenderer) item(it figItem) string {
 			s += `<div class="fig-group-foot">` + r.inline(it.Foot) + `</div>`
 		}
 		return s + `</div>`
+	case it.Tree != nil:
+		// validateFig has already parsed this body and rejected any fault,
+		// so the error cannot fire here. Parsing twice keeps figItem a pure
+		// decode target rather than a struct carrying derived state, which
+		// is worth more than the microseconds.
+		nodes, _ := parseFigTree(*it.Tree)
+		return `<ul class="fig-tree">` + r.treeNodes(nodes) + `</ul>`
 	case it.Chain != nil:
 		return `<div class="fig-chain">` + r.items(it.Chain) + `</div>`
 	case it.Lanes != nil:

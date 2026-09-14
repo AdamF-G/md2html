@@ -417,6 +417,36 @@ figure.fig-wide {
 .fig-defs dd { margin: 0.15rem 0 0.5rem; color: var(--muted); }
 .fig-defs dd:last-child { margin-bottom: 0; }
 
+/* A tree is a real nested list, so the list semantics are reset visually
+   and the nesting is carried by indentation alone — the same thing the
+   source says. Monospace because the content is paths. */
+.fig-tree, .fig-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1rem;
+}
+.fig-tree {
+  padding-left: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+/* A tree's note sits beside its label rather than under it: a file listing
+   reads as one line per node, and a wrapped note would break the column of
+   names the indentation exists to line up. */
+.fig-tree .fig-note {
+  display: inline;
+  margin-top: 0;
+  margin-left: 0.5rem;
+}
+/* The accent ring is for boxes; on a tree line it is a colour, because a
+   ring around a line of text in a listing is noise. */
+.fig-tree > li.fig-accent, .fig-tree li.fig-accent {
+  box-shadow: none;
+  color: var(--accent);
+}
+.fig-muted { color: var(--muted); }
+
 .fig-group {
   border: 1px dashed var(--rule);
   border-radius: 4px;

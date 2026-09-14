@@ -422,3 +422,73 @@ func TestFigStatDetail(t *testing.T) {
 		t.Errorf("a tile without a detail should be unchanged:\n%s", out)
 	}
 }
+
+func TestFigTreeRenders(t *testing.T) {
+	src := "```fig\nitems:\n  - tree: |\n" +
+		"      fig.go -- the fence branch\n" +
+		"        * figtree.go -- the line grammar\n" +
+		"      - testdata/ -- not shipped\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	want := `<ul class="fig-tree">` +
+		`<li><span class="fig-tree-label">fig.go</span>` +
+		`<span class="fig-note">the fence branch</span>` +
+		`<ul><li class="fig-accent"><span class="fig-tree-label">figtree.go</span>` +
+		`<span class="fig-note">the line grammar</span></li></ul></li>` +
+		`<li class="fig-muted"><span class="fig-tree-label">testdata/</span>` +
+		`<span class="fig-note">not shipped</span></li></ul>`
+	if !strings.Contains(out, want) {
+		t.Errorf("want\n%s\ngot\n%s", want, out)
+	}
+}
+
+// A tree's label and note are author text like any other field, so both go
+// through the inline pass — which is also what removes the backslash from
+// an escaped sigil.
+func TestFigTreeTakesInlineMarkdown(t *testing.T) {
+	src := "```fig\nitems:\n  - tree: |\n" +
+		"      `fig.go` -- see [design](./design.md)\n" +
+		"      \\* not accented\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if !strings.Contains(out, `<span class="fig-tree-label"><code>fig.go</code></span>`) {
+		t.Errorf("a tree label should render inline Markdown:\n%s", out)
+	}
+	if !strings.Contains(out, `<a href="./design.md">design</a>`) {
+		t.Errorf("a tree note should render a link:\n%s", out)
+	}
+	if !strings.Contains(out, `<span class="fig-tree-label">* not accented</span>`) {
+		t.Errorf("an escaped marker should render as a literal asterisk:\n%s", out)
+	}
+}
+
+// A link that appears only in a tree note must reach the crawler, the same
+// as one in a box label.
+func TestFigTreeLinksAreExtracted(t *testing.T) {
+	out, _ := figConvert(t,
+		"```fig\nitems:\n  - tree: |\n      api -- see [ref](./api.md)\n```\n")
+	root, err := parseFragment([]byte(out))
+	if err != nil {
+		t.Fatalf("parseFragment: %v", err)
+	}
+	got := kindsOf(ExtractLinks(root, "/docs"))
+	if k, ok := got["./api.md"]; !ok || k != LinkDoc {
+		t.Errorf("ExtractLinks should return ./api.md as a document link, got %v", got)
+	}
+}
+
+func TestFigEmptyTreeRendersAnEmptyList(t *testing.T) {
+	out, warnings := figConvert(t, "```fig\nitems:\n  - tree: \"\"\n```\n")
+	if len(warnings) != 0 {
+		t.Fatalf("an empty tree is a legitimate spacer, got %v", warnings)
+	}
+	if !strings.Contains(out, `<ul class="fig-tree"></ul>`) {
+		t.Errorf("want an empty list, got:\n%s", out)
+	}
+}

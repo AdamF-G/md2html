@@ -438,3 +438,48 @@ func TestFigWideRejectedOnAnItem(t *testing.T) {
 		t.Errorf("warning %q should name the unknown key", warnings[0])
 	}
 }
+
+// A malformed tree degrades the whole fence, like every other fig fault,
+// and the message carries both the item path and the line inside the tree.
+func TestFigTreeFaultDegradesWithAPath(t *testing.T) {
+	src := "```fig\nitems:\n  - box: A\n  - tree: |\n      a\n          b\n        c\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if !strings.Contains(out, `class="language-fig"`) {
+		t.Errorf("want a code-block fallback, got:\n%s", out)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("want exactly 1 warning, got %v", warnings)
+	}
+	if !strings.Contains(warnings[0], "items[1].tree line 3: indented to no enclosing level") {
+		t.Errorf("warning %q should name the item path and the tree's own line", warnings[0])
+	}
+}
+
+// tree is a kind, so it collides with another kind on the same item and
+// takes none of the leaf modifiers.
+func TestFigTreeIsAKind(t *testing.T) {
+	cases := []struct{ name, src, wantMsg string }{
+		{
+			name:    "two kinds",
+			src:     "```fig\nitems:\n  - tree: \"a\"\n    box: B\n```\n",
+			wantMsg: "names 2 kinds (box, tree)",
+		},
+		{
+			name:    "note on a tree",
+			src:     "```fig\nitems:\n  - tree: \"a\"\n    note: why\n```\n",
+			wantMsg: "carries note, which only a box, result, rail or group takes",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, warnings := figConvert(t, c.src)
+			if len(warnings) != 1 {
+				t.Fatalf("want exactly 1 warning, got %v", warnings)
+			}
+			if !strings.Contains(warnings[0], c.wantMsg) {
+				t.Errorf("warning %q should contain %q", warnings[0], c.wantMsg)
+			}
+		})
+	}
+}
