@@ -35,7 +35,7 @@
 | `internal/fences/{ast,extend,parser,renderer,gen_random_string}.go` | Vendored fenced-div extension. Owns fence detection, nesting, the fence line, and the title block node. Knows nothing about md2html's container vocabulary. |
 | `internal/fences/doc.go` | Provenance: upstream, version, and what was changed. |
 | `internal/fences/LICENSE` | Verbatim upstream MIT licence. |
-| `fenceinfo.go` (new) | `parseFenceInfo` — md2html's fence-line grammar, and the only place that knows the five spellings. Supplies the `SplitInfo` hook. |
+| `fenceinfo.go` (new) | `parseFenceInfo` — md2html's fence-line grammar, and the only place that knows the six spellings. Supplies the `SplitInfo` hook. |
 | `fenceinfo_test.go` (new) | Unit tests for that grammar, string in / struct out. |
 | `container.go` | Shrinks. Maps kind to classes, promotes a title into `<summary>`, warns. Loses all first-paragraph mining. |
 | `md2html.go:100-108` | Import path change; `fences.Extender` gains the hook. |
@@ -929,7 +929,7 @@ The last two spellings — `::: kind` and `::: kind Title` — move to the parse
 
 **Interfaces:**
 - Consumes: everything from Tasks 2 and 3.
-- Produces: `applyKind` is deleted; `applyKindWithTitle(div *html.Node, k containerKind, p *html.Node, title []*html.Node)` becomes `applyKind(div *html.Node, k containerKind, title []*html.Node)`.
+- Produces: `trailingBlock(s string) (start int, content string, ok bool)` in `fenceinfo.go`. `applyKind` is deleted; `applyKindWithTitle(div *html.Node, k containerKind, p *html.Node, title []*html.Node)` becomes `applyKind(div *html.Node, k containerKind, title []*html.Node)`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -961,6 +961,52 @@ func TestParseFenceInfoBareKindWithTitle(t *testing.T) {
 	}
 	if s := title(info, got); s != "Why this matters" {
 		t.Errorf("title = %q, want %q", s, "Why this matters")
+	}
+}
+
+// The kind outside the braces, with a real attribute block. Today this
+// spelling puts the literal braces in the title; nothing can be relying on
+// that, so making it work breaks nothing.
+func TestParseFenceInfoKindThenAttrs(t *testing.T) {
+	const info = "aside {#id .compact}"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "aside" {
+		t.Errorf("kind = %q, want %q", got.Kind, "aside")
+	}
+	if s := title(info, got); s != "" {
+		t.Errorf("title = %q, want none — the braces are attributes", s)
+	}
+	var id, class string
+	for _, a := range got.Attrs {
+		switch a.Name {
+		case "id":
+			id = a.Value
+		case "class":
+			class = a.Value
+		}
+	}
+	if id != "id" || class != "compact" {
+		t.Errorf("id = %q, class = %q; want id / compact", id, class)
+	}
+}
+
+func TestParseFenceInfoKindThenTitleThenAttrs(t *testing.T) {
+	const info = "aside Why this matters {#w}"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "aside" {
+		t.Errorf("kind = %q, want %q", got.Kind, "aside")
+	}
+	if s := title(info, got); s != "Why this matters" {
+		t.Errorf("title = %q, want %q", s, "Why this matters")
+	}
+	if len(got.Attrs) != 1 || got.Attrs[0].Name != "id" || got.Attrs[0].Value != "w" {
+		t.Errorf("attrs = %v, want id=w", got.Attrs)
 	}
 }
 ```
@@ -1010,6 +1056,34 @@ func TestContainerBareKindWithTitleUnchanged(t *testing.T) {
 	got := convert(t, "::: aside Why this matters\nBecause.\n:::\n", nil)
 	if !strings.Contains(got, "<summary>Why this matters</summary>") {
 		t.Errorf("title lost\ngot: %s", got)
+	}
+}
+
+// The kind outside the braces with a real attribute block. Today the braces
+// land in the summary as literal text.
+func TestContainerKindThenAttrs(t *testing.T) {
+	got := convert(t, "::: aside {#w .compact}\nbody\n:::\n", nil)
+	if !strings.Contains(got, `id="w"`) {
+		t.Errorf("id not applied\ngot: %s", got)
+	}
+	if !strings.Contains(got, "compact") {
+		t.Errorf("class not applied\ngot: %s", got)
+	}
+	if strings.Contains(got, "{#w") {
+		t.Errorf("attribute block left as text\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<summary>Aside</summary>") {
+		t.Errorf("titleless collapsible lost its fallback\ngot: %s", got)
+	}
+}
+
+func TestContainerKindThenTitleThenAttrs(t *testing.T) {
+	got := convert(t, "::: aside Why this matters {#w}\nbody\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("title lost\ngot: %s", got)
+	}
+	if !strings.Contains(got, `id="w"`) {
+		t.Errorf("id not applied\ngot: %s", got)
 	}
 }
 
@@ -1076,20 +1150,56 @@ func parseFenceInfo(info string) (fenceInfoResult, bool) {
 		}
 	}
 
-	// Bare form: a kind word, optionally followed by an undelimited title
-	// running to the end of the line.
-	word := info
-	if i := strings.IndexAny(info, " \t"); i >= 0 {
-		word = info[:i]
-		if t := strings.TrimLeft(info[i:], " \t"); t != "" {
-			out.TitleStart = len(info) - len(t)
-			out.TitleEnd = len(info)
+	// Bare form: a kind word, then an optional undelimited title, then an
+	// optional trailing attribute block.
+	body := info
+	if start, content, ok := trailingBlock(info); ok && start > 0 {
+		out.Attrs = fenceAttrs(content)
+		body = strings.TrimRight(info[:start], " \t")
+	}
+	word := body
+	if i := strings.IndexAny(body, " \t"); i >= 0 {
+		word = body[:i]
+		if t := strings.TrimLeft(body[i:], " \t"); t != "" {
+			out.TitleStart = len(body) - len(t)
+			out.TitleEnd = len(body)
 		}
 	}
 	out.Kind = word
 	return out, true
 }
 ```
+
+`body` is a prefix of `info`, so offsets computed against it are valid
+offsets into `info` — which is what the parser resolves against the source.
+
+Add the helper:
+
+```go
+// trailingBlock locates a trailing {...} attribute block, returning the index
+// of its opening brace along with its contents.
+//
+// The decision of what counts as a block is splitBraced's, so a container's
+// fence line, a fenced code block's info string and a bracketed span cannot
+// disagree about it. Only the position is computed here, and by length rather
+// than by a second scan: the block is the final "{" + content + "}" of the
+// trimmed string, so its brace sits len(content)+2 bytes from the end.
+func trailingBlock(s string) (start int, content string, ok bool) {
+	_, content, ok = splitBraced(s)
+	if !ok {
+		return -1, "", false
+	}
+	end := len(strings.TrimRight(s, " \t"))
+	return end - len(content) - 2, content, true
+}
+```
+
+This is what makes `::: aside {#id .compact}` mean what it looks like. It
+also puts one rule everywhere — an attribute block is trailing — which is
+already how the label form and fenced code captions read one. The cost is
+that a title ending in a brace group, `::: card The {x}`, reads those as
+attributes; the same trade-off the label form and code captions already
+accept.
 
 Note what this does to the unclosed-bracket case from Task 2: `aside[Why` now reaches the bare branch and yields `Kind: "aside[Why"`, which is what `TestParseFenceInfoUnclosedBracketIsNotALabel` already asserts, except that it now reports true rather than false. Update that test's name and body to assert the kind and `ok == true`:
 
@@ -1322,7 +1432,9 @@ EOF
 
 - [ ] **Step 1: Correct the authoring reference**
 
-In `docs/authoring.md`, find the container section and the claim that the label form is the only spelling that can carry both a title and attributes. Both halves of that are now wrong: every form takes a title, and the braced form takes attributes and a title together. State the four spellings and what each is for, and say that a title is inline Markdown.
+In `docs/authoring.md`, find the container section and the claim that the label form is the only spelling that can carry both a title and attributes. Both halves of that are now wrong: every form takes a title, and the braced form takes attributes and a title together. State the spellings and what each is for, and say that a title is inline Markdown.
+
+Add the spelling Task 4 made real — `::: kind {#id .class}`, the kind outside the braces — and say why the braced form's first class still selects the kind: it is the bridge that makes a document written for Pandoc's `fenced_divs` pick up md2html's styling instead of an unclassed div. The positional rule at `docs/authoring.md:171` stays true and stays documented; it is no longer the only way to combine a kind with attributes.
 
 Check the Traps section too. Nothing about the definition-list or setext interaction belongs there — it is fixed, not documented — but if the branch added anything about needing a blank line after a fence, remove it.
 
@@ -1400,6 +1512,8 @@ EOF
 ## Self-Review
 
 **Spec coverage.** §2's mechanism is what Tasks 2 to 4 replace. §3.1's cases A and B/C are covered by `TestContainerBareKindBeforeDefinitionList` and `TestContainerBareKindBeforeSetextHeading` in Task 4, case D by `TestContainerLabelFormBeforeDefinitionList` in Task 2, and the working controls E through K by the existing suites plus `TestContainerNestingStillWorks` and `TestContainerInsideCodeFenceStaysLiteral`. §4's two silent cases are covered in Task 3. §5.1 is Tasks 1 and 2, §5.2 is the grammar built across Tasks 2 to 4, §5.3 is Task 2's Steps 3 to 5, §5.4's deletions are Task 4's Step 5 and its ordering note is Step 7. §6's test plan is distributed across tasks as listed. §7's "what we keep" items are the Global Constraints.
+
+One task goes beyond the spec: Task 4 accepts `::: kind {#id .class}`, which the spec's §5.2 table did not list. It was added after the plan was first written, on the grounds that the spelling produces nonsense today — the attribute block becomes title text — so making it work breaks nothing, and it gives the undelimited form the same kind-outside-braces shape the label form already has. The spec's table was updated to match.
 
 One item in the spec has no task by design: it says the fix "dissolves the whole family" including the title forms, which Task 4 does, but the spec does not mention `isNav` or the `data-fence` leak — those were found while writing this plan and are Task 5, declared as a deviation above.
 

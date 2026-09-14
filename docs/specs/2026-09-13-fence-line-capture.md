@@ -181,6 +181,22 @@ attributes, covering all five spellings in one place:
 | `card Why this matters` | `card` | `Why this matters` | — |
 | `card[Why]{#w .compact}` | `card` | `Why` | id, classes |
 | `{.card} Why` | `card` | `Why` | classes |
+| `card {#w .compact}` | `card` | — | id, classes |
+| `card Why {#w}` | `card` | `Why` | id |
+
+The last two rows are new syntax rather than a repair. Today the kind
+outside the braces puts the attribute block in the title — `::: aside {#id}`
+renders `<summary>{#id}</summary>` — so nothing can depend on the current
+behaviour, and the undelimited form gains the shape the label form already
+has. An attribute block is then trailing everywhere in this dialect, which
+is how the label form and fenced code captions already read one.
+
+The braced form's first class keeps selecting the kind. That rule is the
+bridge which makes a document written for Pandoc's `fenced_divs` pick up
+md2html's styling rather than an unclassed div, and it cannot be retired
+without changing what three shipped kinds do: `{.warning}` would fall from
+`<div class="callout callout-warning">` to `<div class="warning">`, and
+`{.aside}` and `{.example}` would stop being collapsible.
 
 Attributes go through the shared `{#id .class key=value}` parser added for
 the standards alignment work — the same one bracketed spans and fenced code
