@@ -274,13 +274,18 @@ figure.fig > figcaption {
 }
 
 /* A figure that breaks out of the measure column.
-   The width is clamped to the viewport, so under --fragment — where there
-   is no measure column to break out of — it degrades to no visible change
-   rather than to a figure wider than its host. That clamp is the whole
-   mechanism; there is no second code path.
-   The breakout distance is a custom property so a caller's --css
-   replacement can reinterpret it, as --fig-weight already is. */
-figure.fig-wide {
+   Scoped to `main >` so the breakout only applies inside the page's
+   measure column: inside a container like a card, or under --fragment
+   where there is no <main> at all, the selector simply doesn't match and
+   the figure renders as an ordinary figure instead of overhanging its
+   host's padding or running off an off-centre page. The width is also
+   clamped to the viewport so the figure itself never exceeds the screen.
+   The breakout distance is a custom property for readability within this
+   rule, not an extension hook: unlike --fig-weight, which the renderer
+   emits into the markup for any stylesheet to read, --fig-breakout is
+   declared inside this very rule, so a replacement stylesheet that
+   deletes the rule loses the property along with it. */
+main > figure.fig-wide {
   --fig-breakout: 4rem;
   width: min(calc(100% + 2 * var(--fig-breakout)), calc(100vw - 2rem));
   position: relative;
@@ -498,5 +503,5 @@ figure.fig-wide {
   .fig-cols > .fig-panel > .fig-arrow::before,
   .fig-split > .fig-panel > .fig-arrow::before,
   .fig-chain > .fig-arrow::before { content: "\2193"; }
-  figure.fig-wide { width: 100%; left: auto; translate: none; }
+  main > figure.fig-wide { width: 100%; left: auto; translate: none; }
 }

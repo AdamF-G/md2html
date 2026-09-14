@@ -20,6 +20,7 @@ import (
 	"image/png"
 	"io/fs"
 	"log"
+	"math"
 	"mime"
 	"net/http"
 	"net/http/httptest"
@@ -1187,10 +1188,10 @@ func TestBrowserFigWideBreaksOutOfTheMeasure(t *testing.T) {
 	ctx := newBrowserCtx(t)
 
 	const widths = `(() => {
-		const w = document.querySelector("figure.fig-wide").getBoundingClientRect().width;
+		const wr = document.querySelector("figure.fig-wide").getBoundingClientRect();
 		const n = document.querySelector("figure.fig:not(.fig-wide)").getBoundingClientRect().width;
 		const v = document.documentElement.clientWidth;
-		return [w, n, v].join(",");
+		return [wr.width, wr.left, wr.right, n, v].join(",");
 	})()`
 
 	var wide, narrow string
@@ -1205,35 +1206,47 @@ func TestBrowserFigWideBreaksOutOfTheMeasure(t *testing.T) {
 		t.Fatalf("browser run: %v", err)
 	}
 
-	parse := func(t *testing.T, s string) (w, n, v float64) {
+	parse := func(t *testing.T, s string) (w, left, right, n, v float64) {
 		t.Helper()
 		parts := strings.Split(s, ",")
-		if len(parts) != 3 {
-			t.Fatalf("want three widths, got %q", s)
+		if len(parts) != 5 {
+			t.Fatalf("want five values, got %q", s)
 		}
-		for i, dst := range []*float64{&w, &n, &v} {
+		for i, dst := range []*float64{&w, &left, &right, &n, &v} {
 			f, err := strconv.ParseFloat(parts[i], 64)
 			if err != nil {
 				t.Fatalf("parsing %q: %v", parts[i], err)
 			}
 			*dst = f
 		}
-		return w, n, v
+		return w, left, right, n, v
 	}
 
-	w, n, v := parse(t, wide)
+	w, left, right, n, v := parse(t, wide)
 	if w <= n {
 		t.Errorf("a wide figure should be wider than a normal one, got %v vs %v", w, n)
 	}
 	if w > v {
 		t.Errorf("a wide figure must never exceed the viewport, got %v > %v", w, v)
 	}
+	if left < 0 {
+		t.Errorf("a wide figure must not run off the left edge, got left=%v", left)
+	}
+	if right > v {
+		t.Errorf("a wide figure must not run off the right edge, got right=%v > clientWidth=%v", right, v)
+	}
 
-	w, n, v = parse(t, narrow)
+	w, left, right, n, v = parse(t, narrow)
 	if w > v {
 		t.Errorf("a wide figure must never exceed a narrow viewport, got %v > %v", w, v)
 	}
-	if w != n {
+	if left < 0 {
+		t.Errorf("a wide figure must not run off the left edge, got left=%v", left)
+	}
+	if right > v {
+		t.Errorf("a wide figure must not run off the right edge, got right=%v > clientWidth=%v", right, v)
+	}
+	if math.Abs(w-n) > 0.5 {
 		t.Errorf("the breakout should collapse when narrow, got %v vs %v", w, n)
 	}
 }
