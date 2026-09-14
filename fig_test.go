@@ -146,12 +146,7 @@ func TestFigGalleryRenders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	var warnings []string
-	got, err := Convert(src, Options{Warn: func(m string) { warnings = append(warnings, m) }})
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-	out := string(got)
+	out, warnings := figConvert(t, string(src))
 
 	for _, want := range []string{
 		`<div class="fig-rows">`, `<div class="fig-cols">`,
@@ -161,7 +156,7 @@ func TestFigGalleryRenders(t *testing.T) {
 		`<div class="fig-group`, `<div class="fig-chain">`,
 		`<div class="fig-lane">`,
 		`<span class="fig-stat-value">`, `<dl class="fig-defs">`,
-		"--fig-weight:3",
+		`style="--fig-weight:3"`,
 		// added by this plan
 		`<span class="fig-note">`, `<li class="fig-accent">`,
 		`<div class="fig-group-foot">`, `<span class="fig-stat-detail">`,
