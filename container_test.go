@@ -727,6 +727,13 @@ func TestContainerNavKind(t *testing.T) {
 	if strings.Contains(got, "data-fence") {
 		t.Errorf("internal attribute leaked\ngot: %s", got)
 	}
+	// nav is the one kind with no class of its own (see containerKinds), so
+	// applyKind must skip the class attribute entirely rather than writing
+	// class="" — a stray empty attribute a template author could easily
+	// mistake for meaning something.
+	if strings.Contains(got, `class=""`) {
+		t.Errorf("nav kind wrote an empty class attribute\ngot: %s", got)
+	}
 }
 
 // The old magic class is now an ordinary, inert class.

@@ -88,10 +88,11 @@ func parseFenceInfo(info string) (fenceInfoResult, bool) {
 // disagree about it. Only the position is computed here, and by length rather
 // than by a second scan: the block is the final "{" + content + "}" of the
 // trimmed string, so its brace sits len(content)+2 bytes from the end. The
-// trim set here must match splitBraced's own trailing-whitespace check
-// (strings.TrimSpace), or a caller that hands in a string with trailing
-// whitespace splitBraced accepts but this does not trim will get a start
-// index shifted by the untrimmed bytes.
+// trim set here covers the ASCII whitespace splitBraced's own trailing-
+// whitespace check (strings.TrimSpace) accepts, but not TrimSpace's full
+// Unicode range; a caller that hands in a string with trailing whitespace
+// outside this set that splitBraced still accepts will get a start index
+// shifted by the untrimmed bytes.
 func trailingBlock(s string) (start int, content string, ok bool) {
 	_, content, ok = splitBraced(s)
 	if !ok {
