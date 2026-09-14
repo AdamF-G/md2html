@@ -135,9 +135,11 @@ func Containers(warn func(string)) Transform {
 	return Transform{Name: "containers", Fn: func(root *html.Node) error {
 		for _, div := range fenceDivs(root) {
 			removeAttr(div, "data-fence")
-			// Read the parser's title marker before it is stripped: it is
-			// the only trustworthy signal that the first paragraph is a
-			// title this package emitted rather than one the author wrote.
+			// Read the parser's title marker before it is stripped. It is
+			// the signal that the first paragraph is a title the fence
+			// renderer emitted rather than one the author wrote, and it can
+			// be trusted because the parser reserves the whole data-fence
+			// attribute namespace against author text (reservedFenceAttr).
 			_, titled := attr(div, "data-fence-title")
 			removeAttr(div, "data-fence-title")
 
@@ -499,11 +501,16 @@ func applyLabelAttrs(div *html.Node, block string) {
 //
 // titled is the container's data-fence-title marker, and it gates the whole
 // search. The paragraph is identified by its class, md2html renders with
-// WithUnsafe, and once a titleless owned container exists (the remaining
-// fence spellings) an author's own raw <p class="container-title"> as a
-// container's first block would otherwise be adopted as that container's
-// title and torn apart. The marker is written by the parser at the moment it
-// appends a title node, so it cannot be forged from document text.
+// WithUnsafe, and a titleless owned container already exists — ":::card[]"
+// is one — so without the gate an author's own raw
+// <p class="container-title"> as a container's first block would be adopted
+// as that container's title and torn apart, losing whatever attributes the
+// author put on it.
+//
+// The marker is worth trusting because the parser refuses to set any
+// attribute in the data-fence namespace from author text
+// (reservedFenceAttr); a document that writes data-fence-title itself
+// therefore cannot forge one.
 func parsedTitleNode(div *html.Node, titled bool) *html.Node {
 	if !titled {
 		return nil

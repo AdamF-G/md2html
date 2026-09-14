@@ -1,7 +1,9 @@
 package fences
 
 import (
+	"bytes"
 	"fmt"
+	"strings"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/parser"
@@ -32,6 +34,32 @@ type fenceData struct {
 }
 
 var fencedContainerInfoKey = parser.NewContextKey()
+
+// fenceAttrPrefix namespaces every attribute this parser uses to carry its
+// own state to the renderer and to a post-processing transform: data-fence
+// (the id that makes nested fences work), data-fence-kind and
+// data-fence-title.
+const fenceAttrPrefix = "data-fence"
+
+// reservedFenceAttr reports whether an attribute name belongs to the parser
+// rather than to the author.
+//
+// Two things go wrong if author text can set one. A forged data-fence-title
+// makes the container claim an ordinary paragraph of the document as its
+// title, which is then torn down and rebuilt — the author's own attributes
+// on it are lost. A forged data-fence replaces the random id Open generated,
+// so Continue's lookup finds no matching fenceData, leaves flevel at
+// len(fdataMap) and indexes out of range: a document that panics the
+// converter.
+//
+// So the namespace is reserved here, in the parser, rather than in the
+// SplitInfo implementation that happens to supply the attributes today. The
+// invariants are this parser's, and it has to hold them against any hook —
+// and against the braced attribute block, which never passes through a hook
+// at all.
+func reservedFenceAttr(name string) bool {
+	return strings.HasPrefix(name, fenceAttrPrefix)
+}
 
 func (b *fencedContainerParser) Trigger() []byte {
 	return []byte{':'}
@@ -93,6 +121,9 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 		// definition list marker or a setext underline on the next line.
 		reader.Advance(right + 1)
 		for _, a := range parsed.Attrs {
+			if reservedFenceAttr(a.Name) {
+				continue
+			}
 			node.SetAttributeString(a.Name, []byte(a.Value))
 		}
 		if parsed.Kind != "" {
@@ -110,11 +141,16 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 			t.Lines().Append(text.NewSegment(base+parsed.TitleStart, base+parsed.TitleEnd))
 			node.AppendChild(node, t)
 			// Say on the container that the title element is one of ours.
-			// The rendered paragraph is identified downstream by its class,
-			// and md2html renders with WithUnsafe, so an author's own raw
-			// <p class="container-title"> as a container's first block
-			// would otherwise be adopted as that container's title once a
-			// titleless owned container becomes possible.
+			// The rendered paragraph is identified downstream by its class
+			// alone, and md2html renders with WithUnsafe, so an author's
+			// own raw <p class="container-title"> as the first block of a
+			// titleless container — ":::card[]" makes one — would
+			// otherwise be adopted as that container's title.
+			//
+			// This marker is trustworthy only because reservedFenceAttr
+			// keeps author text out of the data-fence namespace; it is set
+			// last, but the namespace is what makes it unforgeable, not
+			// the ordering.
 			node.SetAttributeString("data-fence-title", []byte("1"))
 		}
 	} else {
@@ -122,6 +158,9 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 		attrs, ok := parser.ParseAttributes(reader)
 		if ok {
 			for _, attr := range attrs {
+				if bytes.HasPrefix(attr.Name, []byte(fenceAttrPrefix)) {
+					continue
+				}
 				node.SetAttribute(attr.Name, attr.Value)
 			}
 		}

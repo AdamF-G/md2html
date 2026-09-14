@@ -472,19 +472,59 @@ func TestContainerLabelFormBeforeSetextUnderline(t *testing.T) {
 	}
 }
 
-// A container the parser did not give a title to must not adopt an author's
-// own <p class="container-title"> as one — md2html renders with WithUnsafe,
-// so that paragraph can come straight from the document. The parser's
-// data-fence-title marker on the container is what separates the two, and
-// neither it nor data-fence-kind may reach the output.
+// A titleless owned container must not adopt an author's own
+// <p class="container-title"> as its title. ":::card[]" is such a container
+// — the empty bracket is a label form with no title — and md2html renders
+// with WithUnsafe, so that paragraph comes straight from the document.
+//
+// Adoption is not merely cosmetic: the paragraph is torn down and its
+// children re-hung, so the author's own attributes on it are lost. The id is
+// asserted for exactly that reason.
 func TestContainerDoesNotAdoptAuthorWrittenTitleParagraph(t *testing.T) {
-	got := convert(t, "::: {.callout}\n<p class=\"container-title\">mine</p>\n\nbody\n:::\n", nil)
-	if !strings.Contains(got, `<p class="container-title">mine</p>`) {
+	got := convert(t, ":::card[]\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title" id="keepme">mine</p>`) {
 		t.Errorf("author's own title paragraph was adopted and rebuilt\ngot: %s", got)
 	}
 	for _, internal := range []string{"data-fence", "data-fence-kind", "data-fence-title"} {
 		if strings.Contains(got, internal) {
 			t.Errorf("%s reached the output\ngot: %s", internal, got)
+		}
+	}
+}
+
+// The same, with the marker spelled out in the document. The parser reserves
+// the data-fence namespace, so an author cannot hand themselves the flag
+// that makes a container adopt their paragraph.
+func TestContainerForgedTitleMarkerDoesNotAdoptAParagraph(t *testing.T) {
+	got := convert(t, ":::card[]{data-fence-title=\"1\"}\n<p class=\"container-title\" id=\"keepme\">mine</p>\n\nbody\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title" id="keepme">mine</p>`) {
+		t.Errorf("forged marker made the container adopt the paragraph\ngot: %s", got)
+	}
+	if strings.Contains(got, "data-fence") {
+		t.Errorf("forged data-fence attribute reached the output\ngot: %s", got)
+	}
+}
+
+// A forged data-fence replaces the random id Open generated, so Continue
+// finds no matching fenceData, leaves flevel at len(fdataMap) and indexes
+// out of range. That panicked the converter — an author could crash a build
+// with three lines of Markdown. It reproduces on the upstream extension, so
+// it predates the vendoring; the namespace guard closes it.
+//
+// A panic here fails the package outright rather than this test alone, which
+// is the correct severity: convert() returning at all is half the assertion.
+func TestContainerForgedFenceIdDoesNotPanic(t *testing.T) {
+	for _, src := range []string{
+		":::card[T]{data-fence=\"x\"}\nbody\n:::\n",          // owned label path
+		"::: {.card data-fence=\"x\"}\nbody\n:::\n",          // braced path, via ParseAttributes
+		":::card[T]{data-fence-kind=\"aside\"}\nbody\n:::\n", // forged kind
+	} {
+		got := convert(t, src, nil)
+		if strings.Contains(got, "data-fence") {
+			t.Errorf("%q: reserved attribute reached the output\ngot: %s", src, got)
+		}
+		if !strings.Contains(got, `class="card"`) {
+			t.Errorf("%q: container lost its kind\ngot: %s", src, got)
 		}
 	}
 }
