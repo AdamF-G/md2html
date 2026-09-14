@@ -15,7 +15,6 @@ require (
 )
 
 require (
-	github.com/stefanfritsch/goldmark-fences v1.0.0 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	go.abhg.dev/goldmark/mermaid v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
