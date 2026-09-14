@@ -18,6 +18,14 @@ var defaultFencedContainerParser = &fencedContainerParser{}
 
 // NewFencedContainerParser returns a new BlockParser that
 // parses fenced code blocks.
+//
+// Its parser has a nil splitInfo hook, so it behaves as upstream's does:
+// everything on the fence line that is not a braced attribute block stays in
+// the content stream. Both it and defaultFencedContainerParser are retained
+// only to keep the diff against upstream small — md2html reaches this
+// package through Extender with a hook supplied, and nothing in md2html
+// calls this. Wiring it up would quietly opt a document out of md2html's
+// fence-line grammar.
 func NewFencedContainerParser() parser.BlockParser {
 	return defaultFencedContainerParser
 }
