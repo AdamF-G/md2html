@@ -165,8 +165,17 @@ func braceBlock(s string) (open int, content string, ok bool) {
 		case '{':
 			end := braceSpan(s, i)
 			if end < 0 {
-				// The block is never closed, and no later "{" can open
-				// one that is: this one would have to close first.
+				// An unclosed "{" makes every boundary after it a guess:
+				// a later "{...}" could be the block, or could be nested
+				// inside the run this one opened. Decline the whole string
+				// rather than pick one. A later block IS reachable — "a { {#w}"
+				// has one — so this is a decision, not an impossibility.
+				//
+				// Declining is also the discoverable failure. The braces
+				// stay in the rendered text where the author can see them,
+				// instead of a stray "{" silently ending up in a title or a
+				// caption. It matches what the grammar did before it was
+				// shared, so no working document changes.
 				return -1, "", false
 			}
 			if strings.TrimSpace(s[end+1:]) == "" {

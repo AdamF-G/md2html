@@ -906,3 +906,21 @@ func TestContainerElemNavIsAnOrdinaryDiv(t *testing.T) {
 		t.Errorf("class lost\ngot: %s", got)
 	}
 }
+
+// The end-to-end consequence of braceBlock declining after an unclosed
+// brace: the attribute block stays in the title as literal text rather than
+// being applied, so the author sees the problem on the page. Balanced braces
+// in a title are unaffected.
+func TestContainerUnbalancedBraceInTitleKeepsTheBlockLiteral(t *testing.T) {
+	got := convert(t, "::: card Opening brace { {#w}\nbody\n:::\n", nil)
+	if strings.Contains(got, `id="w"`) {
+		t.Errorf("applied attributes from a line with an unclosed brace\ngot: %s", got)
+	}
+	if !strings.Contains(got, "{#w}") {
+		t.Errorf("the block vanished instead of staying visible in the title\ngot: %s", got)
+	}
+	balanced := convert(t, "::: card Use {{ var }} here {#t}\nbody\n:::\n", nil)
+	if !strings.Contains(balanced, `id="t"`) {
+		t.Errorf("balanced braces in a title blocked the attributes\ngot: %s", balanced)
+	}
+}

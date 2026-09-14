@@ -133,3 +133,25 @@ func TestSplitBracedIgnoresBraceInsideQuotes(t *testing.T) {
 		t.Errorf("in=%q ok=%v", in, ok)
 	}
 }
+
+// An unclosed "{" declines the whole string, even when a well-formed block
+// follows it. That is a decision rather than an impossibility — the scan
+// could resume after the stray brace and find "{#w}" — so it is pinned here:
+// declining keeps the braces visible in the rendered text, where the author
+// can see the mistake, instead of silently leaving a stray "{" in a title.
+//
+// Removing the early return makes this pass instead, which is exactly the
+// behaviour change this test exists to catch.
+func TestBraceBlockDeclinesAfterAnUnclosedBrace(t *testing.T) {
+	open, in, ok := braceBlock("card Opening brace { {#w}")
+	if ok {
+		t.Errorf("accepted a block after an unclosed brace: open=%d in=%q", open, in)
+	}
+	if open != -1 {
+		t.Errorf("open = %d, want -1 when reporting false", open)
+	}
+	// The balanced case must still work, or the guard is too broad.
+	if _, in, ok := braceBlock("card Use {{ var }} here {#t}"); !ok || in != "#t" {
+		t.Errorf("balanced braces in the head broke the block: in=%q ok=%v", in, ok)
+	}
+}
