@@ -404,3 +404,21 @@ func TestFigGroupMarkupUnchangedWithoutModifiers(t *testing.T) {
 		t.Errorf("missing unchanged markup %q in:\n%s", want, out)
 	}
 }
+
+func TestFigStatDetail(t *testing.T) {
+	src := "```fig\nitems:\n  - stats:\n" +
+		"      - value: 3 / 3\n        label: unit\n        detail: \"parse · render\"\n" +
+		"      - value: 12\n        label: suites\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	if !strings.Contains(out, `<span class="fig-stat-label">unit</span><span class="fig-stat-detail">parse · render</span>`) {
+		t.Errorf("a detail should follow the label:\n%s", out)
+	}
+	// A tile with no detail emits no empty span.
+	if !strings.Contains(out, `<span class="fig-stat-label">suites</span></div>`) {
+		t.Errorf("a tile without a detail should be unchanged:\n%s", out)
+	}
+}

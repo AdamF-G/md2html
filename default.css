@@ -366,6 +366,12 @@ figure.fig > figcaption {
   color: var(--accent);
 }
 .fig-stat-label { display: block; font-size: 0.8rem; color: var(--muted); }
+.fig-stat-detail {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
 
 /* A defs block is the one item kind whose markup is ordinary prose markup,
    and inside a figure — where everything else is a bordered box or a tile —

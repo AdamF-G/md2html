@@ -21,8 +21,9 @@ type figDoc struct {
 
 // figStat is one tile in a stats row.
 type figStat struct {
-	Value string `yaml:"value"`
-	Label string `yaml:"label"`
+	Value  string `yaml:"value"`
+	Label  string `yaml:"label"`
+	Detail string `yaml:"detail"`
 }
 
 // figDef is one row of a term/definition grid.

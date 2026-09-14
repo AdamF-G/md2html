@@ -135,7 +135,13 @@ func (r *figRenderer) item(it figItem) string {
 			b.WriteString(r.inline(s.Value))
 			b.WriteString(`</span><span class="fig-stat-label">`)
 			b.WriteString(r.inline(s.Label))
-			b.WriteString(`</span></div>`)
+			b.WriteString(`</span>`)
+			if s.Detail != "" {
+				b.WriteString(`<span class="fig-stat-detail">`)
+				b.WriteString(r.inline(s.Detail))
+				b.WriteString(`</span>`)
+			}
+			b.WriteString(`</div>`)
 		}
 		b.WriteString(`</div>`)
 		return b.String()
