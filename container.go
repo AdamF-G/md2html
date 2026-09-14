@@ -35,6 +35,11 @@ var containerKinds = map[string]containerKind{
 	"card":    {tag: "div", class: "card"},
 	"aside":   {tag: "details", class: "container aside", fallback: "Aside"},
 	"example": {tag: "details", class: "container example", prefix: "Example"},
+	// nav is the one kind that adds no class of its own: the element *is*
+	// the payload, nav.toc already occupies the styled-nav niche in the
+	// stylesheet, and an author who wants to style theirs writes
+	// "::: nav {.sidebar}".
+	"nav": {tag: "nav", class: ""},
 }
 
 // fenceDivs collects every container the fence extension produced, before
@@ -169,7 +174,9 @@ func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 			tokens = append(tokens, tok)
 		}
 	}
-	setAttr(div, "class", strings.Join(tokens, " "))
+	if len(tokens) > 0 {
+		setAttr(div, "class", strings.Join(tokens, " "))
+	}
 
 	if k.tag == "details" {
 		toDetails(div, k, title)
@@ -183,20 +190,41 @@ func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 		}
 		div.InsertBefore(tp, div.FirstChild)
 	}
+	if k.tag != "div" {
+		retag(div, k.tag)
+	}
 }
 
-// toDetails rebuilds a container as a <details> with a <summary>.
+// retag rebuilds n as the same content and attributes under a different tag
+// name, returning the replacement.
 //
-// The element has to be replaced rather than relabeled: x/net/html keys
-// rendering off DataAtom and Data, and a <div> cannot simply become a
-// <details> in place without leaving one of the two stale. div's Attr slice
-// — already carrying the merged class from applyKind, plus anything else
-// the author wrote, like an id — is reused as-is rather than rebuilt from
-// k.class alone, so a braced collapsible container's extra attributes
-// survive the rebuild.
-func toDetails(div *html.Node, k containerKind, title []*html.Node) {
-	d := &html.Node{Type: html.ElementNode, DataAtom: atom.Details, Data: "details", Attr: div.Attr}
+// The element has to be replaced rather than relabelled: x/net/html keys
+// rendering off DataAtom and Data, and setting one without the other leaves
+// the node half-converted. n's Attr slice is reused as-is, so a merged class
+// and anything else the author wrote survive the rebuild.
+func retag(n *html.Node, tag string) *html.Node {
+	out := &html.Node{
+		Type: html.ElementNode, DataAtom: atom.Lookup([]byte(tag)),
+		Data: tag, Attr: n.Attr,
+	}
+	for c := n.FirstChild; c != nil; {
+		next := c.NextSibling
+		n.RemoveChild(c)
+		out.AppendChild(c)
+		c = next
+	}
+	n.Parent.InsertBefore(out, n)
+	n.Parent.RemoveChild(n)
+	return out
+}
 
+// toDetails rebuilds a container as a <details> with a <summary>, built from
+// the kind's prefix and fallback and the parsed title, then handed to retag
+// for the element swap. div's Attr slice — already carrying the merged class
+// from applyKind, plus anything else the author wrote, like an id — is
+// reused as-is by retag, so a braced collapsible container's extra
+// attributes survive the rebuild.
+func toDetails(div *html.Node, k containerKind, title []*html.Node) {
 	sum := &html.Node{Type: html.ElementNode, DataAtom: atom.Summary, Data: "summary"}
 	switch {
 	case k.prefix != "" && len(title) > 0:
@@ -209,16 +237,9 @@ func toDetails(div *html.Node, k containerKind, title []*html.Node) {
 	for _, n := range title {
 		sum.AppendChild(n)
 	}
-	d.AppendChild(sum)
 
-	for c := div.FirstChild; c != nil; {
-		next := c.NextSibling
-		div.RemoveChild(c)
-		d.AppendChild(c)
-		c = next
-	}
-	div.Parent.InsertBefore(d, div)
-	div.Parent.RemoveChild(div)
+	d := retag(div, "details")
+	d.InsertBefore(sum, d.FirstChild)
 }
 
 // knownKindList renders the vocabulary for a warning message, in a stable

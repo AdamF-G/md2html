@@ -697,3 +697,48 @@ func TestContainerInsideCodeFenceStaysLiteral(t *testing.T) {
 		t.Errorf("a fenced code example became a container\ngot: %s", got)
 	}
 }
+
+// A landmark that cannot be named is noise in a screen reader's landmark
+// list, and aria-label is not in goldmark's global attribute allowlist.
+func TestContainerTakesAnAriaLabel(t *testing.T) {
+	got := convert(t, "::: card {aria-label=\"Primary\"}\nbody\n:::\n", nil)
+	if !strings.Contains(got, `aria-label="Primary"`) {
+		t.Errorf("aria-label dropped\ngot: %s", got)
+	}
+}
+
+// An event handler must not survive, whatever else is allowed through.
+func TestContainerDropsEventHandlerAttribute(t *testing.T) {
+	got := convert(t, "::: card {onmouseover=\"alert(1)\"}\nbody\n:::\n", nil)
+	if strings.Contains(got, "onmouseover") {
+		t.Errorf("event handler survived\ngot: %s", got)
+	}
+}
+
+// nav becomes a shipped kind rather than a class the renderer sniffs for.
+func TestContainerNavKind(t *testing.T) {
+	got := convert(t, "::: nav {aria-label=\"Section\"}\n- [One](./a.md)\n:::\n", nil)
+	if !strings.Contains(got, "<nav") {
+		t.Errorf("no nav element\ngot: %s", got)
+	}
+	if !strings.Contains(got, `aria-label="Section"`) {
+		t.Errorf("nav cannot be named\ngot: %s", got)
+	}
+	if strings.Contains(got, "data-fence") {
+		t.Errorf("internal attribute leaked\ngot: %s", got)
+	}
+}
+
+// The old magic class is now an ordinary, inert class.
+func TestContainerElemNavIsAnOrdinaryDiv(t *testing.T) {
+	got := convert(t, "::: {.elem-nav}\nbody\n:::\n", nil)
+	if strings.Contains(got, "<nav") {
+		t.Errorf("still emitting a nav element\ngot: %s", got)
+	}
+	if strings.Contains(got, "data-fence") {
+		t.Errorf("internal data-fence attribute leaked\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<div class="elem-nav">`) {
+		t.Errorf("class lost\ngot: %s", got)
+	}
+}

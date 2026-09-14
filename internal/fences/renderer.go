@@ -1,7 +1,7 @@
 package fences
 
 import (
-	"regexp"
+	"bytes"
 
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
@@ -48,17 +48,46 @@ func (r *Renderer) renderFencedContainerTitle(w util.BufWriter, source []byte, n
 	return ast.WalkContinue, nil
 }
 
+// renderContainerAttributes writes a container's attributes, allowing the
+// aria- prefix alongside goldmark's global attribute list and the data-
+// prefix its own renderer already permits.
+//
+// An accessible name is what a landmark most needs, and aria-label is not
+// in that list — so without this a <nav> or a labelled region could be
+// emitted but never named, which is worse than not emitting it at all.
+//
+// Values are escaped and names are not, exactly as goldmark does it. Names
+// therefore have to arrive already validated; md2html's safeAttrName is
+// what does that, at the point where author text becomes attributes.
+func renderContainerAttributes(w util.BufWriter, n ast.Node) {
+	for _, attr := range n.Attributes() {
+		if !FencedContainerAttributeFilter.Contains(attr.Name) &&
+			!bytes.HasPrefix(attr.Name, []byte("data-")) &&
+			!bytes.HasPrefix(attr.Name, []byte("aria-")) {
+			continue
+		}
+		_, _ = w.WriteString(" ")
+		_, _ = w.Write(attr.Name)
+		_, _ = w.WriteString(`="`)
+		var value []byte
+		switch typed := attr.Value.(type) {
+		case []byte:
+			value = typed
+		case string:
+			value = util.StringToReadOnlyBytes(typed)
+		}
+		_, _ = w.Write(util.EscapeHTML(value))
+		_ = w.WriteByte('"')
+	}
+}
+
 func (r *Renderer) renderFencedContainer(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	n := node.(*FencedContainer)
 	if entering {
 		n.element = "div"
-		if isNav(node) {
-			n.element = "nav"
-		}
-
 		if n.Attributes() != nil {
 			_, _ = w.WriteString("<" + n.element)
-			html.RenderAttributes(w, n, FencedContainerAttributeFilter)
+			renderContainerAttributes(w, n)
 			_, _ = w.WriteString(">\n")
 		} else {
 			_, _ = w.WriteString("<" + n.element + ">\n")
@@ -68,18 +97,3 @@ func (r *Renderer) renderFencedContainer(w util.BufWriter, source []byte, node a
 	}
 	return ast.WalkContinue, nil
 }
-
-func isNav(node ast.Node) bool {
-	class, ok := node.AttributeString("class")
-	if !ok {
-		return false
-	}
-	if navChk.Match(class.([]byte)) {
-		return true
-	}
-
-	return false
-}
-
-// check for the .nav class
-var navChk = regexp.MustCompile(`(^| |\.)elem-nav($| )`)
