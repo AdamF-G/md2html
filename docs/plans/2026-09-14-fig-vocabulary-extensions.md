@@ -307,7 +307,7 @@ func TestFigGroupCarriesPanelMetadata(t *testing.T) {
 		}
 	}
 	// The foot is a trailing line, so it must follow the group's items.
-	if strings.Index(out, `fig-group-foot`) < strings.Index(out, `>Handler<`) {
+	if strings.Index(out, `<div class="fig-group-foot">`) < strings.Index(out, `>Handler<`) {
 		t.Errorf("the foot should come after the group's items:\n%s", out)
 	}
 }
@@ -363,7 +363,7 @@ func TestFigGroupNoteGlossesTheTitle(t *testing.T) {
 	if strings.Index(out, `class="fig-note"`) > strings.Index(out, ">request<") {
 		t.Errorf("a group's note must precede its items:\n%s", out)
 	}
-	if strings.Index(out, "fig-group-foot") < strings.Index(out, ">request<") {
+	if strings.Index(out, `<div class="fig-group-foot">`) < strings.Index(out, ">request<") {
 		t.Errorf("a group's foot must follow its items:\n%s", out)
 	}
 }
