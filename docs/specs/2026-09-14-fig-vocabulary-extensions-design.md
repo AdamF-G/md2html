@@ -339,8 +339,11 @@ modes and its own tests. This is the same reasoning that split
 The stylesheet additions are built from existing tokens — `--accent`,
 `--rule`, `--muted` — so they inherit all four theme states without defining
 a colour, exactly as the shipped `fig` block does. `fig-wide` needs one new
-custom property for the breakout distance so a caller's `--css` replacement
-can reinterpret it, following the precedent set by `--fig-weight`.
+custom property for the breakout distance, but unlike `--fig-weight` —
+which the renderer emits into the markup, so a caller's `--css` replacement
+can read it — `--fig-breakout` is declared inside the very rule such a
+replacement would delete, so it is self-documentation for the rule's own
+value rather than an extension hook.
 
 While the stylesheet is open, the rendered gallery gets checked for whether
 a `box` holding a paragraph of body text reads acceptably, per §5. If it

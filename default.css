@@ -446,7 +446,7 @@ main > figure.fig-wide {
 }
 /* The accent ring is for boxes; on a tree line it is a colour, because a
    ring around a line of text in a listing is noise. */
-.fig-tree > li.fig-accent, .fig-tree li.fig-accent {
+.fig-tree li.fig-accent {
   box-shadow: none;
   color: var(--accent);
 }
@@ -460,6 +460,10 @@ main > figure.fig-wide {
   flex-direction: column;
   gap: 0.5rem;
 }
+/* .fig-accent and .fig-group have equal specificity and .fig-group's
+   border shorthand comes later, so an accented group needs its own
+   border-color rule to actually get the accent colour. */
+.fig-group.fig-accent { border-color: var(--accent); }
 .fig-group-title {
   font-size: 0.8rem;
   color: var(--muted);
