@@ -37,26 +37,6 @@ var containerKinds = map[string]containerKind{
 	"example": {tag: "details", class: "container example", prefix: "Example"},
 }
 
-// firstWord returns the leading whitespace-delimited word of s and the
-// remainder with the separating spaces removed. A newline ends the word but
-// is kept in the remainder: for a bare container the newline is the end of
-// the opening fence line, and Task 3's title lifting needs to see it.
-func firstWord(s string) (word, rest string) {
-	i := 0
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-		i++
-	}
-	j := i
-	for j < len(s) && s[j] != ' ' && s[j] != '\t' && s[j] != '\n' {
-		j++
-	}
-	word = s[i:j]
-	for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
-		j++
-	}
-	return word, s[j:]
-}
-
 // fenceDivs collects every container the fence extension produced, before
 // any of them is modified. Collect-then-mutate, the same discipline
 // TableScroll uses: the transform replaces nodes, and a walk that is also
@@ -105,23 +85,6 @@ func removeClassToken(n *html.Node, tok string) {
 	setAttr(n, "class", strings.Join(kept, " "))
 }
 
-// firstParagraph returns the container's first element child if it is a
-// paragraph whose own first child is a text node — the shape a bare
-// container's opening fence line always produces.
-func firstParagraph(div *html.Node) *html.Node {
-	for c := div.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type == html.TextNode && strings.TrimSpace(c.Data) == "" {
-			continue // inter-element whitespace
-		}
-		if c.Type == html.ElementNode && c.DataAtom == atom.P &&
-			c.FirstChild != nil && c.FirstChild.Type == html.TextNode {
-			return c
-		}
-		return nil
-	}
-	return nil
-}
-
 // Containers normalizes fenced containers. It accepts the brace-free
 // "::: kind" form as an alias for "::: {.kind}", maps the shipped kinds
 // onto their stylesheet classes, warns when a brace-free name is not one of
@@ -143,10 +106,6 @@ func Containers(warn func(string)) Transform {
 			_, titled := attr(div, "data-fence-title")
 			removeAttr(div, "data-fence-title")
 
-			// The fence parser owns the label form end to end: its
-			// attributes are already on the div, its kind travelled as
-			// data-fence-kind, and its title is a first-child paragraph.
-			// There is nothing left to mine out of the body.
 			if kind, owned := attr(div, "data-fence-kind"); owned {
 				removeAttr(div, "data-fence-kind")
 				k, known := containerKinds[kind]
@@ -160,7 +119,7 @@ func Containers(warn func(string)) Transform {
 					declassParsedTitle(div, titled)
 					continue
 				}
-				applyKindWithTitle(div, k, nil, detachParsedTitle(div, titled))
+				applyKind(div, k, detachParsedTitle(div, titled))
 				continue
 			}
 
@@ -172,7 +131,7 @@ func Containers(warn func(string)) Transform {
 				if f := strings.Fields(cls); len(f) > 0 {
 					if k, known := containerKinds[f[0]]; known {
 						removeClassToken(div, f[0])
-						applyKindWithTitle(div, k, nil, detachParsedTitle(div, titled))
+						applyKind(div, k, detachParsedTitle(div, titled))
 					}
 					continue
 				}
@@ -182,93 +141,14 @@ func Containers(warn func(string)) Transform {
 				// say. Not the brace-free form, so do not sniff its text.
 				continue
 			}
-
-			p := firstParagraph(div)
-			if p == nil {
-				warn("container has no class and no recognizable kind name")
-				continue
-			}
-			if kind, isLabel := labelKind(p); isLabel {
-				if k, known := containerKinds[kind]; known {
-					if label, block, done := detachLabel(p); done {
-						applyLabelAttrs(div, block)
-						applyKindWithTitle(div, k, p, label)
-						continue
-					}
-				}
-			}
-
-			word, rest := firstWord(p.FirstChild.Data)
-			k, known := containerKinds[word]
-			if !known {
-				warn(fmt.Sprintf("unknown container kind %q: emitting an unclassed div "+
-					"(known kinds: %s)", word, knownKindList()))
-				continue
-			}
-			p.FirstChild.Data = rest
-			applyKind(div, k, p)
+			warn("container has no class and no recognizable kind name")
 		}
 		return nil
 	}}
 }
 
-// detachTitle removes and returns the inline nodes that made up the rest of
-// a brace-free container's opening fence line. The kind word has already
-// been stripped from p's leading text node by the caller.
-//
-// goldmark merges the text after ":::" with the next source line into one
-// paragraph, so the first newline among p's direct children is exactly the
-// end of the fence line. That boundary is only trustworthy for the
-// brace-free form, where the leading word has already proven this paragraph
-// began on the fence line; the braced form is ambiguous and never gets here.
-//
-// Only direct children are scanned. Emphasis opened on the fence line and
-// closed on the next one would carry the newline inside an element, and the
-// title then runs to the following top-level newline — a title containing a
-// newline, which HTML collapses to a space. Harmless, and not worth cloning
-// elements across the split to avoid.
-//
-// Whitespace is trimmed only at the title's two outer edges: the trailing
-// space before the newline here, and (via the empty-remnant check below)
-// the leading space firstWord left behind after removing the kind word.
-// Whitespace between inline nodes — e.g. the space between a `code` span
-// and the word after it — is part of the title's own text and must survive
-// untouched, or the rendered title would run words together.
-func detachTitle(p *html.Node) []*html.Node {
-	var title []*html.Node
-	for c := p.FirstChild; c != nil; {
-		next := c.NextSibling
-		if c.Type == html.TextNode {
-			if i := strings.IndexByte(c.Data, '\n'); i >= 0 {
-				head := strings.TrimRight(c.Data[:i], " \t")
-				c.Data = c.Data[i+1:]
-				if head != "" {
-					title = append(title, &html.Node{Type: html.TextNode, Data: head})
-				}
-				return title
-			}
-			if len(title) == 0 && strings.TrimSpace(c.Data) == "" {
-				// The empty (or whitespace-only) remnant left behind after
-				// firstWord stripped the kind word and its separating
-				// space — not a real leading space in the title, so it
-				// must not become one.
-				p.RemoveChild(c)
-				c = next
-				continue
-			}
-		}
-		p.RemoveChild(c)
-		title = append(title, c)
-		c = next
-	}
-	// No newline anywhere: the whole paragraph was the opening fence line.
-	return title
-}
-
-// applyKind gives a container its element, classes and — for a brace-free
-// container with a title on the fence line — its title paragraph or summary.
-// p is that container's first paragraph with the kind word already stripped,
-// or nil for a braced container, which never gets a title.
+// applyKind gives a container its element, classes and — when the fence
+// line carried one — its title paragraph or summary.
 //
 // A braced container may already carry classes of its own — {#note .callout
 // .compact} is documented and merges to class="callout compact" — so this
@@ -279,18 +159,7 @@ func detachTitle(p *html.Node) []*html.Node {
 // merged class, and anything else like an id) forward onto the replacement
 // <details> element, so this merge is what a collapsible kind ends up
 // wearing too.
-func applyKind(div *html.Node, k containerKind, p *html.Node) {
-	var title []*html.Node
-	if p != nil {
-		title = detachTitle(p)
-	}
-	applyKindWithTitle(div, k, p, title)
-}
-
-// applyKindWithTitle is applyKind with the title already detached, for the
-// label form, whose title is delimited by brackets rather than by the end
-// of the fence line and so is found a different way.
-func applyKindWithTitle(div *html.Node, k containerKind, p *html.Node, title []*html.Node) {
+func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 	existing, _ := attr(div, "class")
 	seen := map[string]bool{}
 	var tokens []string
@@ -301,11 +170,6 @@ func applyKindWithTitle(div *html.Node, k containerKind, p *html.Node, title []*
 		}
 	}
 	setAttr(div, "class", strings.Join(tokens, " "))
-
-	if p != nil && p.FirstChild == nil {
-		// The fence line was the paragraph's entire content.
-		p.Parent.RemoveChild(p)
-	}
 
 	if k.tag == "details" {
 		toDetails(div, k, title)
@@ -368,134 +232,6 @@ func knownKindList() string {
 	return strings.Join(names, ", ")
 }
 
-// labelKind reads the kind word of a label-form container — the "aside" of
-// ":::aside[Why this matters]" — without modifying anything, so an unknown
-// kind can fall through to the brace-free path and warn there exactly as
-// it does today.
-func labelKind(p *html.Node) (string, bool) {
-	first := p.FirstChild
-	if first == nil || first.Type != html.TextNode {
-		return "", false
-	}
-	open := strings.IndexByte(first.Data, '[')
-	if open <= 0 {
-		return "", false
-	}
-	kind := first.Data[:open]
-	if strings.ContainsAny(kind, " \t\n") {
-		return "", false
-	}
-	return kind, true
-}
-
-// detachLabel removes a label-form container's opening fence line from p,
-// returning the label's inline nodes and the contents of a trailing
-// attribute block if one followed.
-//
-// This is the directive label syntax — :::kind[Title] — from the
-// CommonMark generic directives proposal, as implemented by
-// remark-directive and used by Docusaurus. It exists alongside the
-// undelimited "::: kind Title" form rather than replacing it, and it is
-// the only one of the two that can also carry an attribute block: an
-// undelimited title runs to the end of the line, so a following {...}
-// would be part of the title text rather than attributes.
-//
-// The scan crosses sibling nodes because a label may contain inline
-// markup: "[Why `code` matters]" reaches this function as a text node, a
-// <code> element and another text node, and the closing bracket is in the
-// third of them.
-//
-// It reports false without mutating anything when there is no closing
-// bracket, leaving the caller to fall through to the brace-free path.
-func detachLabel(p *html.Node) (label []*html.Node, block string, ok bool) {
-	first := p.FirstChild
-	open := strings.IndexByte(first.Data, '[')
-
-	// Pass one: locate the closing bracket. Nothing is modified until it
-	// is known to exist, so a malformed fence line is left exactly as the
-	// author wrote it.
-	var closing *html.Node
-	closeIdx := -1
-	for c := first; c != nil; c = c.NextSibling {
-		if c.Type != html.TextNode {
-			continue
-		}
-		start := 0
-		if c == first {
-			start = open + 1
-		}
-		if j := strings.IndexByte(c.Data[start:], ']'); j >= 0 {
-			closing, closeIdx = c, start+j
-			break
-		}
-	}
-	if closing == nil {
-		return nil, "", false
-	}
-
-	// Pass two: move everything up to the bracket into the label.
-	for c := first; c != closing; {
-		next := c.NextSibling
-		if c == first {
-			if head := c.Data[open+1:]; head != "" {
-				label = append(label, &html.Node{Type: html.TextNode, Data: head})
-			}
-			p.RemoveChild(c)
-		} else {
-			p.RemoveChild(c)
-			label = append(label, c)
-		}
-		c = next
-	}
-	start := 0
-	if closing == first {
-		start = open + 1
-	}
-	if head := closing.Data[start:closeIdx]; head != "" {
-		label = append(label, &html.Node{Type: html.TextNode, Data: head})
-	}
-	rest := closing.Data[closeIdx+1:]
-
-	// An attribute block may follow the label on the same line.
-	if trimmed := strings.TrimLeft(rest, " \t"); strings.HasPrefix(trimmed, "{") {
-		if line, tail, found := strings.Cut(trimmed, "\n"); found {
-			if _, content, braced := splitBraced(line); braced {
-				block, rest = content, "\n"+tail
-			}
-		} else if _, content, braced := splitBraced(trimmed); braced {
-			block, rest = content, ""
-		}
-	}
-	// The newline ending the fence line is a separator, not body text —
-	// the same boundary detachTitle consumes for the undelimited form.
-	rest = strings.TrimPrefix(rest, "\n")
-
-	if rest == "" {
-		p.RemoveChild(closing)
-	} else {
-		closing.Data = rest
-	}
-	return label, block, true
-}
-
-// applyLabelAttrs puts a label-form container's attribute block onto the
-// div, before applyKindWithTitle merges the kind's own classes in on top.
-func applyLabelAttrs(div *html.Node, block string) {
-	if block == "" {
-		return
-	}
-	a, ok := parseAttrs(block)
-	if !ok {
-		return
-	}
-	if a.id != "" {
-		setAttr(div, "id", a.id)
-	}
-	if len(a.classes) > 0 {
-		setAttr(div, "class", strings.Join(a.classes, " "))
-	}
-}
-
 // parsedTitleNode returns the paragraph the fence renderer emitted for a
 // container's title, or nil if there is none.
 //
@@ -528,11 +264,11 @@ func parsedTitleNode(div *html.Node, titled bool) *html.Node {
 }
 
 // detachParsedTitle removes the title element the fence parser emitted and
-// returns its inline children, for applyKindWithTitle to place as a title
-// paragraph or a summary.
+// returns its inline children, for applyKind to place as a title paragraph
+// or a summary.
 //
 // It returns nil when the fence line carried no title, which is the same
-// thing applyKindWithTitle already expects from a titleless container.
+// thing applyKind already expects from a titleless container.
 func detachParsedTitle(div *html.Node, titled bool) []*html.Node {
 	tp := parsedTitleNode(div, titled)
 	if tp == nil {

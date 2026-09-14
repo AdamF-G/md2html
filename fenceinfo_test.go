@@ -55,24 +55,16 @@ func TestParseFenceInfoLabelFormNoAttrs(t *testing.T) {
 	}
 }
 
-// An unclosed bracket is not a label form. parseFenceInfo declines it, so
-// the line stays in the content stream and falls through to the old path,
-// which takes "aside[Why" as a bare kind word and fires the existing
-// unknown-kind warning on it — see
-// TestContainerUnclosedLabelBracketFallsThrough for that half.
-//
-// Declining rather than claiming the line is what keeps the malformed
-// spelling byte-identical to what it renders today: a claimed line would be
-// consumed, so the author's text would vanish from the output and the
-// warning would name the whole remainder rather than its first word.
+// An unclosed bracket is not a label form. It falls through to the bare
+// path as one unusable kind word, so the unknown-kind warning fires on it.
 func TestParseFenceInfoUnclosedBracketIsNotALabel(t *testing.T) {
 	const info = "aside[Why"
 	got, ok := parseFenceInfo(info)
-	if ok {
-		t.Fatalf("parseFenceInfo(%q) claimed the line: %+v", info, got)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
 	}
-	if got.Kind != "" {
-		t.Errorf("kind = %q, want none from a declined line", got.Kind)
+	if got.Kind != "aside[Why" {
+		t.Errorf("kind = %q, want the whole word %q", got.Kind, "aside[Why")
 	}
 	if s := title(info, got); s != "" {
 		t.Errorf("title = %q, want none", s)
@@ -194,5 +186,79 @@ func TestParseFenceInfoBracedQuotedBrace(t *testing.T) {
 	}
 	if s := title(info, got); s != "Title" {
 		t.Errorf("title = %q, want %q", s, "Title")
+	}
+}
+
+func TestParseFenceInfoBareKind(t *testing.T) {
+	const info = "callout"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "callout" {
+		t.Errorf("kind = %q, want %q", got.Kind, "callout")
+	}
+	if s := title(info, got); s != "" {
+		t.Errorf("title = %q, want none", s)
+	}
+}
+
+func TestParseFenceInfoBareKindWithTitle(t *testing.T) {
+	const info = "aside Why this matters"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "aside" {
+		t.Errorf("kind = %q, want %q", got.Kind, "aside")
+	}
+	if s := title(info, got); s != "Why this matters" {
+		t.Errorf("title = %q, want %q", s, "Why this matters")
+	}
+}
+
+// The kind outside the braces, with a real attribute block. Today this
+// spelling puts the literal braces in the title; nothing can be relying on
+// that, so making it work breaks nothing.
+func TestParseFenceInfoKindThenAttrs(t *testing.T) {
+	const info = "aside {#id .compact}"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "aside" {
+		t.Errorf("kind = %q, want %q", got.Kind, "aside")
+	}
+	if s := title(info, got); s != "" {
+		t.Errorf("title = %q, want none — the braces are attributes", s)
+	}
+	var id, class string
+	for _, a := range got.Attrs {
+		switch a.Name {
+		case "id":
+			id = a.Value
+		case "class":
+			class = a.Value
+		}
+	}
+	if id != "id" || class != "compact" {
+		t.Errorf("id = %q, class = %q; want id / compact", id, class)
+	}
+}
+
+func TestParseFenceInfoKindThenTitleThenAttrs(t *testing.T) {
+	const info = "aside Why this matters {#w}"
+	got, ok := parseFenceInfo(info)
+	if !ok {
+		t.Fatalf("parseFenceInfo(%q) reported false", info)
+	}
+	if got.Kind != "aside" {
+		t.Errorf("kind = %q, want %q", got.Kind, "aside")
+	}
+	if s := title(info, got); s != "Why this matters" {
+		t.Errorf("title = %q, want %q", s, "Why this matters")
+	}
+	if len(got.Attrs) != 1 || got.Attrs[0].Name != "id" || got.Attrs[0].Value != "w" {
+		t.Errorf("attrs = %v, want id=w", got.Attrs)
 	}
 }

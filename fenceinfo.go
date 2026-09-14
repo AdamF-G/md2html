@@ -15,9 +15,10 @@ type fenceInfoResult = fences.Info
 // after the colons, already trimmed — into its kind word, its attributes
 // and the source range of its title.
 //
-// It reports false for a spelling this package does not yet own, which
-// leaves the line in the content stream for the container transform to mine
-// out of the first paragraph, exactly as it always did.
+// Every spelling but one is owned: the braced form, the label form and the
+// bare form all report true. It reports false only when the line opens with
+// "{" but never closes it — a malformed braced form with nothing else to
+// fall back to.
 //
 // Offsets rather than a title string: the parser points a source segment at
 // the range so goldmark parses the title's inline markup natively, which is
@@ -26,8 +27,6 @@ type fenceInfoResult = fences.Info
 func parseFenceInfo(info string) (fenceInfoResult, bool) {
 	out := fenceInfoResult{TitleStart: -1, TitleEnd: -1}
 
-	// Braced form: {#id .class key=value} with an optional trailing title
-	// running to the end of the line.
 	if strings.HasPrefix(info, "{") {
 		content, rest, ok := readBracedPrefix(info)
 		if !ok {
@@ -41,31 +40,61 @@ func parseFenceInfo(info string) (fenceInfoResult, bool) {
 		return out, true
 	}
 
-	// Label form: kind[Title] with an optional trailing attribute block.
-	open := strings.IndexByte(info, '[')
-	if open <= 0 || strings.ContainsAny(info[:open], " \t{") {
-		return out, false
-	}
-	close := strings.IndexByte(info[open+1:], ']')
-	if close < 0 {
-		return out, false
-	}
-	close += open + 1
-
-	out.Kind = info[:open]
-	out.TitleStart, out.TitleEnd = open+1, close
-
-	if tail := strings.TrimLeft(info[close+1:], " \t"); tail != "" {
-		if _, content, ok := splitBraced(tail); ok {
-			out.Attrs = fenceAttrs(content)
-		} else {
-			// Trailing text that is not an attribute block. Not a spelling
-			// we own; let the old path see the whole line rather than
-			// silently dropping the tail.
-			return fenceInfoResult{TitleStart: -1, TitleEnd: -1}, false
+	// Label form: kind[Title], with an optional trailing attribute block.
+	if open := strings.IndexByte(info, '['); open > 0 && !strings.ContainsAny(info[:open], " \t{") {
+		if close := strings.IndexByte(info[open+1:], ']'); close >= 0 {
+			close += open + 1
+			tail := strings.TrimLeft(info[close+1:], " \t")
+			var attrs []fences.Attr
+			owned := tail == ""
+			if !owned {
+				if _, content, ok := splitBraced(tail); ok {
+					attrs, owned = fenceAttrs(content), true
+				}
+			}
+			if owned {
+				out.Kind = info[:open]
+				out.TitleStart, out.TitleEnd = open+1, close
+				out.Attrs = attrs
+				return out, true
+			}
 		}
 	}
+
+	// Bare form: a kind word, then an optional undelimited title, then an
+	// optional trailing attribute block.
+	body := info
+	if start, content, ok := trailingBlock(info); ok && start > 0 {
+		out.Attrs = fenceAttrs(content)
+		body = strings.TrimRight(info[:start], " \t")
+	}
+	word := body
+	if i := strings.IndexAny(body, " \t"); i >= 0 {
+		word = body[:i]
+		if t := strings.TrimLeft(body[i:], " \t"); t != "" {
+			out.TitleStart = len(body) - len(t)
+			out.TitleEnd = len(body)
+		}
+	}
+	out.Kind = word
 	return out, true
+}
+
+// trailingBlock locates a trailing {...} attribute block, returning the index
+// of its opening brace along with its contents.
+//
+// The decision of what counts as a block is splitBraced's, so a container's
+// fence line, a fenced code block's info string and a bracketed span cannot
+// disagree about it. Only the position is computed here, and by length rather
+// than by a second scan: the block is the final "{" + content + "}" of the
+// trimmed string, so its brace sits len(content)+2 bytes from the end.
+func trailingBlock(s string) (start int, content string, ok bool) {
+	_, content, ok = splitBraced(s)
+	if !ok {
+		return -1, "", false
+	}
+	end := len(strings.TrimRight(s, " \t"))
+	return end - len(content) - 2, content, true
 }
 
 // readBracedPrefix reads a leading {...} attribute block, returning its

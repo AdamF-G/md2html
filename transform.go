@@ -21,10 +21,13 @@ func Builtins() []Transform {
 }
 
 // builtins is the ordered default list. Containers must run first because
-// it restructures fenced containers before anything else inspects the tree,
-// and Alerts follows it as the other transform that produces containers —
-// both must precede Chips, so that a fence line's or a marker's brackets
-// are consumed before bracketed-span rewriting could read them;
+// it restructures fenced containers before anything else inspects the tree.
+// Alerts follows it as the other transform that produces containers, and
+// must precede Chips so a marker's brackets are consumed before
+// bracketed-span rewriting could read them. A container's own fence line no
+// longer needs that protection: the fence parser consumes it, so
+// ":::aside[Why]{.compact}" never reaches the tree as text a bracketed span
+// could claim.
 // Chips must run before HeadingAnchors so a status marker is already a
 // <span class="chip"> — and therefore excluded by headingText — by the time
 // slugs are computed; SectionLinks and TOC must both run after

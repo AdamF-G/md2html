@@ -124,22 +124,6 @@ func TestContainerNestingPreserved(t *testing.T) {
 	}
 }
 
-func TestFirstWord(t *testing.T) {
-	cases := []struct{ in, word, rest string }{
-		{"warning", "warning", ""},
-		{"warning Be careful", "warning", "Be careful"},
-		{"warning\nbody", "warning", "\nbody"},
-		{"  warning  x", "warning", "x"},
-		{"", "", ""},
-	}
-	for _, c := range cases {
-		w, r := firstWord(c.in)
-		if w != c.word || r != c.rest {
-			t.Errorf("firstWord(%q) = (%q, %q), want (%q, %q)", c.in, w, r, c.word, c.rest)
-		}
-	}
-}
-
 // R28: a documented braced form combining an id with several classes must
 // keep every class, not just the kind's own — goldmark-fences merges
 // {#note .callout .compact} into class="callout compact", and applyKind
@@ -380,10 +364,13 @@ func TestContainerLabelFormSummaryUsesTitle(t *testing.T) {
 	}
 }
 
-// The other half of TestParseFenceInfoUnclosedBracketIsNotALabel: a fence
-// line the grammar declines stays in the content stream, so the bare-word
-// path still names its first word in the existing warning and the author's
-// text still reaches the output rather than being silently consumed.
+// The other half of TestParseFenceInfoUnclosedBracketIsNotALabel: an
+// unclosed bracket is not a label form, so the bare path claims the line.
+// Its first word — "aside[Why" — becomes the (unknown) kind and fires the
+// existing warning; the rest of the fence line becomes the container's
+// (declassed) title text, and the body that follows is untouched. Nothing
+// falls back to raw, unconsumed text any more — there is no path left that
+// does that — but the author's words all still reach the output somewhere.
 func TestContainerUnclosedLabelBracketFallsThrough(t *testing.T) {
 	var warns []string
 	got := convert(t, ":::aside[Why this matters\nbody\n:::\n",
@@ -391,8 +378,14 @@ func TestContainerUnclosedLabelBracketFallsThrough(t *testing.T) {
 	if len(warns) != 1 || !strings.Contains(warns[0], `unknown container kind "aside[Why"`) {
 		t.Errorf("warning changed: %v\ngot: %s", warns, got)
 	}
-	if !strings.Contains(got, "aside[Why this matters") {
-		t.Errorf("declined fence line was consumed\ngot: %s", got)
+	if !strings.Contains(got, "this matters") {
+		t.Errorf("title text lost\ngot: %s", got)
+	}
+	if !strings.Contains(got, "body") {
+		t.Errorf("body text lost\ngot: %s", got)
+	}
+	if strings.Contains(got, "aside[Why") {
+		t.Errorf("kind word leaked into the output\ngot: %s", got)
 	}
 }
 
@@ -614,5 +607,93 @@ func TestContainerBracedSingleQuotedValueAcceptedByPermissiveAttrParser(t *testi
 	}
 	if !strings.Contains(got, `<div class="callout" data-x="single">`) {
 		t.Errorf("single-quoted value not carried through unquoted\ngot: %s", got)
+	}
+}
+
+// Cases A, B and C from the spec: a definition list marker or a setext
+// underline on the next line used to capture the kind word.
+func TestContainerBareKindBeforeDefinitionList(t *testing.T) {
+	var warns []string
+	got := convert(t, "::: card\nterm\n: def\n:::\n",
+		func(s string) { warns = append(warns, s) })
+	if len(warns) != 0 {
+		t.Errorf("warned: %v\ngot: %s", warns, got)
+	}
+	if !strings.Contains(got, `<div class="card">`) {
+		t.Errorf("kind word was stolen\ngot: %s", got)
+	}
+	if strings.Contains(got, "<dt>card</dt>") {
+		t.Errorf("kind word became a term\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<dt>term</dt>") {
+		t.Errorf("definition list lost\ngot: %s", got)
+	}
+}
+
+func TestContainerBareKindBeforeSetextHeading(t *testing.T) {
+	for _, underline := range []string{"===", "---"} {
+		var warns []string
+		got := convert(t, "::: card\nHeading text\n"+underline+"\n:::\n",
+			func(s string) { warns = append(warns, s) })
+		if len(warns) != 0 {
+			t.Errorf("%s: warned: %v\ngot: %s", underline, warns, got)
+		}
+		if !strings.Contains(got, `<div class="card">`) {
+			t.Errorf("%s: kind word was stolen\ngot: %s", underline, got)
+		}
+		if strings.Contains(got, "card\nHeading text") || strings.Contains(got, `id="card-heading-text"`) {
+			t.Errorf("%s: kind word reached the heading text or its id\ngot: %s", underline, got)
+		}
+	}
+}
+
+// The undelimited title form keeps working, and a bare ":::" still closes.
+func TestContainerBareKindWithTitleUnchanged(t *testing.T) {
+	got := convert(t, "::: aside Why this matters\nBecause.\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("title lost\ngot: %s", got)
+	}
+}
+
+// The kind outside the braces with a real attribute block. Today the braces
+// land in the summary as literal text.
+func TestContainerKindThenAttrs(t *testing.T) {
+	got := convert(t, "::: aside {#w .compact}\nbody\n:::\n", nil)
+	if !strings.Contains(got, `id="w"`) {
+		t.Errorf("id not applied\ngot: %s", got)
+	}
+	if !strings.Contains(got, "compact") {
+		t.Errorf("class not applied\ngot: %s", got)
+	}
+	if strings.Contains(got, "{#w") {
+		t.Errorf("attribute block left as text\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<summary>Aside</summary>") {
+		t.Errorf("titleless collapsible lost its fallback\ngot: %s", got)
+	}
+}
+
+func TestContainerKindThenTitleThenAttrs(t *testing.T) {
+	got := convert(t, "::: aside Why this matters {#w}\nbody\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("title lost\ngot: %s", got)
+	}
+	if !strings.Contains(got, `id="w"`) {
+		t.Errorf("id not applied\ngot: %s", got)
+	}
+}
+
+func TestContainerNestingStillWorks(t *testing.T) {
+	got := convert(t, ":::: card\n::: callout\ninner\n:::\n::::\n", nil)
+	if !strings.Contains(got, `<div class="card">`) || !strings.Contains(got, `<div class="callout">`) {
+		t.Errorf("nesting broken\ngot: %s", got)
+	}
+}
+
+// A ::: line inside a code fence is content, not a container.
+func TestContainerInsideCodeFenceStaysLiteral(t *testing.T) {
+	got := convert(t, "```markdown\n::: card\nbody\n:::\n```\n", nil)
+	if strings.Contains(got, `<div class="card">`) {
+		t.Errorf("a fenced code example became a container\ngot: %s", got)
 	}
 }
