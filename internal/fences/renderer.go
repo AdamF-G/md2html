@@ -17,7 +17,8 @@ type Config struct {
 	Unsafe    bool
 }
 
-// HeadingAttributeFilter defines attribute names which heading elements can have
+// FencedContainerAttributeFilter defines attribute names which fenced
+// container elements can have.
 var FencedContainerAttributeFilter = html.GlobalAttributeFilter
 
 // A Renderer struct is an implementation of renderer.NodeRenderer that renders

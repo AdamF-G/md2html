@@ -90,10 +90,11 @@ func removeClassToken(n *html.Node, tok string) {
 	setAttr(n, "class", strings.Join(kept, " "))
 }
 
-// Containers normalizes fenced containers. It accepts the brace-free
-// "::: kind" form as an alias for "::: {.kind}", maps the shipped kinds
-// onto their stylesheet classes, warns when a brace-free name is not one of
-// them, and drops the fence library's internal data-fence attribute.
+// Containers normalizes fenced containers. Acceptance of the brace-free
+// "::: kind" and label "kind[Title]" forms happens upstream, in the parser;
+// this transform maps a kind name handed to it via data-fence-kind onto the
+// shipped kind's element and stylesheet classes, warns when that name is not
+// one of them, and drops the fence library's internal data-fence attribute.
 //
 // warn may be nil.
 func Containers(warn func(string)) Transform {
@@ -111,6 +112,15 @@ func Containers(warn func(string)) Transform {
 			_, titled := attr(div, "data-fence-title")
 			removeAttr(div, "data-fence-title")
 
+			// The parser owns every fence line now, whichever form it took —
+			// bare, braced or label — and stamps data-fence-kind on the div
+			// whenever the line named a kind at all, known or not. owned is
+			// true exactly when that attribute is present: it is what tells
+			// this loop the parser already committed to a kind (and, via
+			// detachParsedTitle, already isolated any title paragraph) for
+			// this container, as opposed to the plain-class braced path
+			// below, which the parser leaves for this transform to read
+			// straight off the class attribute.
 			if kind, owned := attr(div, "data-fence-kind"); owned {
 				removeAttr(div, "data-fence-kind")
 				k, known := containerKinds[kind]
@@ -143,7 +153,7 @@ func Containers(warn func(string)) Transform {
 			}
 			if len(div.Attr) > 0 {
 				// Braced, but with something other than a class — an id,
-				// say. Not the brace-free form, so do not sniff its text.
+				// say — and no kind for this loop to apply.
 				continue
 			}
 			warn("container has no class and no recognizable kind name")

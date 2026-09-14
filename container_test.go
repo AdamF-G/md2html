@@ -371,7 +371,7 @@ func TestContainerLabelFormSummaryUsesTitle(t *testing.T) {
 // (declassed) title text, and the body that follows is untouched. Nothing
 // falls back to raw, unconsumed text any more — there is no path left that
 // does that — but the author's words all still reach the output somewhere.
-func TestContainerUnclosedLabelBracketFallsThrough(t *testing.T) {
+func TestContainerUnclosedLabelBracketBecomesUnknownBareKind(t *testing.T) {
 	var warns []string
 	got := convert(t, ":::aside[Why this matters\nbody\n:::\n",
 		func(s string) { warns = append(warns, s) })
