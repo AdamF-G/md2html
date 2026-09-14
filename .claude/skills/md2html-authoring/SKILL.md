@@ -36,15 +36,31 @@ half and the next block inheriting the wrong language.
 ::: house-style    -> <div>, and the run warns
 ```
 
-The shipped kinds are `callout`, `warning`, `card`, `aside` and `example`.
-`aside` and `example` are collapsible `<details>`. A braced class outside the
-set still emits a correctly classed but unstyled div, silently — that is
-deliberate, since the author supplies the CSS.
+The shipped kinds are `callout`, `warning`, `card`, `aside`, `example` and
+`nav`. `aside` and `example` are collapsible `<details>`; `nav` is a `<nav>`
+landmark and the one kind that adds no class of its own — name it with
+`aria-label` (`::: nav {aria-label="Section"}`) whenever it is not the only
+`<nav>` on the page, which it usually isn't: `[[toc]]` already emits its own
+`<nav class="toc">`. A braced class outside the shipped set still emits a
+correctly classed but unstyled div, silently — that is deliberate, since the
+author supplies the CSS. An unknown *kind word* — bare, labelled or
+kind-outside-braces — still consumes the word and warns, and still renders
+any title it found as a plain, unstyled paragraph.
 
-Two forms carry a title: `::: aside Why this matters`, and the label form
-`:::aside[Why this matters]`. Use the label form when the container also
-needs an id or classes — `:::aside[Why]{#w .compact}` — because it is the
-only one that can carry both.
+Every container form carries a title now: the bare form
+(`::: aside Why this matters`), the braced form with a trailing title
+(`::: {.aside} Why this matters`), the kind-outside-braces form with a
+trailing attribute block (`::: aside Why this matters {#w .compact}`), and
+the label form (`:::aside[Why this matters]{#w .compact}`). Reach for the
+label form specifically when the title needs to stay unambiguous next to
+attributes — every other spelling reads a trailing `{...}` as the attribute
+block, so a title that itself ends in a brace-like group gets misread as
+attributes rather than words.
+
+A container also passes through a fixed attribute set: `id`, `class`,
+goldmark's global attributes, and any `data-` or `aria-` name. Anything
+else — an event handler, most obviously — is dropped, and `data-fence`,
+`data-fence-kind` and `data-fence-title` are reserved for the parser itself.
 
 **A link to `.html` is never rewritten.**
 
@@ -65,8 +81,8 @@ through md2html. Ask that before picking.
 | Construct | Forms | Choose by |
 |---|---|---|
 | Warning, note | `> [!WARNING]` / `::: warning` | The alert renders natively on GitHub, Obsidian and Typora and degrades to a readable blockquote elsewhere; `::: warning` shows on GitHub as literal text. In a repository file, use the alert. |
-| Container kind | `::: callout` / `::: {.callout}` | The braced form is Pandoc's `fenced_divs`, so it survives in a document shared with Pandoc, kramdown or MyST. The bare form reads better. Neither renders on GitHub. |
-| Container title | `::: aside Why` / `:::aside[Why]` | Only the label form can also carry an id or classes. |
+| Container kind | `::: callout` / `::: {.callout}` / `::: callout {#id .class}` | The braced form is Pandoc's `fenced_divs`, so it survives in a document shared with Pandoc, kramdown or MyST — which is also why the braced form's first class token, not some marker of ours, is what selects the kind. The kind-outside-braces form is the clearest of the three to read, but Pandoc will not parse it as a fenced div at all. Neither unbraced form renders on GitHub. |
+| Container title | `::: aside Why` / `:::aside[Why]` | Every form now carries a title. Pick the label form when the title needs to stay unambiguous next to an id or classes — it delimits the title instead of reading to end of line, so it is the only spelling a trailing brace-shaped title cannot confuse. |
 | Chip, span | `[proven]` / `[proven]{.chip}` | The bare form covers only the six status words; the attribute form is Pandoc's `bracketed_spans` and takes any label or class. Prefer the attribute form in new writing. |
 | Code caption | `` ```go caption="x" `` / `` ```{.go caption="x"} `` | GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there. The braced form does not highlight on GitHub, but is what Pandoc reads and the only one that can escape a `"` in the caption. |
 | Contents list | `[[toc]]` / `[TOC]` | Neither travels to any other renderer, so choose for the reader of the source. `[[toc]]` is markdown-it and VitePress; `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. |
@@ -106,6 +122,7 @@ from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 | Collapsible aside | `::: aside Title` … `:::` |
 | Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
 | Worked example | `::: example Title` … `:::` |
+| Named nav landmark | `::: nav {aria-label="Section"}` … `:::` |
 | Status marker | `[proven]` for the six status words; `[any label]{.chip}` otherwise |
 | Any classed span | `[text]{.cls}` |
 | Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |

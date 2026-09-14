@@ -99,8 +99,8 @@ only here.
 | Construct | Forms | Choose by |
 |---|---|---|
 | Warning, note | `> [!WARNING]` — `::: warning` | **Where it is read.** The alert renders natively on GitHub, Obsidian and Typora, and degrades to an ordinary blockquote with a visible marker anywhere else. `::: warning` shows up on GitHub as literal text. In a repository file the alert is almost always right. |
-| Container kind | `::: callout` — `::: {.callout}` | **Who else parses it.** The braced form is Pandoc's `fenced_divs`, so a document shared with Pandoc, kramdown or MyST keeps its class there. The bare form is easier to read and is what most of this repo writes. Neither renders on GitHub. |
-| Container title | `::: aside Why` — `:::aside[Why]` | **Whether it also needs an id or classes.** Only the label form carries both; see Containers. The label form is the CommonMark generic directives syntax, which remark-directive and Docusaurus implement. |
+| Container kind | `::: callout` — `::: {.callout}` — `::: callout {#id .class}` | **Who else parses it.** The braced form is Pandoc's `fenced_divs`, so a document shared with Pandoc, kramdown or MyST keeps its class there — which is also why the braced form's first class token is what selects the kind, not some other marker. The kind-outside-braces form is the clearest of the three to read, but it is md2html's own invention: Pandoc does not parse `::: callout {#id}` as a fenced div at all. Neither unbraced form renders on GitHub. |
+| Container title | `::: aside Why` — `:::aside[Why]` | **Whether the title needs to be unambiguous next to attributes.** Every container form now carries a title — see Containers. The label form is still the only one that *delimits* it, so it is what to reach for when a title might itself end in something that looks like a brace group, or when a directive-reading tool (remark-directive, Docusaurus) needs to parse the title out on its own. It is the CommonMark generic directives syntax. |
 | Chip, span | `[proven]` — `[proven]{.chip}` — `[c:proven]` | **Vocabulary.** The bare form only works for the six status words. The attribute form is Pandoc's `bracketed_spans`, works for any label or class, and is the form to prefer in new writing. `[c:…]` predates it and still parses. |
 | Code caption | `` ```go caption="x" `` — `` ```{.go caption="x"} `` | **Syntax highlighting elsewhere, and quoting.** GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there; the braced form does not highlight on GitHub but is what Pandoc and MyST read, and is the only one that can escape a `"` inside the caption. |
 | Contents list | `[[toc]]` — `[TOC]` | **Neither travels.** No other renderer produces a list from either, so pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
@@ -125,8 +125,9 @@ one yourself.
 
 ### Containers
 
-Fenced containers become `<div>`, except two kinds which become collapsible
-`<details>`. Bare and braced forms are equivalent in element and classes:
+Fenced containers become `<div>`, a `<nav>` landmark, or — for two
+collapsible kinds — `<details>`. Bare and braced forms are equivalent in
+element and classes:
 
 ```markdown
 ::: callout
@@ -138,8 +139,8 @@ Same thing.
 :::
 ```
 
-The shipped vocabulary is `callout`, `warning` and `card` (`<div>`), and
-`aside` and `example` (`<details>`):
+The shipped vocabulary is six kinds: `callout`, `warning` and `card`
+(`<div>`), `aside` and `example` (`<details>`), and `nav` (`<nav>`):
 
 ```markdown
 ::: warning
@@ -149,8 +150,25 @@ Overwrites state.
 
 renders `<div class="callout callout-warning">`.
 
-**Two forms carry a title.** The bare form writes it on the fence's
-opening line; the label form delimits it in brackets:
+**`nav` adds no class of its own** — every other kind styles an element;
+this one's whole job is to *be* one, for a landmark a bare `<ul>` of links
+would not announce as such. `[[toc]]` already emits its own `<nav
+class="toc">`, so a hand-written `nav` container is almost always the
+*second* `<nav>` on the page — which is exactly when it needs a name, since
+assistive tech otherwise has no way to tell two landmarks apart:
+
+```markdown
+::: nav {aria-label="Section contents"}
+- [One](./one.md)
+- [Two](./two.md)
+:::
+```
+
+renders `<nav aria-label="Section contents">`.
+
+**Every form carries a title now.** Write it on the fence's opening line,
+delimit it in brackets, or put it after a braced attribute block — these
+all render the same `<summary>Why this matters</summary>`:
 
 ```markdown
 ::: aside Why this matters
@@ -160,22 +178,36 @@ Because.
 :::aside[Why this matters]
 Because.
 :::
+
+::: {.aside} Why this matters
+Because.
+:::
+
+::: aside Why this matters {#why .compact}
+Because.
+:::
 ```
+
+and the last of those also carries the id and class onto the `<details>`,
+same as the label form below.
 
 The label form is the directive syntax from the CommonMark generic
 directives proposal, as implemented by remark-directive and used by
-Docusaurus. Prefer it when the container also needs an id or classes,
-because it is the only one that can carry both:
+Docusaurus. It is still the one to reach for when the title needs to stay
+unambiguous next to an id or classes, because it *delimits* the title
+rather than reading to the end of the line:
 
 ```markdown
 :::aside[Why this matters]{#why .compact}
 ```
 
-The bare form cannot, and neither can `::: {.aside}`. An undelimited title
-runs to the end of the line, so goldmark's fence library merges it into the
-container's first paragraph and a trailing `{...}` would be part of the
-title text rather than attributes. Delimiting the label is what removes
-that constraint.
+Every other spelling instead treats a trailing `{...}` on the fence line as
+the attribute block, with everything before it — after the kind, if the
+kind sits outside braces — read as the title. That is right almost always,
+with one trap: a title that itself *ends* in something shaped like a brace
+group is read as attributes, not words. `::: card The {x}` titles the card
+"The" and consumes `{x}` as an (empty) attribute. Reach for the label form,
+or avoid a trailing brace-like title, when that shape is a real risk.
 
 A label form naming an unknown kind falls through to the bare form's rules
 and warns there, so `:::housestyle[Title]` is reported, not silently
@@ -200,12 +232,52 @@ renders `<div id="note" class="callout compact">`.
 checked as the kind name, isn't one, and the whole class list is left
 exactly as written, unstyled. Put the kind word first.
 
+That positional rule is also the bridge to Pandoc: a document written for
+`fenced_divs` spells its kind as an ordinary first class — `{.warning}`,
+`{.aside}` — and reading the kind off that token, rather than from some
+marker of our own, is what lets such a document pick up md2html's styling
+for free instead of landing as an unclassed div. The rule cannot be
+retired without changing what three shipped kinds do: `{.warning}` would
+fall from `<div class="callout callout-warning">` to a plain `<div
+class="warning">`, and `{.aside}` / `{.example}` would stop being
+collapsible.
+
+The kind can also sit outside the braces, with a real attribute block
+after it — a third spelling, alongside the bare and braced forms:
+
+```markdown
+::: aside {#id .compact}
+Because.
+:::
+```
+
+renders `<details id="id" class="container aside compact">`.
+
 Containers nest.
 
-An unknown bare kind (`::: house-style`) emits an unclassed `<div>` and the
-run warns. A braced class outside the vocabulary (`::: {.house-brand}`)
-emits a correctly classed, unstyled `<div>` — silently, since the author
-supplies their own CSS for it.
+An unknown bare kind (`::: house-style`) consumes its kind word and any
+title, emits an unclassed `<div>`, and the run warns; the title still
+reaches the page, as an ordinary paragraph with no styling class to hang
+on a kind that does not exist. A braced class outside the vocabulary
+(`::: {.house-brand}`) emits a correctly classed, unstyled `<div>` —
+silently, since the author supplies their own CSS for it.
+
+**A container passes a fixed attribute set through.** `id`, `class`,
+goldmark's global attribute list, and any `data-` or `aria-` name reach the
+element; anything else — an event handler, most obviously — is dropped,
+and an attribute name outside `[A-Za-z][A-Za-z0-9_.:-]*` is dropped
+whatever prefix it carries:
+
+```markdown
+::: card {onclick="alert(1)" data-tracking="x"}
+Because.
+:::
+```
+
+renders `<div data-tracking="x" class="card">` — the tracking attribute
+survives, the handler does not. `data-fence`, `data-fence-kind` and
+`data-fence-title` are reserved for the parser's own bookkeeping, so
+writing one yourself gets it dropped rather than honored.
 
 Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
 to write and it drops you out of Markdown for the enclosed content.

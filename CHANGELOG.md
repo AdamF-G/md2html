@@ -58,8 +58,29 @@ major version instead.
   of it in place, which is why the check lives with the files rather than in
   the command.
 
+### Changed
+
+- `github.com/stefanfritsch/goldmark-fences` is vendored into
+  `internal/fences` and is no longer a dependency.
+
 ### Fixed
 
+- A container's `:::` fence line is now consumed by the parser rather than
+  recovered from the rendered body. Four spellings previously lost their kind
+  word to a definition list marker or a setext underline on the following
+  line — the setext cases leaked it into the heading text and the generated
+  anchor id — and a title written after a braced fence was silently absorbed
+  into the body, with collapsible kinds showing their fallback label
+  instead. A title is now accepted on every container form. See
+  [docs/specs/2026-09-13-fence-line-capture.md](./docs/specs/2026-09-13-fence-line-capture.md).
+- `::: {.elem-nav}` no longer emits a `<nav>` carrying the fence library's
+  internal `data-fence` attribute.
+- A forged `data-fence` attribute — `::: {.card data-fence="x"}` or
+  `:::card[Title]{data-fence="x"}` — previously panicked the converter with
+  an index-out-of-range inside the (now-vendored) fence parser. This bug
+  predates this change and was already reachable on `main`; it is fixed
+  here because fixing it is one guard on code this work already owns. The
+  attribute is now silently dropped instead.
 - `[proven]{.chip}` no longer renders broken. The chip transform fired on
   the bracket and left `{.chip}` on the page as literal text; a
   non-vocabulary label such as `[needs review]{.chip}` stayed literal in

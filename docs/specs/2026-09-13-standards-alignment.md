@@ -205,9 +205,15 @@ One line. `[[toc]]` is markdown-it/VitePress convention; `[TOC]` is
 Python-Markdown, MkDocs, Typora and StackEdit. Accept both, document
 `[[toc]]`.
 
-## 4. Splitting the `fig` vocabulary
+## 4. Splitting the `fig` vocabulary [planned]
 
 The `fig` fence mixes two kinds of thing, and they want opposite treatment.
+
+This section was blocked on the definition-list and setext traps described
+in [docs/specs/2026-09-13-fence-line-capture.md](./2026-09-13-fence-line-capture.md):
+`stats` and `defs` are defined to hold a definition list, which is one of
+the two constructs that used to steal a brace-free container's kind word.
+That fix has landed, so the promotion below is unblocked.
 
 ::: card
 **Content** wants composability. `stats` and `defs` hold prose with a
@@ -293,9 +299,10 @@ the commits that made them.
   what the marker guard exists to avoid.
 - **The label form collided with bracketed spans.** `:::aside[Why]{.compact}`
   is also a valid bracketed span, and Chips claimed it. Containers already
-  runs first, so implementing the label form resolved it — but the ordering
-  is now load-bearing for a second reason, and both the builtins comment
-  and a test say so.
+  runs first, so implementing the label form resolved it. The collision
+  itself is gone now: the fence line no longer reaches the tree as text at
+  all, since the parser owns it end to end — see
+  [docs/specs/2026-09-13-fence-line-capture.md](./2026-09-13-fence-line-capture.md).
 - **Alerts are a transform, not a dependency.** `github.com/yuin/goldmark-alert`
   exists and would have worked, but an alert has to land on the shipped
   container vocabulary rather than on markup of its own, and the tree layer

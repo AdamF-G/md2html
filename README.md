@@ -15,7 +15,8 @@ writes a browsable HTML tree. Tables get scroll containers, headings get
 anchors, `.md` links become `.html` links, and mermaid fences render as
 diagrams. Markdown also gets a few extras beyond CommonMark/GFM: fenced
 containers (`::: callout` … `:::`, or `:::callout[With a title]`) for
-callouts, warnings, cards and collapsible asides/examples; GitHub alerts
+callouts, warnings, cards, collapsible asides/examples and named `<nav>`
+landmarks; GitHub alerts
 (`> [!WARNING]`) as an alias for the same; `[proven]`-style status chips
 and the general `[label]{.chip}` form; `§4.2` cross-references that
 autolink to numbered headings; a `[[toc]]` or `[TOC]` marker for a
