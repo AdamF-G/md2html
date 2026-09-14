@@ -606,7 +606,7 @@ Every item is exactly one *kind*:
 | `arrow` | label, may be `""` | a connector; blank is decorative |
 | `result` | label | an emphasized outcome bar |
 | `rail` | label | a full-width accent rail |
-| `stats` | list of `value`/`label` | a row of stat tiles |
+| `stats` | list of `value`/`label`, plus optional `detail` | a row of stat tiles |
 | `defs` | list of `term`/`def` | a term/definition grid |
 | `group` | title, plus `items` | a labeled container |
 | `chain` | list of items | steps connected in sequence |

@@ -121,8 +121,41 @@ items:
     note: retries twice, then gives up
   - result: 200 OK
     accent: true
+    note: after one retry
   - rail: Phase one
     note: everything below ships together
+```
+
+A `note` on a `group` sits inside the title line, before its items; a
+`foot` follows them. A group may carry either, or both at once:
+
+```fig
+caption: A group's note and foot, together and apart
+items:
+  - group: Cache warmup
+    note: skipped in CI
+    items:
+      - box: Check
+  - group: Deploy
+    note: rolls back automatically
+    foot: two minutes end-to-end
+    items:
+      - box: Build
+      - arrow: ""
+      - box: Ship
+```
+
+## A box holding body text
+
+```fig
+caption: A box holding body text — the case that decided against a separate prose kind
+items:
+  - box: >-
+      A box can hold more than a short label. This one carries a full
+      paragraph instead, because the design considered and declined a
+      separate prose-block kind: a box that centers a word or two and a
+      box that wraps several sentences are the same element, just asked
+      to hold different amounts of text.
 ```
 
 ## Panel metadata rides on a group
