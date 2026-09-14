@@ -581,3 +581,38 @@ func TestContainerBracedFormDoesNotAdoptAuthorWrittenTitleParagraph(t *testing.T
 		}
 	}
 }
+
+// Two braced spellings that main's fence library rejected outright, so the
+// fence text fell through to the old mining path: goldmark's own
+// parser.ParseAttributes did not accept a bare key with no value or a
+// single-quoted attribute value, and either would leave the whole line as
+// unrecognized body text and warn "unknown container kind" on it.
+//
+// This package's shared attribute parser (parseAttrs, via fenceAttrs) is
+// simply more permissive on both counts, and now handles every braced
+// container, not just a titled one. No document that worked before this
+// change is affected — these two spellings never rendered as containers
+// on main — but the widening itself needs a test, or a later refactor
+// could narrow the shared parser back to goldmark's rules without anyone
+// noticing the regression.
+func TestContainerBracedBareKeyAcceptedByPermissiveAttrParser(t *testing.T) {
+	var warns []string
+	got := convert(t, "::: {.callout data-flag}\nx\n:::\n", func(s string) { warns = append(warns, s) })
+	if len(warns) != 0 {
+		t.Errorf("warned on a now-accepted spelling: %v", warns)
+	}
+	if !strings.Contains(got, `<div class="callout" data-flag="">`) {
+		t.Errorf("bare key did not become an empty-valued attribute\ngot: %s", got)
+	}
+}
+
+func TestContainerBracedSingleQuotedValueAcceptedByPermissiveAttrParser(t *testing.T) {
+	var warns []string
+	got := convert(t, "::: {.callout data-x='single'}\nx\n:::\n", func(s string) { warns = append(warns, s) })
+	if len(warns) != 0 {
+		t.Errorf("warned on a now-accepted spelling: %v", warns)
+	}
+	if !strings.Contains(got, `<div class="callout" data-x="single">`) {
+		t.Errorf("single-quoted value not carried through unquoted\ngot: %s", got)
+	}
+}
