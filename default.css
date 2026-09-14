@@ -331,6 +331,25 @@ figure.fig > figcaption {
   text-align: center;
 }
 
+/* A note is a second, quieter piece of text on a primitive that already has
+   a label. It is deliberately not a container: two short strings at
+   different weights, never a paragraph. */
+.fig-note {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* One flag, three jobs: a highlighted box, an accented panel, an accented
+   lane. The ring rather than a border colour alone, because .fig-rail is
+   a filled bar with no border for a colour to land on. */
+.fig-accent {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
+}
+
 .fig-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .fig-stat {
   flex: 1 1 0;

@@ -53,6 +53,13 @@ type figItem struct {
 
 	Items  []figItem `yaml:"items"`
 	Weight int       `yaml:"weight"`
+
+	// Modifiers are plain values, not pointers. The absent-versus-empty
+	// distinction that makes every kind key a *string does not apply: a
+	// modifier names no kind, so an empty one and a missing one mean the
+	// same thing and render the same way.
+	Note   string `yaml:"note"`
+	Accent bool   `yaml:"accent"`
 }
 
 // kinds reports every kind key set on an item. Exactly one is legal; the
@@ -115,6 +122,15 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 		}
 		if it.Weight != 0 && !weightOK {
 			return fmt.Errorf("%s carries weight, which is only legal on a panel of a cols layout", at)
+		}
+		// note and accent share a predicate: both are legal on any kind
+		// that has a label to hang them beside. A group's label is its
+		// title, so a group takes both; Task 2 renders them.
+		if it.Note != "" && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
+			return fmt.Errorf("%s carries note, which only a box, result, rail or group takes", at)
+		}
+		if it.Accent && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
+			return fmt.Errorf("%s carries accent, which only a box, result, rail or group takes", at)
 		}
 		if it.Items != nil && it.Group == nil {
 			return fmt.Errorf("%s carries items, which only a group takes", at)

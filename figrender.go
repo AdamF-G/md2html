@@ -82,6 +82,24 @@ func (r *figRenderer) inline(s string) string {
 	return out
 }
 
+// leaf renders one bordered leaf kind: its class, the accent flag, the
+// label, and an optional secondary note.
+//
+// A leaf carrying neither modifier emits exactly what it emitted before
+// they existed — the class string is untouched and no span is appended —
+// which is what keeps this feature additive for every figure already
+// written.
+func (r *figRenderer) leaf(class string, it figItem, label string) string {
+	if it.Accent {
+		class += " fig-accent"
+	}
+	s := `<div class="` + class + `">` + r.inline(label)
+	if it.Note != "" {
+		s += `<span class="fig-note">` + r.inline(it.Note) + `</span>`
+	}
+	return s + `</div>`
+}
+
 // items renders a run of items with no wrapper of its own. Every nesting
 // kind shares it, which is what keeps recursion depth a non-issue: nesting
 // is the same code all the way down.
@@ -98,7 +116,7 @@ func (r *figRenderer) items(list []figItem) string {
 func (r *figRenderer) item(it figItem) string {
 	switch {
 	case it.Box != nil:
-		return `<div class="fig-box">` + r.inline(*it.Box) + `</div>`
+		return r.leaf("fig-box", it, *it.Box)
 	case it.Arrow != nil:
 		if *it.Arrow == "" {
 			// Decorative: the boxes either side carry the meaning.
@@ -106,9 +124,9 @@ func (r *figRenderer) item(it figItem) string {
 		}
 		return `<div class="fig-arrow">` + r.inline(*it.Arrow) + `</div>`
 	case it.Result != nil:
-		return `<div class="fig-result">` + r.inline(*it.Result) + `</div>`
+		return r.leaf("fig-result", it, *it.Result)
 	case it.Rail != nil:
-		return `<div class="fig-rail">` + r.inline(*it.Rail) + `</div>`
+		return r.leaf("fig-rail", it, *it.Rail)
 	case it.Stats != nil:
 		var b strings.Builder
 		b.WriteString(`<div class="fig-stats">`)

@@ -332,3 +332,37 @@ func TestFigUnknownKeyWarningIsAuthorFacing(t *testing.T) {
 		}
 	}
 }
+
+func TestFigModifierPlacementRejected(t *testing.T) {
+	cases := []struct{ name, src, wantMsg string }{
+		{
+			name:    "note on an arrow",
+			src:     "```fig\nitems:\n  - arrow: next\n    note: why\n```\n",
+			wantMsg: "carries note, which only a box, result, rail or group takes",
+		},
+		{
+			name:    "accent on an arrow",
+			src:     "```fig\nitems:\n  - arrow: next\n    accent: true\n```\n",
+			wantMsg: "carries accent, which only a box, result, rail or group takes",
+		},
+		{
+			name:    "note nested inside a chain",
+			src:     "```fig\nitems:\n  - chain:\n      - arrow: \"\"\n        note: why\n```\n",
+			wantMsg: "items[0].chain[0] carries note",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, warnings := figConvert(t, c.src)
+			if !strings.Contains(out, `class="language-fig"`) {
+				t.Errorf("want a code-block fallback, got:\n%s", out)
+			}
+			if len(warnings) != 1 {
+				t.Fatalf("want exactly 1 warning, got %v", warnings)
+			}
+			if !strings.Contains(warnings[0], c.wantMsg) {
+				t.Errorf("warning %q should contain %q", warnings[0], c.wantMsg)
+			}
+		})
+	}
+}

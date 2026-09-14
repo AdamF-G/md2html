@@ -304,3 +304,48 @@ func TestFigLabelCannotMintAHeading(t *testing.T) {
 		t.Errorf("the real heading should still be in the toc:\n%s", out)
 	}
 }
+
+func TestFigLeafNoteAndAccent(t *testing.T) {
+	out, warnings := figConvert(t,
+		"```fig\nitems:\n  - box: Client\n    note: retries twice\n"+
+			"  - result: 200 OK\n    accent: true\n```\n")
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-box">Client<span class="fig-note">retries twice</span></div>`,
+		`<div class="fig-result fig-accent">200 OK</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// A note is a text field like any other, so it renders through the inline
+// pass rather than being escaped.
+func TestFigNoteTakesInlineMarkdown(t *testing.T) {
+	out, _ := figConvert(t,
+		"```fig\nitems:\n  - box: Client\n    note: \"see `auth`\"\n```\n")
+	if !strings.Contains(out, `<span class="fig-note">see <code>auth</code></span>`) {
+		t.Errorf("a note should render inline Markdown, got:\n%s", out)
+	}
+}
+
+// The modifiers are purely additive. A figure that uses neither must emit
+// exactly what it emitted before they existed. This test is the guard on
+// that promise; do not relax it.
+func TestFigLeafMarkupUnchangedWithoutModifiers(t *testing.T) {
+	out, _ := figConvert(t,
+		"```fig\nitems:\n  - box: Client\n  - result: 200 OK\n  - rail: Phase one\n```\n")
+	for _, want := range []string{
+		`<div class="fig-box">Client</div>`,
+		`<div class="fig-result">200 OK</div>`,
+		`<div class="fig-rail">Phase one</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing unchanged markup %q in:\n%s", want, out)
+		}
+	}
+}
