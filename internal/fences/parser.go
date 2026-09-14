@@ -100,9 +100,22 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 		}
 		if parsed.TitleEnd > parsed.TitleStart {
 			t := NewFencedContainerTitle()
-			base := lineSeg.Start + left
+			// PeekLine returns a padded line: line[k] is
+			// source[Start+k-Padding], not source[Start+k]. Without the
+			// padding term a fence behind tab-expanded indentation — a
+			// container inside a blockquote or a list — shifts its title
+			// right by the pad width, and at the end of the buffer reads
+			// past the source entirely.
+			base := lineSeg.Start + left - lineSeg.Padding
 			t.Lines().Append(text.NewSegment(base+parsed.TitleStart, base+parsed.TitleEnd))
 			node.AppendChild(node, t)
+			// Say on the container that the title element is one of ours.
+			// The rendered paragraph is identified downstream by its class,
+			// and md2html renders with WithUnsafe, so an author's own raw
+			// <p class="container-title"> as a container's first block
+			// would otherwise be adopted as that container's title once a
+			// titleless owned container becomes possible.
+			node.SetAttributeString("data-fence-title", []byte("1"))
 		}
 	} else {
 		reader.Advance(left)

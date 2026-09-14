@@ -135,6 +135,11 @@ func Containers(warn func(string)) Transform {
 	return Transform{Name: "containers", Fn: func(root *html.Node) error {
 		for _, div := range fenceDivs(root) {
 			removeAttr(div, "data-fence")
+			// Read the parser's title marker before it is stripped: it is
+			// the only trustworthy signal that the first paragraph is a
+			// title this package emitted rather than one the author wrote.
+			_, titled := attr(div, "data-fence-title")
+			removeAttr(div, "data-fence-title")
 
 			// The fence parser owns the label form end to end: its
 			// attributes are already on the div, its kind travelled as
@@ -146,9 +151,14 @@ func Containers(warn func(string)) Transform {
 				if !known {
 					warn(fmt.Sprintf("unknown container kind %q: emitting an unclassed div "+
 						"(known kinds: %s)", kind, knownKindList()))
+					// The kind was refused, so the container gets no
+					// classes — and its title must not keep a styling hook
+					// for a container that does not exist. The author's
+					// text survives as ordinary prose instead.
+					declassParsedTitle(div, titled)
 					continue
 				}
-				applyKindWithTitle(div, k, nil, detachParsedTitle(div))
+				applyKindWithTitle(div, k, nil, detachParsedTitle(div, titled))
 				continue
 			}
 
@@ -484,23 +494,40 @@ func applyLabelAttrs(div *html.Node, block string) {
 	}
 }
 
+// parsedTitleNode returns the paragraph the fence renderer emitted for a
+// container's title, or nil if there is none.
+//
+// titled is the container's data-fence-title marker, and it gates the whole
+// search. The paragraph is identified by its class, md2html renders with
+// WithUnsafe, and once a titleless owned container exists (the remaining
+// fence spellings) an author's own raw <p class="container-title"> as a
+// container's first block would otherwise be adopted as that container's
+// title and torn apart. The marker is written by the parser at the moment it
+// appends a title node, so it cannot be forged from document text.
+func parsedTitleNode(div *html.Node, titled bool) *html.Node {
+	if !titled {
+		return nil
+	}
+	for c := div.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode && strings.TrimSpace(c.Data) == "" {
+			continue // inter-element whitespace
+		}
+		if c.Type == html.ElementNode && c.DataAtom == atom.P && hasClass(c, "container-title") {
+			return c
+		}
+		return nil
+	}
+	return nil
+}
+
 // detachParsedTitle removes the title element the fence parser emitted and
 // returns its inline children, for applyKindWithTitle to place as a title
 // paragraph or a summary.
 //
 // It returns nil when the fence line carried no title, which is the same
 // thing applyKindWithTitle already expects from a titleless container.
-func detachParsedTitle(div *html.Node) []*html.Node {
-	var tp *html.Node
-	for c := div.FirstChild; c != nil; c = c.NextSibling {
-		if c.Type == html.TextNode && strings.TrimSpace(c.Data) == "" {
-			continue
-		}
-		if c.Type == html.ElementNode && c.DataAtom == atom.P && hasClass(c, "container-title") {
-			tp = c
-		}
-		break
-	}
+func detachParsedTitle(div *html.Node, titled bool) []*html.Node {
+	tp := parsedTitleNode(div, titled)
 	if tp == nil {
 		return nil
 	}
@@ -513,4 +540,18 @@ func detachParsedTitle(div *html.Node) []*html.Node {
 	}
 	div.RemoveChild(tp)
 	return out
+}
+
+// declassParsedTitle drops the class from a parsed title paragraph, leaving
+// the author's words in place as an ordinary paragraph.
+//
+// It is the unknown-kind path's counterpart to detachParsedTitle: the
+// container was refused and carries no kind classes, so a title paragraph
+// still wearing container-title would be a styling hook for a container that
+// was not built. Removing the attribute rather than the element keeps the
+// text the author wrote.
+func declassParsedTitle(div *html.Node, titled bool) {
+	if tp := parsedTitleNode(div, titled); tp != nil {
+		removeAttr(tp, "class")
+	}
 }

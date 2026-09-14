@@ -32,10 +32,13 @@ func (r *Renderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(KindFencedContainerTitle, r.renderFencedContainerTitle)
 }
 
-// renderFencedContainerTitle emits a container's title. The class is the one
-// md2html's container transform already uses for a title paragraph, so a
-// non-collapsible container needs no further work and a collapsible one is
-// recognised by it.
+// renderFencedContainerTitle emits a container's title. The class is a
+// marker: md2html's container transform finds the paragraph by it (together
+// with the container's data-fence-title attribute) and then rebuilds it —
+// as a title paragraph, as a <summary>, or as unclassed prose when the kind
+// turns out to be unknown. It is the same class that transform writes for a
+// title paragraph, so the marker and the final markup coincide for the
+// commonest case.
 func (r *Renderer) renderFencedContainerTitle(w util.BufWriter, source []byte, node ast.Node, entering bool) (ast.WalkStatus, error) {
 	if entering {
 		_, _ = w.WriteString(`<p class="container-title">`)

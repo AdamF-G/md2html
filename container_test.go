@@ -395,3 +395,96 @@ func TestContainerUnclosedLabelBracketFallsThrough(t *testing.T) {
 		t.Errorf("declined fence line was consumed\ngot: %s", got)
 	}
 }
+
+// A fence line behind tab-expanded indentation. PeekLine hands the parser a
+// padded line, so a title segment computed without subtracting the padding
+// slides right by the pad width — ">\t:::card[Numbers]" rendered a title of
+// "mbers]" — and at the end of the buffer reads past the source entirely.
+func TestContainerLabelFormTitleInIndentedBlockquote(t *testing.T) {
+	got := convert(t, ">\t:::card[Numbers]\n>\tterm\n>\t: def\n>\t:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title">Numbers</p>`) {
+		t.Errorf("padded fence line shifted the title\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<dt>term</dt>") {
+		t.Errorf("definition list lost\ngot: %s", got)
+	}
+}
+
+// The same, with no trailing newline: the offsets then run past len(source)
+// and splice the reader's buffer slack into the title.
+func TestContainerLabelFormTitleInIndentedBlockquoteAtEOF(t *testing.T) {
+	got := convert(t, ">\t:::card[Numbers]", nil)
+	if !strings.Contains(got, `<p class="container-title">Numbers</p>`) {
+		t.Errorf("title read past the end of the source\ngot: %s", got)
+	}
+}
+
+// An unknown kind in the label form names just the kind word, because the
+// parser split the fence line before the transform ever saw it. It used to
+// name the whole remainder, "housestyle[Title]".
+//
+// The refused container carries no kind classes, so its title must not keep
+// container-title either: that would be a styling hook for a container that
+// was not built. The author's words stay, as ordinary prose.
+func TestContainerLabelFormUnknownKindWarnsOnKindAlone(t *testing.T) {
+	var warns []string
+	got := convert(t, ":::housestyle[Title]\nBody.\n:::\n",
+		func(s string) { warns = append(warns, s) })
+	if len(warns) != 1 || !strings.Contains(warns[0], `unknown container kind "housestyle"`) {
+		t.Errorf("warning does not name the kind alone: %v", warns)
+	}
+	if strings.Contains(got, "container-title") {
+		t.Errorf("refused container kept a title styling hook\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<p>Title</p>") {
+		t.Errorf("author's title text lost\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<p>Body.</p>") {
+		t.Errorf("body lost\ngot: %s", got)
+	}
+}
+
+// A key=value pair in a label form's attribute block reaches the div. The
+// old paragraph-mining path applied only id and class and dropped every
+// other pair on the floor.
+func TestContainerLabelFormKeyValueAttributesReachTheDiv(t *testing.T) {
+	got := convert(t, `:::card[T]{data-sort="name"}`+"\nbody\n:::\n", nil)
+	if !strings.Contains(got, `data-sort="name"`) {
+		t.Errorf("key=value attribute dropped\ngot: %s", got)
+	}
+}
+
+// The same family as the definition-list case: a setext underline on the
+// next line used to reinterpret the fence line as a heading, which also
+// hijacked the page title.
+func TestContainerLabelFormBeforeSetextUnderline(t *testing.T) {
+	var warns []string
+	got := convert(t, ":::card[Under]\n===\n:::\n",
+		func(s string) { warns = append(warns, s) })
+	if len(warns) != 0 {
+		t.Errorf("warned: %v\ngot: %s", warns, got)
+	}
+	if strings.Contains(got, "<h1") {
+		t.Errorf("fence line was captured by the setext underline\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<p class="container-title">Under</p>`) {
+		t.Errorf("title missing\ngot: %s", got)
+	}
+}
+
+// A container the parser did not give a title to must not adopt an author's
+// own <p class="container-title"> as one — md2html renders with WithUnsafe,
+// so that paragraph can come straight from the document. The parser's
+// data-fence-title marker on the container is what separates the two, and
+// neither it nor data-fence-kind may reach the output.
+func TestContainerDoesNotAdoptAuthorWrittenTitleParagraph(t *testing.T) {
+	got := convert(t, "::: {.callout}\n<p class=\"container-title\">mine</p>\n\nbody\n:::\n", nil)
+	if !strings.Contains(got, `<p class="container-title">mine</p>`) {
+		t.Errorf("author's own title paragraph was adopted and rebuilt\ngot: %s", got)
+	}
+	for _, internal := range []string{"data-fence", "data-fence-kind", "data-fence-title"} {
+		if strings.Contains(got, internal) {
+			t.Errorf("%s reached the output\ngot: %s", internal, got)
+		}
+	}
+}

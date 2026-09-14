@@ -1,6 +1,9 @@
 package md2html
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // title extracts what parseFenceInfo marked as the title, so a test can
 // assert on the string rather than on two offsets.
@@ -76,6 +79,15 @@ func TestParseFenceInfoUnclosedBracketIsNotALabel(t *testing.T) {
 	}
 }
 
+// unsafeAttrNameBytes are the characters that let an attribute name break
+// out of the attribute list it is written into: a quote closes the
+// surrounding value, "=" and a space start a new attribute, and "<" or ">"
+// end the tag. This is deliberately spelled out here rather than expressed
+// as !safeAttrName(...): asserting the filter's own predicate on the
+// filter's own output tests nothing, because fenceAttrs selected those names
+// with that very predicate.
+const unsafeAttrNameBytes = "\"'=<> \t"
+
 // An attribute name reaches the output unescaped, so a key carrying a quote
 // would close the attribute and make the rest of it an event handler.
 // goldmark's own ParseAttributes used to reject such a block; this package's
@@ -91,9 +103,29 @@ func TestParseFenceInfoRejectsUnsafeAttributeNames(t *testing.T) {
 			t.Fatalf("parseFenceInfo(%q) reported false", info)
 		}
 		for _, a := range got.Attrs {
-			if !safeAttrName(a.Name) {
+			if strings.ContainsAny(a.Name, unsafeAttrNameBytes) {
 				t.Errorf("%s: unsafe attribute name survived: %q", info, a.Name)
 			}
+		}
+	}
+}
+
+// The guard's real claim is about the rendered page, not about a struct:
+// html.RenderAttributes writes names verbatim and exempts every data- name
+// from its allowlist, so safeAttrName is the only thing between an injected
+// key and a live event handler in the output.
+func TestContainerLabelFormAttributesCannotInjectAHandler(t *testing.T) {
+	for _, src := range []string{
+		":::card[T]{data-y\"onmouseover=\"alert(1)}\nbody\n:::\n",
+		":::card[T]{aria-x\"onmouseover=\"alert(1)}\nbody\n:::\n",
+		":::card[T]{<script>=1}\nbody\n:::\n",
+	} {
+		got := convert(t, src, nil)
+		if strings.Contains(got, "onmouseover") {
+			t.Errorf("%q: event handler reached the output\ngot: %s", src, got)
+		}
+		if strings.Contains(got, "<script") {
+			t.Errorf("%q: script tag reached the output\ngot: %s", src, got)
 		}
 	}
 }
