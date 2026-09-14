@@ -1414,13 +1414,36 @@ In `md2html_test.go`, add to `conformanceChecks`, after the
 ```
 
 `TestFigGalleryRenders` (`fig_test.go:142`) has no golden file — it asserts
-a list of class substrings. In `fig_test.go`, add the new classes to that
-test's `want` list:
+a list of substrings against the converted gallery.
+
+**`Convert` inlines the whole stylesheet into its output**, so a bare class
+name like `fig-note` matches the CSS rule that defines it and the assertion
+passes even when no markup uses the class. Every entry must therefore be a
+full tag fragment. Replace the test's entire `want` list with:
 
 ```go
-		"fig-note", "fig-accent", "fig-group-foot", "fig-stat-detail",
-		"fig-tree", "fig-tree-label", "fig-muted", "fig-wide",
+	for _, want := range []string{
+		`<div class="fig-rows">`, `<div class="fig-cols">`,
+		`<div class="fig-split">`, `<div class="fig-boundary">`,
+		`<div class="fig-box`, `<div class="fig-arrow`,
+		`<div class="fig-result`, `<div class="fig-rail`,
+		`<div class="fig-group`, `<div class="fig-chain">`,
+		`<div class="fig-lane">`,
+		`<span class="fig-stat-value">`, `<dl class="fig-defs">`,
+		"--fig-weight:3",
+		// added by this plan
+		`<span class="fig-note">`, `<li class="fig-accent">`,
+		`<div class="fig-group-foot">`, `<span class="fig-stat-detail">`,
+		`<ul class="fig-tree">`, `<span class="fig-tree-label">`,
+		`<li class="fig-muted">`, `<figure class="fig fig-wide">`,
+	} {
 ```
+
+The pre-existing entries are converted along with the new ones: leaving half
+the list matching the stylesheet while the other half matches markup would
+be worse than either. The unterminated fragments (`<div class="fig-box`) are
+deliberate — those kinds may carry a second class, so the opening quote must
+not be closed.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
