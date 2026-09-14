@@ -120,7 +120,7 @@ func TestFigModifierPlacementRejected(t *testing.T) {
 		{
 			name:    "note on an arrow",
 			src:     "```fig\nitems:\n  - arrow: next\n    note: why\n```\n",
-			wantMsg: "carries note, which only a box, result or rail takes",
+			wantMsg: "carries note, which only a box, result, rail or group takes",
 		},
 		{
 			name:    "accent on an arrow",
@@ -175,8 +175,11 @@ In `fig.go`, inside `validateItems`, immediately after the existing
 `it.Weight` check:
 
 ```go
-		if it.Note != "" && it.Box == nil && it.Result == nil && it.Rail == nil {
-			return fmt.Errorf("%s carries note, which only a box, result or rail takes", at)
+		// note and accent share a predicate: both are legal on any kind
+		// that has a label to hang them beside. A group's label is its
+		// title, so a group takes both; Task 2 renders them.
+		if it.Note != "" && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
+			return fmt.Errorf("%s carries note, which only a box, result, rail or group takes", at)
 		}
 		if it.Accent && it.Box == nil && it.Result == nil && it.Rail == nil && it.Group == nil {
 			return fmt.Errorf("%s carries accent, which only a box, result, rail or group takes", at)
@@ -274,7 +277,8 @@ that needs one, which is what makes `lanes` able to keep its shipped
 
 **Interfaces:**
 - Consumes: `figItem.Accent` and the `fig-accent` class from Task 1.
-- Produces: `figItem.Foot string`; the CSS class `fig-group-foot`.
+- Produces: `figItem.Foot string`; the CSS classes `fig-group-foot` and
+  `.fig-group-title .fig-note`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -340,6 +344,30 @@ func TestFigGroupMarkupUnchangedWithoutModifiers(t *testing.T) {
 Add to `fig_test.go`:
 
 ```go
+// note and foot are different positions on a group, not two spellings of
+// one: the note glosses the title and precedes the items, the foot follows
+// them. A test that only checked both were present would pass with them
+// swapped.
+func TestFigGroupNoteGlossesTheTitle(t *testing.T) {
+	src := "```fig\nitems:\n  - group: retry loop\n    note: N attempts, exponential backoff\n" +
+		"    foot: the only caller\n    items:\n      - box: request\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	want := `<div class="fig-group-title">retry loop<span class="fig-note">N attempts, exponential backoff</span></div>`
+	if !strings.Contains(out, want) {
+		t.Errorf("missing %q in:\n%s", want, out)
+	}
+	if strings.Index(out, `class="fig-note"`) > strings.Index(out, ">request<") {
+		t.Errorf("a group's note must precede its items:\n%s", out)
+	}
+	if strings.Index(out, "fig-group-foot") < strings.Index(out, ">request<") {
+		t.Errorf("a group's foot must follow its items:\n%s", out)
+	}
+}
+
 func TestFigFootRejectedOffAGroup(t *testing.T) {
 	out, warnings := figConvert(t,
 		"```fig\nitems:\n  - box: A\n    foot: trailing\n```\n")
@@ -359,7 +387,8 @@ func TestFigFootRejectedOffAGroup(t *testing.T) {
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `go test -run 'TestFigGroup|TestFigLane|TestFigFoot' .`
-Expected: FAIL — `unknown key "foot"`, and no `fig-group-foot` in the markup.
+Expected: FAIL — `unknown key "foot"`, and neither `fig-group-foot` nor a
+note inside the group title in the markup.
 
 - [ ] **Step 3: Add the struct field**
 
@@ -386,15 +415,22 @@ In `figrender.go`, replace the `Group` case in `item` with:
 
 ```go
 	case it.Group != nil:
-		// A panel or lane that needs a title, an accent or a footnote is a
-		// group; this is the only place any of the three is rendered, so
-		// .fig-panel stays a bare weight carrier.
+		// A panel or lane that needs a title, an accent, a gloss or a
+		// footnote is a group; this is the only place any of the four is
+		// rendered, so .fig-panel stays a bare weight carrier.
 		class := "fig-group"
 		if it.Accent {
 			class += " fig-accent"
 		}
+		title := r.inline(*it.Group)
+		if it.Note != "" {
+			// Inside the title line, before the items. A note glosses the
+			// label it follows, so the reader must meet it before the
+			// content it explains; foot is the slot that comes after.
+			title += `<span class="fig-note">` + r.inline(it.Note) + `</span>`
+		}
 		s := `<div class="` + class + `"><div class="fig-group-title">` +
-			r.inline(*it.Group) + `</div>` + r.items(it.Items)
+			title + `</div>` + r.items(it.Items)
 		if it.Foot != "" {
 			s += `<div class="fig-group-foot">` + r.inline(it.Foot) + `</div>`
 		}
@@ -414,6 +450,17 @@ In `default.css`, immediately after the `.fig-group-title { … }` block:
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+/* A group's note glosses its title, so it sits on the title line instead of
+   breaking below it the way a box's note does. The title is uppercase and
+   letter-spaced; a gloss is prose, so both are reset rather than inherited. */
+.fig-group-title .fig-note {
+  display: inline;
+  margin-top: 0;
+  margin-left: 0.4rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
 ```
 
 - [ ] **Step 7: Run the tests to verify they pass**
@@ -425,7 +472,7 @@ Expected: PASS.
 
 ```bash
 git add fig.go figrender.go default.css fig_test.go figrender_test.go
-git commit -m "feat: let a fig group carry an accent and a trailing foot
+git commit -m "feat: let a fig group carry a note, an accent and a foot
 
 A panel or lane that needs a title, an accent or a footnote is a group.
 That keeps .fig-panel a bare weight carrier and lets lanes keep its
@@ -1178,7 +1225,7 @@ func TestFigTreeIsAKind(t *testing.T) {
 		{
 			name:    "note on a tree",
 			src:     "```fig\nitems:\n  - tree: \"a\"\n    note: why\n```\n",
-			wantMsg: "carries note, which only a box, result or rail takes",
+			wantMsg: "carries note, which only a box, result, rail or group takes",
 		},
 	}
 	for _, c := range cases {
@@ -1540,11 +1587,15 @@ Some kinds take **modifiers** alongside their value:
 
 | Modifier | On | What it does |
 |---|---|---|
-| `note` | `box`, `result`, `rail` | a second, quieter line of text |
+| `note` | `box`, `result`, `rail`, `group` | a quieter gloss beside the label |
 | `accent` | `box`, `result`, `rail`, `group` | marks this item out from its siblings |
 | `foot` | `group` | a trailing line below the group's items |
 
 A modifier used anywhere else is an error, not a silent no-op.
+
+`note` and `foot` are different positions on a `group`, not alternatives. A
+`note` follows the title and glosses it — the reader meets it before the
+group's items. A `foot` follows those items. A group may carry both.
 
 **A panel that needs a title, an accent or a footnote is a `group`.** There
 is no panel-level metadata: put a `group` inside the panel and use its

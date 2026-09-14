@@ -36,9 +36,9 @@ first.
 | Change | Kind of thing |
 |---|---|
 | `tree` | a new leaf kind |
-| `note` | a modifier on `box`, `result`, `rail` |
+| `note` | a modifier on `box`, `result`, `rail`, `group` |
 | `accent` | a modifier on `box`, `result`, `rail`, `group` |
-| `foot` | a modifier on `group` |
+| `foot` | a modifier on `group`, after its items |
 | `detail` | a third field on a stat tile |
 | `wide` | a figure-level flag |
 
@@ -208,7 +208,7 @@ costs microseconds; the struct's single job is worth more.
 
 | Field | Legal on | Rejected where illegal by |
 |---|---|---|
-| `note` | `box`, `result`, `rail` | validation |
+| `note` | `box`, `result`, `rail`, `group` | validation |
 | `accent` | `box`, `result`, `rail`, `group` | validation |
 | `foot` | `group` | validation |
 | `detail` | a stat tile | the decoder, via `figStat` |
@@ -225,10 +225,14 @@ does not apply to a modifier: a modifier names no kind, so an empty one and
 a missing one mean the same thing and render the same way.
 
 **`note`** is a second short piece of text at a different visual weight —
-the muted "why" beside the headline. It is explicitly *not* a composability
-request, and §4.2's rule that diagram primitives stay inline-only is
-untouched: a box may carry two short strings, never a paragraph or a list.
-Chain steps get `note` for free, because a step is an item.
+the muted "why" beside the headline. It is defined by its *position*: the
+secondary text immediately after this kind's label. A group's label is its
+title, so a group's `note` follows the title. Chain steps get `note` for
+free, because a step is an item.
+
+It is explicitly *not* a step toward composability, and §4.2's rule that
+diagram primitives stay inline-only is untouched: a box may carry two short
+strings, never a paragraph or a list.
 
 **`accent`** adds a class rather than changing an element. It is one flag
 covering three needs that could have been three features: a highlighted box, an
@@ -236,6 +240,29 @@ accented panel, an accented lane.
 
 **`foot`** renders after a group's items as a trailing line distinct from
 them.
+
+**Why a group takes both `note` and `foot`.** They are different positions,
+not two spellings of one. A `note` follows the label and is read as part of
+it — a gloss on what the title means. A `foot` follows the *items* and is
+read after them, as a summary or a caveat. Routing a gloss into `foot` moves
+it below the content it was meant to gloss, which produces a different
+document rather than a differently-spelled one. §1's objection to two
+spellings does not apply, because there is only ever one spelling per
+position.
+
+The two are not interchangeable in practice either. A gloss that explains a
+title belongs beside it, before any items; a footnote that summarises or
+qualifies the items belongs after them. The panel footnote that `foot`
+serves is the §1 slot, with a different job.
+
+::: warning
+An earlier draft of this section excluded `note` from `group`, reasoning
+that a group already had a trailing slot and so needed no second string.
+That confused *how many* slots a kind has with *which position* was being
+asked for, and it left `note` meaning one thing on a leaf and nothing at all
+on the one kind that has a title. The rule above replaces it. The mistake is
+recorded because the reasoning was plausible enough to survive a review.
+:::
 
 **`detail`** is the stat tile's third line. §4 will eventually give `stats` a
 container form with full block Markdown, which supersedes the need for a
