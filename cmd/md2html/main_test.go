@@ -197,6 +197,27 @@ func TestRunExcludeWritesNothingIntoExcludedTree(t *testing.T) {
 	}
 }
 
+// End to end: a name glob drops matching documents wherever they sit.
+func TestRunExcludeNamePattern(t *testing.T) {
+	root := tree(t, map[string]string{
+		"index.md":           "# Index\n",
+		"AUDIT_2026.md":      "# Audit\n",
+		"notes/AUDIT_old.md": "# Old\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--exclude", "AUDIT_*", root}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "index.html")); err != nil {
+		t.Errorf("did not write index.html: %v", err)
+	}
+	for _, p := range []string{"AUDIT_2026.html", "notes/AUDIT_old.html"} {
+		if _, err := os.Stat(filepath.Join(root, p)); !os.IsNotExist(err) {
+			t.Errorf("wrote excluded %s: %v", p, err)
+		}
+	}
+}
+
 func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 	root := tree(t, map[string]string{
 		"index.md": "[a](./a.md)\n",

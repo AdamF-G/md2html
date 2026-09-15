@@ -26,10 +26,13 @@ type CrawlOptions struct {
 	NoMdLinks bool
 	// NoAssets leaves asset links unrewritten.
 	NoAssets bool
-	// Exclude lists directory prefixes that must never be entered. Each
-	// value is either absolute or relative to the resolved base. A path at
-	// or beneath one is never seeded, never followed as a link target, and
-	// never written to; a link pointing at one keeps its href exactly as
+	// Exclude lists what must never be entered. A value containing *, ? or
+	// [ is a filepath.Match pattern tested against each file and directory
+	// name below the resolved base, so "AUDIT_*" names documents at any
+	// depth; any other value is a directory prefix, either absolute or
+	// relative to base. A path at or beneath a prefix, or with a name
+	// matching a pattern, is never seeded, never followed as a link target,
+	// and never written to; a link pointing at one keeps its href exactly as
 	// written, the same handling a link escaping base gets in in-place mode.
 	//
 	// This exists for subtrees some other tool already owns — a slide-deck
@@ -112,8 +115,8 @@ func resolve(p string) (string, error) {
 }
 
 // seed returns the Markdown files a single entry point contributes, plus
-// how many candidate paths exclusion caused it to drop. Paths at or
-// beneath an excluded prefix contribute nothing, and an excluded directory
+// how many candidate paths exclusion caused it to drop. Excluded paths
+// contribute nothing, and an excluded directory
 // is never descended into — admit would reject every file inside one
 // anyway, but walking a vendored or archived subtree only to throw the
 // whole result away is work nobody asked for.
@@ -124,7 +127,7 @@ func resolve(p string) (string, error) {
 // tell "nothing here was ever Markdown" apart from "everything here was
 // excluded" once pruning means the latter no longer shows up as files
 // admit had to refuse.
-func seed(entry string, depth int, excluded []string) (files []string, skipped int, err error) {
+func seed(entry string, depth int, excluded exclusions) (files []string, skipped int, err error) {
 	info, err := os.Stat(entry)
 	if err != nil {
 		return nil, 0, fmt.Errorf("entry point %s: %w", entry, err)
@@ -137,7 +140,7 @@ func seed(entry string, depth int, excluded []string) (files []string, skipped i
 		if err != nil {
 			return nil, 0, err
 		}
-		if isExcluded(p, excluded) {
+		if excluded.match(p) {
 			return nil, 1, nil
 		}
 		return []string{p}, 0, nil
@@ -152,7 +155,7 @@ func seed(entry string, depth int, excluded []string) (files []string, skipped i
 			return nil // unreadable subtree: skip, do not abort
 		}
 		if d.IsDir() {
-			if isExcluded(p, excluded) {
+			if excluded.match(p) {
 				skipped++
 				return filepath.SkipDir
 			}
@@ -180,7 +183,7 @@ func seed(entry string, depth int, excluded []string) (files []string, skipped i
 			}
 			// Resolution can land a file inside an excluded subtree even
 			// though the walk reached it outside one, via a symlink.
-			if isExcluded(rp, excluded) {
+			if excluded.match(rp) {
 				skipped++
 				return nil
 			}
@@ -207,11 +210,18 @@ func pathDepth(rel string) int {
 	return n
 }
 
-// resolveExcludes turns each Exclude value into an absolute, cleaned,
-// symlink-resolved directory prefix, plus a warning for any value that
-// matches nothing on disk.
+// resolveExcludes sorts each Exclude value into a name pattern or an
+// absolute, cleaned, symlink-resolved directory prefix, plus a warning for
+// any value that can exclude nothing.
 //
-// A relative value is taken against base, which is why this runs after
+// A name pattern is matched against a single file or directory name, which
+// can never contain a separator, so a pattern holding one — most likely a
+// path glob like "docs/AUDIT_*" — could never match. That, and a pattern
+// filepath.Match rejects as malformed, is warned about and dropped. A
+// pattern is not checked against the disk: finding out whether it matches
+// anything would mean walking the whole tree up front.
+//
+// A relative prefix is taken against base, which is why this runs after
 // commonAncestor rather than at the top of Crawl. Symlinks are resolved so
 // a subtree reached through a link is still recognized as the excluded one,
 // matching how every other path in the crawler is keyed. A value naming
@@ -223,12 +233,26 @@ func pathDepth(rel string) int {
 // point that named it, a value like "docs/vendor" against entry "docs"
 // resolves to ".../docs/docs/vendor" and excludes nothing without the
 // warning saying why.
-func resolveExcludes(vals []string, base string) ([]string, []Warning) {
-	out := make([]string, 0, len(vals))
+func resolveExcludes(vals []string, base string) (exclusions, []Warning) {
+	ex := exclusions{base: base}
 	var warnings []Warning
 	for _, v := range vals {
 		v = strings.TrimSpace(v)
 		if v == "" {
+			continue
+		}
+		if isNamePattern(v) {
+			if strings.ContainsRune(v, '/') || strings.ContainsRune(v, filepath.Separator) {
+				warnings = append(warnings, Warning{v,
+					fmt.Sprintf("exclude %q matches nothing: a pattern is matched against single file and directory names, so it cannot contain a path separator", v)})
+				continue
+			}
+			if _, err := filepath.Match(v, ""); err != nil {
+				warnings = append(warnings, Warning{v,
+					fmt.Sprintf("exclude %q is not a valid pattern: %v", v, err)})
+				continue
+			}
+			ex.names = append(ex.names, v)
 			continue
 		}
 		p := v
@@ -243,9 +267,9 @@ func resolveExcludes(vals []string, base string) ([]string, []Warning) {
 		if err != nil {
 			r = filepath.Clean(p)
 		}
-		out = append(out, r)
+		ex.prefixes = append(ex.prefixes, r)
 	}
-	return out, warnings
+	return ex, warnings
 }
 
 // Crawl discovers every document reachable from the entry points.
@@ -291,10 +315,10 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	admit := func(src, target, ref string, viaLink bool, hops int) {
 		// Exclusion is checked before containment: both are real
 		// constraints, and either one alone has to be able to stop a path.
-		if isExcluded(target, excluded) {
+		if excluded.match(target) {
 			if viaLink {
 				res.Warnings = append(res.Warnings, Warning{src,
-					fmt.Sprintf("not following %s: excluded directory", ref)})
+					fmt.Sprintf("not following %s: excluded", ref)})
 			}
 			return
 		}

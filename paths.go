@@ -78,6 +78,57 @@ func isExcluded(path string, excluded []string) bool {
 	return false
 }
 
+// isNamePattern reports whether an Exclude value is a name glob rather than
+// a directory prefix: whether it contains any of filepath.Match's
+// metacharacters.
+func isNamePattern(v string) bool {
+	return strings.ContainsAny(v, "*?[")
+}
+
+// matchesName reports whether any file or directory name along path
+// matches one of the name patterns. Only the names below the deepest
+// directory path and base share are tested: base's own ancestors are where
+// the run happens to live, not something the caller was describing, so a
+// pattern like "Dev*" must not exclude the whole run for sitting under
+// ~/Developer. A path outside base still has its names below that shared
+// directory tested, so a link reaching an excluded name from outside base
+// cannot pull it back in.
+func matchesName(path, base string, names []string) bool {
+	if len(names) == 0 {
+		return false
+	}
+	rel, err := filepath.Rel(base, filepath.Clean(path))
+	if err != nil {
+		rel = filepath.Base(path)
+	}
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		if part == "." || part == ".." {
+			continue
+		}
+		for _, n := range names {
+			if ok, _ := filepath.Match(n, part); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// exclusions is a resolved Exclude set: the directory prefixes and name
+// patterns resolveExcludes sorted the values into, and the base the
+// patterns are matched below.
+type exclusions struct {
+	base     string
+	prefixes []string
+	names    []string
+}
+
+// match reports whether path is excluded, by prefix or by name. path must
+// be absolute.
+func (x exclusions) match(path string) bool {
+	return isExcluded(path, x.prefixes) || matchesName(path, x.base, x.names)
+}
+
 // outputPath maps a source document to its generated HTML location.
 // Both src and base must be absolute paths.
 // An empty outDir means in-place: the HTML sits beside its source.

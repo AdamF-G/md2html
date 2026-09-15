@@ -561,6 +561,93 @@ func TestCrawlExcludeWarnsWhenValueMatchesNothing(t *testing.T) {
 	}
 }
 
+// A name pattern drops every document so named at any depth, whether it
+// is seeded or reached by a link, and prunes a directory so named. It is
+// not a path on disk, so it must not be warned about as matching nothing.
+func TestCrawlExcludeNamePattern(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":            "[audit](./AUDIT_linked.md)\n[ok](./ok.md)",
+		"docs/ok.md":               "fine",
+		"docs/AUDIT_linked.md":     "x",
+		"docs/deep/AUDIT_seed.md":  "y",
+		"docs/deep/keep.md":        "z",
+		"docs/AUDIT_dir/inside.md": "w",
+	})
+	res, err := Crawl(CrawlOptions{LinkDepth: -1,
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"AUDIT_*"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	want := []string{"docs/deep/keep.md", "docs/index.md", "docs/ok.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	var sawLink bool
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, "./AUDIT_linked.md") && strings.Contains(w.Message, "excluded") {
+			sawLink = true
+		}
+		if strings.Contains(w.Message, "matches nothing") {
+			t.Errorf("pattern warned about as a missing path: %v", w)
+		}
+	}
+	if !sawLink {
+		t.Errorf("no exclusion warning for the linked document, got %v", res.Warnings)
+	}
+}
+
+// A pattern is matched only below base, so one that happens to match a
+// directory the run lives in excludes nothing.
+func TestCrawlExcludeNamePatternIgnoresBaseAndAbove(t *testing.T) {
+	root := writeTree(t, map[string]string{"docs/index.md": "x"})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"doc?"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	if got := srcNames(t, root, res.Docs); !eq(got, []string{"docs/index.md"}) {
+		t.Errorf("got %v, want [docs/index.md]", got)
+	}
+}
+
+// A pattern that can never match — a path glob, or a malformed one — is
+// warned about and dropped, rather than quietly excluding nothing.
+func TestCrawlExcludeWarnsOnUnusablePattern(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":       "x",
+		"docs/sub/AUDIT_a.md": "y",
+	})
+	res, err := Crawl(CrawlOptions{
+		Entries: []string{filepath.Join(root, "docs")},
+		Depth:   -1,
+		Exclude: []string{"sub/AUDIT_*", "[AUDIT"},
+	})
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	for _, v := range []string{"sub/AUDIT_*", "[AUDIT"} {
+		var saw bool
+		for _, w := range res.Warnings {
+			if w.Src == v {
+				saw = true
+			}
+		}
+		if !saw {
+			t.Errorf("no warning for unusable pattern %q, got %v", v, res.Warnings)
+		}
+	}
+	want := []string{"docs/index.md", "docs/sub/AUDIT_a.md"}
+	if got := srcNames(t, root, res.Docs); !eq(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
+
 // Excluding everything is a mistake worth failing on, not an empty build
 // that silently succeeds.
 func TestCrawlExcludeEverythingIsAnError(t *testing.T) {
@@ -589,7 +676,7 @@ func TestSeedSkipsExcludedDirectories(t *testing.T) {
 		"docs/keep/c.md":        "w",
 	})
 	got, _, err := seed(filepath.Join(root, "docs"), -1,
-		[]string{filepath.Join(root, "docs/vendor")})
+		exclusions{prefixes: []string{filepath.Join(root, "docs/vendor")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -613,7 +700,7 @@ func TestSeedSkipsExcludedDirectories(t *testing.T) {
 func TestSeedSkipsExcludedFileEntry(t *testing.T) {
 	root := writeTree(t, map[string]string{"docs/vendor/a.md": "y"})
 	got, _, err := seed(filepath.Join(root, "docs/vendor/a.md"), -1,
-		[]string{filepath.Join(root, "docs/vendor")})
+		exclusions{prefixes: []string{filepath.Join(root, "docs/vendor")}})
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}

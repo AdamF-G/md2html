@@ -121,6 +121,36 @@ func TestIsExcluded(t *testing.T) {
 	}
 }
 
+func TestMatchesName(t *testing.T) {
+	names := []string{"AUDIT_*", "draft?"}
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"/tree/AUDIT_2026.md", true},   // directly below base
+		{"/tree/a/b/AUDIT_x.md", true},  // at any depth
+		{"/tree/drafts/doc.md", true},   // a directory name covers what is inside
+		{"/tree/draft/doc.md", false},   // ? needs exactly one character
+		{"/tree/NOT_AUDIT_x.md", false}, // a pattern matches the whole name
+		{"/tree/audit_x.md", false},     // case-sensitive
+		{"/other/AUDIT_x.md", true},     // outside base, below the shared directory
+		{"/tree", false},                // base itself contributes no name
+	}
+	for _, c := range cases {
+		if got := matchesName(c.path, "/tree", names); got != c.want {
+			t.Errorf("matchesName(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
+// Base's own ancestors are where the run lives, not something a pattern
+// describes.
+func TestMatchesNameIgnoresBaseAncestors(t *testing.T) {
+	if matchesName("/home/drafts1/tree/doc.md", "/home/drafts1/tree", []string{"draft*"}) {
+		t.Error("a pattern matched a directory above base")
+	}
+}
+
 // No exclusions must never exclude anything — the default path through
 // every call site.
 func TestIsExcludedEmptyExcludesNothing(t *testing.T) {

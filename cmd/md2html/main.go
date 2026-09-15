@@ -54,7 +54,7 @@ Entries may be files or directories, and several may be given in one run:
 the emit set is their union, so an extra directory can be built for a
 single invocation without being added to a standing entry list. Links
 between documents are followed across directories, without limit unless
---link-depth says otherwise, and never into an --exclude'd directory.
+--link-depth says otherwise, and never into anything --exclude names.
 Output never leaves -o.
 
 Flags:
@@ -79,7 +79,7 @@ Flags:
 		installProject = fs.Bool("install-skill-project", false, "install the authoring skill under ./.claude/skills and exit")
 	)
 	var exclude stringList
-	fs.Var(&exclude, "exclude", "directory prefix never to enter or write to (repeatable, comma-separated)")
+	fs.Var(&exclude, "exclude", "directory prefix, or file/directory name glob such as 'AUDIT_*', never to enter or write to (repeatable, comma-separated)")
 	// Go's flag package stops parsing at the first positional argument, so a
 	// plain fs.Parse would read "md2html ./docs -o ./site" as three entry
 	// points. Resume parsing after each positional so flags may appear
