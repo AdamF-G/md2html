@@ -305,6 +305,38 @@ main > figure.fig-wide {
   min-width: 0;
 }
 
+/* Panel position draws a card around whatever item sits in it. It is a
+   layer on top of that item's own look, not a replacement: a group in a
+   panel keeps its dashed border inside the card. An arrow panel is exempt,
+   because cols: [group, arrow, group] is how "A -> B" is drawn and a card
+   around the connector would put a box between the boxes. The exemption is
+   a :not() rather than a reset rule so it never has to track which
+   properties the card sets.
+   --fig-surface names what the card paints, so an accent ring inside it can
+   draw its gap in the same colour; see .fig-accent. It is declared by these
+   rules rather than emitted into the markup, so it is not an extension hook:
+   a replacement stylesheet that drops the card loses it, and the ring falls
+   back to --bg. */
+.fig-panel:not(.fig-panel-arrow) {
+  --fig-surface: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--fig-surface);
+  padding: 0.6rem;
+}
+/* Two classes, not one: the :not() above counts as a class, so a bare
+   .fig-panel-accent would lose its border colour to the card's shorthand. */
+.fig-panel.fig-panel-accent { border-color: var(--accent); }
+/* 12%, not the obvious 8%: 8% lands on --code-bg, the fill every box uses,
+   in both themes. Behind @supports because a custom property keeps a value
+   it cannot parse, so an engine without color-mix() would fail background
+   at computed-value time and paint no card at all; here it keeps --bg. */
+@supports (background: color-mix(in srgb, red 50%, blue)) {
+  .fig-panel.fig-panel-accent {
+    --fig-surface: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  }
+}
+
 .fig-box {
   border: 1px solid var(--rule);
   border-radius: 4px;
@@ -364,10 +396,13 @@ main > figure.fig-wide {
 
 /* One flag, three jobs: a highlighted box, an accented panel, an accented
    lane. The ring rather than a border colour alone, because .fig-rail is
-   a filled bar with no border for a colour to land on. */
+   a filled bar with no border for a colour to land on. The ring's gap is
+   painted in --fig-surface, the colour of the card the item sits on, so
+   inside a tinted card it does not show a stripe of page colour; outside
+   any card it is --bg, as it always was. */
 .fig-accent {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 2px var(--fig-surface, var(--bg)), 0 0 0 3px var(--accent);
 }
 
 .fig-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }

@@ -1124,50 +1124,57 @@ func TestBrowserCollapsibleContainerDiscloses(t *testing.T) {
 // Layout under a media query is still behavior, and it still needs a real
 // engine to observe, so it earns the one exception.
 func TestBrowserFigColsStackWhenNarrow(t *testing.T) {
-	page, err := md2html.Convert([]byte(
-		"```fig\nlayout: cols\nitems:\n  - box: Left\n  - box: Right\n```\n"),
-		md2html.Options{})
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
-	}
-	baseURL := serveGenerated(t, map[string][]byte{"fig.html": page})
+	for _, c := range []struct{ name, src string }{
+		{"cols layout", "```fig\nlayout: cols\nitems:\n  - box: Left\n  - box: Right\n```\n"},
+		// A cols item nested in a rows figure has to stack by the same rule:
+		// the media query targets .fig-cols by class, not by depth.
+		{"cols item", "```fig\nitems:\n  - box: Lead\n  - cols:\n      - box: Left\n      - box: Right\n```\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			page, err := md2html.Convert([]byte(c.src), md2html.Options{})
+			if err != nil {
+				t.Fatalf("Convert: %v", err)
+			}
+			baseURL := serveGenerated(t, map[string][]byte{"fig.html": page})
 
-	ctx := newBrowserCtx(t)
+			ctx := newBrowserCtx(t)
 
-	// Both panels' left edges, read from the live layout.
-	const edges = `(() => {
-		const p = [...document.querySelectorAll(".fig-panel")];
-		return p.map(e => e.getBoundingClientRect().left).join(",");
-	})()`
+			// Both panels' left edges, read from the live layout.
+			const edges = `(() => {
+				const p = [...document.querySelectorAll(".fig-cols > .fig-panel")];
+				return p.map(e => e.getBoundingClientRect().left).join(",");
+			})()`
 
-	// No sleep between the resize and the read: getBoundingClientRect
-	// forces a synchronous layout, and CDP applies the metrics override
-	// before the next evaluation returns. Polling until the assertion
-	// holds would turn a real failure into a timeout, which is worse
-	// diagnostics, not better.
-	var wide, narrow string
-	if err := chromedp.Run(ctx,
-		chromedp.EmulateViewport(1200, 800),
-		chromedp.Navigate(baseURL+"/fig.html"),
-		chromedp.WaitVisible(".fig-cols", chromedp.ByQuery),
-		chromedp.Evaluate(edges, &wide),
-		chromedp.EmulateViewport(390, 800),
-		chromedp.Evaluate(edges, &narrow),
-	); err != nil {
-		t.Fatalf("browser run: %v", err)
-	}
+			// No sleep between the resize and the read: getBoundingClientRect
+			// forces a synchronous layout, and CDP applies the metrics override
+			// before the next evaluation returns. Polling until the assertion
+			// holds would turn a real failure into a timeout, which is worse
+			// diagnostics, not better.
+			var wide, narrow string
+			if err := chromedp.Run(ctx,
+				chromedp.EmulateViewport(1200, 800),
+				chromedp.Navigate(baseURL+"/fig.html"),
+				chromedp.WaitVisible(".fig-cols", chromedp.ByQuery),
+				chromedp.Evaluate(edges, &wide),
+				chromedp.EmulateViewport(390, 800),
+				chromedp.Evaluate(edges, &narrow),
+			); err != nil {
+				t.Fatalf("browser run: %v", err)
+			}
 
-	wideLeft := strings.Split(wide, ",")
-	narrowLeft := strings.Split(narrow, ",")
-	if len(wideLeft) != 2 || len(narrowLeft) != 2 {
-		t.Fatalf("want two panels, got wide=%q narrow=%q", wide, narrow)
-	}
-	if wideLeft[0] == wideLeft[1] {
-		t.Errorf("panels should share a row when wide, both left edges at %s", wideLeft[0])
-	}
-	if narrowLeft[0] != narrowLeft[1] {
-		t.Errorf("panels should stack when narrow, left edges %q vs %q",
-			narrowLeft[0], narrowLeft[1])
+			wideLeft := strings.Split(wide, ",")
+			narrowLeft := strings.Split(narrow, ",")
+			if len(wideLeft) != 2 || len(narrowLeft) != 2 {
+				t.Fatalf("want two panels, got wide=%q narrow=%q", wide, narrow)
+			}
+			if wideLeft[0] == wideLeft[1] {
+				t.Errorf("panels should share a row when wide, both left edges at %s", wideLeft[0])
+			}
+			if narrowLeft[0] != narrowLeft[1] {
+				t.Errorf("panels should stack when narrow, left edges %q vs %q",
+					narrowLeft[0], narrowLeft[1])
+			}
+		})
 	}
 }
 
@@ -1433,6 +1440,137 @@ func TestBrowserFigAccentRingNotClipped(t *testing.T) {
 	}
 	if light.Accent == dark.Accent {
 		t.Errorf("--accent did not change between themes (%s)", light.Accent)
+	}
+}
+
+// figColorMath parses the two serializations getComputedStyle uses for an
+// sRGB colour — rgb()/rgba() for a token, color(srgb ...) for a color-mix()
+// result — and computes WCAG contrast from them. The card tests assert
+// floors rather than colours: a palette change that keeps a panel readable
+// passes, and one that does not fails.
+const figColorMath = `
+	function channels(s) {
+		let m = s.match(/^rgba?\(([^)]*)\)$/);
+		if (m) return m[1].split(/[\s,\/]+/).filter(Boolean).slice(0, 3).map(v => parseFloat(v) / 255);
+		m = s.match(/^color\(srgb ([^)]*)\)$/);
+		if (m) return m[1].split(/[\s\/]+/).filter(Boolean).slice(0, 3).map(parseFloat);
+		throw new Error("unparsed colour: " + s);
+	}
+	function luminance(s) {
+		const lin = c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+		const [r, g, b] = channels(s).map(lin);
+		return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+	}
+	function contrast(a, b) {
+		const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+		return (hi + 0.05) / (lo + 0.05);
+	}
+	function channelDelta(a, b) {
+		const x = channels(a), y = channels(b);
+		return Math.max(...x.map((v, i) => Math.abs(v - y[i])));
+	}`
+
+// Panel position draws a card around whatever item sits in it, an accented
+// item tints that card, and an arrow panel draws none. The tint is the one
+// fig surface that is not a plain token, so it is also the one place
+// contrast is measured instead of assumed: the muted title on it must stay
+// readable, a box's fill must stay distinguishable from it, and an accent
+// ring inside it must draw its gap in the tint rather than in the page.
+func TestBrowserFigPanelCard(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nlayout: cols\nitems:\n"+
+			"  - group: Plain\n    items:\n      - box: Inside\n"+
+			"  - arrow: \"\"\n"+
+			"  - group: Marked\n    accent: true\n    items:\n      - box: Ringed\n        accent: true\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"card.html": page})
+	ctx := newBrowserCtx(t)
+
+	const probe = figResolveVar + figColorMath + `
+	(() => {
+		const [plain, arrow, marked] = [...document.querySelectorAll(".fig-panel")];
+		const cs = e => getComputedStyle(e);
+		const title = marked.querySelector(".fig-group-title");
+		const ringed = marked.querySelector(".fig-box");
+		const shadow = cs(ringed).boxShadow;
+		const gap = shadow.match(/^(rgba?\([^)]*\)|color\([^)]*\))/);
+		return {
+			plainStyle:    cs(plain).borderTopStyle,
+			plainBorder:   cs(plain).borderTopColor,
+			plainBg:       cs(plain).backgroundColor,
+			arrowStyle:    cs(arrow).borderTopStyle,
+			markedBorder:  cs(marked).borderTopColor,
+			markedBg:      cs(marked).backgroundColor,
+			titleContrast: contrast(cs(title).color, cs(marked).backgroundColor),
+			fillContrast:  contrast(cs(ringed).backgroundColor, cs(marked).backgroundColor),
+			gapDelta:      gap ? channelDelta(gap[1], cs(marked).backgroundColor) : -1,
+			shadow:        shadow,
+			rule:          resolveVar("--rule"),
+			accent:        resolveVar("--accent"),
+			bg:            resolveVar("--bg"),
+		};
+	})()`
+
+	type sample struct {
+		PlainStyle, PlainBorder, PlainBg, ArrowStyle string
+		MarkedBorder, MarkedBg                       string
+		TitleContrast, FillContrast, GapDelta        float64
+		Shadow, Rule, Accent, Bg                     string
+	}
+	var light, dark sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/card.html"),
+		chromedp.WaitVisible(".fig-panel", chromedp.ByQuery),
+		figSetTheme("light"),
+		chromedp.Evaluate(probe, &light),
+		figSetTheme("dark"),
+		chromedp.Evaluate(probe, &dark),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	for _, c := range []struct {
+		theme string
+		got   sample
+	}{{"light", light}, {"dark", dark}} {
+		g := c.got
+		if g.PlainStyle != "solid" {
+			t.Errorf("%s: a panel should draw a solid card border, got %q", c.theme, g.PlainStyle)
+		}
+		if g.PlainBorder != g.Rule {
+			t.Errorf("%s: a card border should paint in --rule (%s), got %s", c.theme, g.Rule, g.PlainBorder)
+		}
+		if g.PlainBg != g.Bg {
+			t.Errorf("%s: a plain card should paint --bg (%s), got %s", c.theme, g.Bg, g.PlainBg)
+		}
+		if g.ArrowStyle != "none" {
+			t.Errorf("%s: an arrow panel should draw no card, got border style %q", c.theme, g.ArrowStyle)
+		}
+		if g.MarkedBorder != g.Accent {
+			t.Errorf("%s: an accented card border should paint in --accent (%s), got %s", c.theme, g.Accent, g.MarkedBorder)
+		}
+		if g.MarkedBg == g.Bg {
+			t.Errorf("%s: an accented panel should tint its card, got plain --bg (%s)", c.theme, g.Bg)
+		}
+		if g.TitleContrast < 4.5 {
+			t.Errorf("%s: a muted title on the tint must keep 4.5:1 contrast, got %.2f", c.theme, g.TitleContrast)
+		}
+		if g.FillContrast < 1.05 {
+			t.Errorf("%s: a box's fill must stay distinguishable from the tint (>= 1.05), got %.3f", c.theme, g.FillContrast)
+		}
+		switch {
+		case g.GapDelta < 0:
+			t.Errorf("%s: could not read the ring's gap colour from %q", c.theme, g.Shadow)
+		case g.GapDelta > 0.01:
+			t.Errorf("%s: the ring's gap should be drawn in the card's tint (%s), got %q", c.theme, g.MarkedBg, g.Shadow)
+		}
+	}
+	if light.Accent == dark.Accent {
+		t.Errorf("--accent did not change between themes (%s); the theme switch is not taking effect", light.Accent)
 	}
 }
 
