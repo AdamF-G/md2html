@@ -637,7 +637,10 @@ items:
 ```
 
 A `cols` item's children take `weight` exactly as a `cols` figure's items
-do. A figure whose only item is a `cols` or `split` item is an error: that
+do. Inside a `chain`, the other steps size to their content and a `cols`
+or `split` step takes the width they leave, so its weights share out that
+width rather than the whole row's. A
+figure whose only item is a `cols` or `split` item is an error: that
 is `layout: cols` or `layout: split` spelled a second way, and the warning
 names the spelling to use.
 

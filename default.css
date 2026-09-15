@@ -304,6 +304,11 @@ main > figure.fig-wide {
   flex: var(--fig-weight, 1) 1 0;
   min-width: 0;
 }
+/* A chain sizes its boxes and arrows to their content. A cols or split step
+   takes the width they leave instead: sized to its own content, it would
+   hand its panels that width from a zero basis, and a lighter panel would
+   come out narrower than its own text. */
+.fig-chain > .fig-cols, .fig-chain > .fig-split { flex: 1 1 0; }
 
 /* Panel position draws a card around whatever item sits in it. It is a
    layer on top of that item's own look, not a replacement: a group in a
@@ -336,6 +341,10 @@ main > figure.fig-wide {
     --fig-surface: color-mix(in srgb, var(--accent) 12%, var(--bg));
   }
 }
+/* A connector panel draws no card, so nothing shows the row's height around
+   it. Left to stretch, its glyph sits level with the cards' top edges;
+   centred, it sits between their middles, where "A -> B" reads. */
+.fig-cols > .fig-panel-arrow { align-self: center; }
 
 .fig-box {
   border: 1px solid var(--rule);
@@ -539,6 +548,10 @@ main > figure.fig-wide {
 @media (max-width: 34rem) {
   .fig-cols, .fig-lanes, .fig-chain, .fig-split { flex-direction: column; }
   .fig-cols > .fig-panel, .fig-split > .fig-panel { flex: 1 1 auto; }
+  /* A split centres its panels across the row so the boundary lines up with
+     them. Stacked, that same rule would shrink each card to its content
+     instead of spanning the column the way a cols panel does. */
+  .fig-split { align-items: stretch; }
   .fig-cols > .fig-panel > .fig-arrow::before,
   .fig-split > .fig-panel > .fig-arrow::before,
   .fig-chain > .fig-arrow::before { content: "\2193"; }
