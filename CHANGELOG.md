@@ -9,6 +9,27 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- **`--exclude` accepts name globs.** A value containing `*`, `?` or `[`
+  is matched, with Go's `filepath.Match` syntax, against every file and
+  directory name below the base instead of being taken as a directory
+  prefix. `--exclude 'AUDIT_*'` skips every document named that way at any
+  depth, and prunes any directory named that way. A pattern never matches
+  the base or a directory above it. A pattern containing a path separator,
+  or a malformed one, is warned about and ignored.
+
+### Changed
+
+- **breaking:** an `--exclude` value containing `*`, `?` or `[` used to be
+  a literal directory path, and is now a name pattern. To exclude a
+  directory whose name contains one of those characters, escape it with
+  `\`; that matches the name at any depth below the base.
+- The warning for a link into an excluded path now ends "excluded" rather
+  than "excluded directory", since the match may be a file name.
+
 ## v0.4.0 — 2026-09-14
 
 ### Added

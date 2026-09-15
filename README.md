@@ -184,6 +184,9 @@ md2html README.md                            # one file, HTML beside it
 # The maintained set, plus one scratch directory for this run only,
 # with a vendored subtree another tool owns left strictly alone.
 md2html -o ./site ./docs ./scratch/notes --exclude vendor
+
+# Skip every document named AUDIT_*, wherever it sits.
+md2html -o ./site ./docs --exclude 'AUDIT_*'
 ```
 
 ### Two kinds of reach
@@ -249,7 +252,7 @@ unrelated tools that share the name is never claimed.
 | `--no-external-links` | do not mark external links |
 | `--no-md-links` | do not rewrite `.md` links |
 | `--no-assets` | do not rewrite asset links |
-| `--exclude DIR` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute); repeatable, or comma-separated |
+| `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
 | `--install-skill-user` | install the Claude Code authoring skill under `~/.claude/skills` and exit |
 | `--install-skill-project` | install it under `./.claude/skills` instead |
