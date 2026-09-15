@@ -228,6 +228,10 @@ func (r *figRenderer) item(it figItem) string {
 		}
 		b.WriteString(`</div>`)
 		return b.String()
+	case it.Cols != nil:
+		return r.layout("cols", it.Cols, "")
+	case it.Split != nil:
+		return r.layout("split", it.Split, it.Boundary)
 	}
 	return ""
 }
@@ -252,4 +256,36 @@ func figWeight(n int) int {
 func (r *figRenderer) panel(it figItem) string {
 	return fmt.Sprintf(`<div class="fig-panel" style="--fig-weight:%d">%s</div>`,
 		figWeight(it.Weight), r.item(it))
+}
+
+// layout renders a run of items in one of the three layouts. A figure calls
+// it with its own layout and boundary; a cols or split item calls it with
+// its own list, so a nested layout is the same markup as a figure-level one
+// rather than a second implementation of it. Any kind other than cols or
+// split is rows, which is what an unset figure layout means.
+func (r *figRenderer) layout(kind string, items []figItem, boundary string) string {
+	var b strings.Builder
+	switch kind {
+	case "cols":
+		b.WriteString(`<div class="fig-cols">`)
+		for _, it := range items {
+			b.WriteString(r.panel(it))
+		}
+		b.WriteString(`</div>`)
+	case "split":
+		// Validation has already guaranteed exactly two items, for a split
+		// figure and a split item alike.
+		b.WriteString(`<div class="fig-split">`)
+		b.WriteString(r.panel(items[0]))
+		b.WriteString(`<div class="fig-boundary">`)
+		b.WriteString(r.inline(boundary))
+		b.WriteString(`</div>`)
+		b.WriteString(r.panel(items[1]))
+		b.WriteString(`</div>`)
+	default:
+		b.WriteString(`<div class="fig-rows">`)
+		b.WriteString(r.items(items))
+		b.WriteString(`</div>`)
+	}
+	return b.String()
 }

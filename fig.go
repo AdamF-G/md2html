@@ -53,6 +53,8 @@ type figItem struct {
 	Defs  []figDef    `yaml:"defs"`
 	Chain []figItem   `yaml:"chain"`
 	Lanes [][]figItem `yaml:"lanes"`
+	Cols  []figItem   `yaml:"cols"`
+	Split []figItem   `yaml:"split"`
 
 	Items  []figItem `yaml:"items"`
 	Weight int       `yaml:"weight"`
@@ -64,6 +66,9 @@ type figItem struct {
 	Note   string `yaml:"note"`
 	Accent bool   `yaml:"accent"`
 	Foot   string `yaml:"foot"`
+	// Boundary is the label between a split item's two panels — the same
+	// label figDoc.Boundary is for a split figure.
+	Boundary string `yaml:"boundary"`
 }
 
 // kinds reports every kind key set on an item. Exactly one is legal; the
@@ -84,6 +89,8 @@ func (it figItem) kinds() []string {
 		{"defs", it.Defs != nil},
 		{"chain", it.Chain != nil},
 		{"lanes", it.Lanes != nil},
+		{"cols", it.Cols != nil},
+		{"split", it.Split != nil},
 	} {
 		if k.set {
 			out = append(out, k.name)
@@ -101,8 +108,8 @@ func (it figItem) takesLabelModifier() bool {
 // validateFig enforces what the decoder cannot see. KnownFields rejects a
 // key no kind defines, but one struct carries every kind's fields, so only
 // validation knows whether a key is legal *here*: that an item names one
-// kind and not two, and that weight appears only on a panel of a cols
-// layout.
+// kind and not two, and that weight appears only on a child of a cols
+// layout or cols item.
 //
 // Errors carry an item path (items[1].chain[0]) rather than a line number.
 // Retaining lines would need a custom UnmarshalYAML on figItem, and
@@ -118,9 +125,10 @@ func validateFig(doc figDoc) error {
 	return validateItems(doc.Items, "items", doc.Layout == "cols")
 }
 
-// validateItems walks one level of items. weightOK is true only for the
-// top level of a cols layout, so nesting cannot smuggle a weight in.
-func validateItems(items []figItem, path string, weightOK bool) error {
+// validateItems walks one level of items. inCols is true only for the items
+// of a cols layout or a cols item — the only positions where weight means
+// anything — so nesting cannot smuggle a weight in.
+func validateItems(items []figItem, path string, inCols bool) error {
 	for i, it := range items {
 		at := fmt.Sprintf("%s[%d]", path, i)
 		switch ks := it.kinds(); len(ks) {
@@ -131,8 +139,8 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 			return fmt.Errorf("%s names %d kinds (%s); an item is exactly one",
 				at, len(ks), strings.Join(ks, ", "))
 		}
-		if it.Weight != 0 && !weightOK {
-			return fmt.Errorf("%s carries weight, which is only legal on a panel of a cols layout", at)
+		if it.Weight != 0 && !inCols {
+			return fmt.Errorf("%s carries weight, which only a child of a cols layout or cols item takes", at)
 		}
 		// note and accent share a predicate: both are legal on any kind
 		// that has a label to hang them beside. A group's label is its
@@ -145,6 +153,12 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 		}
 		if it.Foot != "" && it.Group == nil {
 			return fmt.Errorf("%s carries foot, which only a group takes", at)
+		}
+		if it.Boundary != "" && it.Split == nil {
+			return fmt.Errorf("%s carries boundary, which only a split takes", at)
+		}
+		if it.Split != nil && len(it.Split) != 2 {
+			return fmt.Errorf("%s: a split needs exactly 2 items, got %d", at, len(it.Split))
 		}
 		// Parsed here so a malformed tree degrades the fence before any
 		// markup is written. The renderer parses it again; see the comment
@@ -167,6 +181,12 @@ func validateItems(items []figItem, path string, weightOK bool) error {
 			if err := validateItems(lane, fmt.Sprintf("%s.lanes[%d]", at, j), false); err != nil {
 				return err
 			}
+		}
+		if err := validateItems(it.Cols, at+".cols", true); err != nil {
+			return err
+		}
+		if err := validateItems(it.Split, at+".split", false); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -294,27 +314,7 @@ func renderFig(body []byte, warn func(string)) (string, bool) {
 		figClass += " fig-wide"
 	}
 	b.WriteString(`<figure class="` + figClass + `">`)
-	switch doc.Layout {
-	case "cols":
-		b.WriteString(`<div class="fig-cols">`)
-		for _, it := range doc.Items {
-			b.WriteString(r.panel(it))
-		}
-		b.WriteString(`</div>`)
-	case "split":
-		// validateFig has already guaranteed exactly two items.
-		b.WriteString(`<div class="fig-split">`)
-		b.WriteString(r.panel(doc.Items[0]))
-		b.WriteString(`<div class="fig-boundary">`)
-		b.WriteString(r.inline(doc.Boundary))
-		b.WriteString(`</div>`)
-		b.WriteString(r.panel(doc.Items[1]))
-		b.WriteString(`</div>`)
-	default:
-		b.WriteString(`<div class="fig-rows">`)
-		b.WriteString(r.items(doc.Items))
-		b.WriteString(`</div>`)
-	}
+	b.WriteString(r.layout(doc.Layout, doc.Items, doc.Boundary))
 	if doc.Caption != "" {
 		b.WriteString(`<figcaption>`)
 		b.WriteString(r.inline(doc.Caption))

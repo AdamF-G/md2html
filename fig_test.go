@@ -496,3 +496,71 @@ func TestFigTreeIsAKind(t *testing.T) {
 		})
 	}
 }
+
+// A layout item is validated where it sits. Every case leads with another
+// item so the figure never has a layout item as its only item, which is a
+// separate fault with its own test.
+func TestFigLayoutItemRejects(t *testing.T) {
+	cases := []struct{ name, src, wantMsg string }{
+		{
+			name:    "split with one item",
+			src:     "```fig\nitems:\n  - box: Lead\n  - split:\n      - box: A\n```\n",
+			wantMsg: "items[1]: a split needs exactly 2 items, got 1",
+		},
+		{
+			name:    "split with three items",
+			src:     "```fig\nitems:\n  - box: Lead\n  - split:\n      - box: A\n      - box: B\n      - box: C\n```\n",
+			wantMsg: "items[1]: a split needs exactly 2 items, got 3",
+		},
+		{
+			name:    "boundary on a box",
+			src:     "```fig\nitems:\n  - box: Lead\n    boundary: to\n```\n",
+			wantMsg: "items[0] carries boundary, which only a split takes",
+		},
+		{
+			name:    "boundary on a group",
+			src:     "```fig\nitems:\n  - group: G\n    boundary: to\n    items:\n      - box: A\n```\n",
+			wantMsg: "items[0] carries boundary, which only a split takes",
+		},
+		{
+			name:    "boundary on a cols item",
+			src:     "```fig\nitems:\n  - box: Lead\n  - cols:\n      - box: A\n    boundary: to\n```\n",
+			wantMsg: "items[1] carries boundary, which only a split takes",
+		},
+		{
+			name:    "weight on a split child",
+			src:     "```fig\nitems:\n  - box: Lead\n  - split:\n      - box: A\n        weight: 2\n      - box: B\n```\n",
+			wantMsg: "items[1].split[0] carries weight, which only a child of a cols layout or cols item takes",
+		},
+		{
+			name:    "weight on a group child",
+			src:     "```fig\nitems:\n  - group: G\n    items:\n      - box: A\n        weight: 2\n```\n",
+			wantMsg: "items[0].items[0] carries weight",
+		},
+		{
+			// inCols must not leak past the cols item's own children.
+			name:    "weight on a grandchild of a cols item",
+			src:     "```fig\nitems:\n  - box: Lead\n  - cols:\n      - group: G\n        items:\n          - box: A\n            weight: 2\n```\n",
+			wantMsg: "items[1].cols[0].items[0] carries weight",
+		},
+		{
+			name:    "split and box on one item",
+			src:     "```fig\nitems:\n  - box: Lead\n  - box: A\n    split:\n      - box: B\n      - box: C\n```\n",
+			wantMsg: "names 2 kinds (box, split)",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, warnings := figConvert(t, c.src)
+			if !strings.Contains(out, `class="language-fig"`) {
+				t.Errorf("want a code-block fallback, got:\n%s", out)
+			}
+			if len(warnings) != 1 {
+				t.Fatalf("want exactly 1 warning, got %v", warnings)
+			}
+			if !strings.Contains(warnings[0], c.wantMsg) {
+				t.Errorf("warning %q should contain %q", warnings[0], c.wantMsg)
+			}
+		})
+	}
+}

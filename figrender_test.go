@@ -496,3 +496,88 @@ func TestFigEmptyTreeRendersAnEmptyList(t *testing.T) {
 		t.Errorf("want an empty list, got:\n%s", out)
 	}
 }
+
+func TestFigColsItemTakesWeights(t *testing.T) {
+	src := "```fig\nitems:\n  - box: Lead\n  - cols:\n      - box: Wide\n        weight: 3\n      - box: Narrow\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	want := `<div class="fig-rows"><div class="fig-box">Lead</div>` +
+		`<div class="fig-cols">` +
+		`<div class="fig-panel" style="--fig-weight:3"><div class="fig-box">Wide</div></div>` +
+		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-box">Narrow</div></div>` +
+		`</div></div>`
+	if !strings.Contains(out, want) {
+		t.Errorf("missing %q in:\n%s", want, out)
+	}
+}
+
+// The case the item form exists for: context above a split and an outcome
+// below it, in one figure.
+func TestFigSplitItemBetweenOtherItems(t *testing.T) {
+	src := "```fig\nitems:\n  - rail: Context\n  - split:\n      - box: Client\n      - box: Server\n    boundary: TLS\n  - result: Done\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	want := `<div class="fig-rail">Context</div>` +
+		`<div class="fig-split">` +
+		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-box">Client</div></div>` +
+		`<div class="fig-boundary">TLS</div>` +
+		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-box">Server</div></div>` +
+		`</div>` +
+		`<div class="fig-result">Done</div>`
+	if !strings.Contains(out, want) {
+		t.Errorf("missing %q in:\n%s", want, out)
+	}
+}
+
+func TestFigSplitNestsInsideAGroupInAPanel(t *testing.T) {
+	src := "```fig\nlayout: cols\nitems:\n  - group: Outer\n    items:\n      - split:\n          - box: A\n          - box: B\n        boundary: to\n  - box: Other\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-group-title">Outer</div><div class="fig-split">`,
+		`<div class="fig-boundary">to</div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+// The figure-level layout and the item form share r.layout, so the same
+// split written either way must emit the same block. The comparison is
+// between the two renders rather than against a hand-copied string, which
+// is what makes it a test of sharing and not of transcription.
+func TestFigSplitItemMatchesSplitLayout(t *testing.T) {
+	layoutOut, w1 := figConvert(t, "```fig\nlayout: split\nboundary: becomes\nitems:\n"+
+		"  - group: Before\n    items:\n      - box: Handler\n"+
+		"  - group: After\n    accent: true\n    items:\n      - box: Cache\n```\n")
+	itemOut, w2 := figConvert(t, "```fig\nitems:\n  - box: Lead\n  - split:\n"+
+		"      - group: Before\n        items:\n          - box: Handler\n"+
+		"      - group: After\n        accent: true\n        items:\n          - box: Cache\n"+
+		"    boundary: becomes\n```\n")
+
+	if len(w1) != 0 || len(w2) != 0 {
+		t.Fatalf("want no warnings, got layout=%v item=%v", w1, w2)
+	}
+	start, end := strings.Index(layoutOut, `<div class="fig-split">`), strings.Index(layoutOut, `</figure>`)
+	if start < 0 || end < start {
+		t.Fatalf("no split block in the layout form:\n%s", layoutOut)
+	}
+	block := layoutOut[start:end]
+	// In the item form the split follows the lead box and is closed by the
+	// rows wrapper, then the figure.
+	want := `<div class="fig-box">Lead</div>` + block + `</div></figure>`
+	if !strings.Contains(itemOut, want) {
+		t.Errorf("the item form should emit the layout form's split block verbatim\nlayout form:\n%s\nitem form:\n%s",
+			layoutOut, itemOut)
+	}
+}
