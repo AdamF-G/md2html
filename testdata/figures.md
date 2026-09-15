@@ -112,6 +112,62 @@ items:
       - box: Cache
 ```
 
+## A split inside rows
+
+A `split` is an item too, so context can sit above one and an outcome below
+it. The server panel's `accent` tints its card.
+
+```fig
+caption: One trust boundary, with context either side
+items:
+  - rail: A request crosses one trust boundary
+  - split:
+      - group: Client
+        items:
+          - box: Browser
+      - group: Server
+        accent: true
+        items:
+          - box: Handler
+          - arrow: ""
+          - box: Store
+    boundary: TLS
+  - result: The response is signed
+```
+
+## Nested weighted columns
+
+```fig
+caption: A cols item inside a panel, with weights of its own
+layout: cols
+items:
+  - group: Before
+    items:
+      - box: Handler
+  - cols:
+      - box: Handler
+        weight: 2
+      - box: Cache
+```
+
+## An accented panel
+
+The card tints for an accented item. An accented box inside keeps its ring,
+with the ring's gap drawn against the tint rather than against the page.
+
+```fig
+layout: cols
+items:
+  - group: Unchanged
+    items:
+      - box: Handler
+  - group: New layer
+    accent: true
+    items:
+      - box: Cache
+        accent: true
+```
+
 ## Modifiers
 
 ```fig

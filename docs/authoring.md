@@ -612,11 +612,34 @@ Every item is exactly one *kind*:
 | `chain` | list of items | steps connected in sequence |
 | `lanes` | list of lists | parallel stacks |
 | `tree` | an indented block scalar | a file or config hierarchy |
+| `cols` | list of items | items side by side, anywhere an item goes |
+| `split` | list of exactly 2 items | two panels either side of a `boundary` |
 
 `layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
 top-level item may carry `weight` (1–12; out-of-range values are clamped,
 not rejected). Under `split`, exactly two items sit either side of a
 `boundary` label.
+
+`cols` and `split` are also item kinds, so a layout can sit anywhere an
+item can — context above a split and an outcome below it, or a split
+inside one column:
+
+```yaml
+items:
+  - rail: A request crosses one trust boundary
+  - split:
+      - group: Client
+        items: [{box: Browser}]
+      - group: Server
+        items: [{box: Handler}]
+    boundary: TLS
+  - result: The response is signed
+```
+
+A `cols` item's children take `weight` exactly as a `cols` figure's items
+do. A figure whose only item is a `cols` or `split` item is an error: that
+is `layout: cols` or `layout: split` spelled a second way, and the warning
+names the spelling to use.
 
 Some kinds take **modifiers** alongside their value:
 
@@ -625,6 +648,7 @@ Some kinds take **modifiers** alongside their value:
 | `note` | `box`, `result`, `rail`, `group` | a quieter gloss beside the label |
 | `accent` | `box`, `result`, `rail`, `group` | marks this item out from its siblings |
 | `foot` | `group` | a trailing line below the group's items |
+| `boundary` | `split` | the label between its two panels |
 
 A modifier used anywhere else is an error, not a silent no-op.
 
@@ -638,6 +662,11 @@ group's items. A `foot` follows those items. A group may carry both.
 **A panel that needs a title, an accent or a footnote is a `group`.** There
 is no panel-level metadata: put a `group` inside the panel and use its
 title, `accent` and `foot`. The same goes for a lane of a `lanes` item.
+
+**Every panel draws a card** — a border and padding around whatever item
+sits in it, on top of that item's own look. A panel whose item carries
+`accent` tints its card. A panel holding an arrow draws no card, so a
+`cols` of group, arrow, group still reads as one thing leading to another.
 
 Set `wide: true` at the top level to let a figure break out of the text
 column.

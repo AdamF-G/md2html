@@ -141,6 +141,7 @@ from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 | Diagram | `` ```mermaid `` fence |
 | Hand-laid-out figure | ` ```fig ` fence, YAML body |
 | File or config hierarchy | `tree:` item in a ` ```fig ` fence, one node per line |
+| Context above or below a split | `split:` item between other items in a ` ```fig ` fence |
 | Cross-document link | `[x](./other.md)` — never `.html` |
 | Artifact-shaped output | `--fragment` |
 
