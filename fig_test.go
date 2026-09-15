@@ -497,6 +497,66 @@ func TestFigTreeIsAKind(t *testing.T) {
 	}
 }
 
+// A rows figure whose only item is a layout item means exactly what the
+// figure-level layout means. One spelling per figure: the item form there
+// is a fault that names the other.
+func TestFigSoleLayoutItemRejected(t *testing.T) {
+	cases := []struct{ name, src, wantMsg string }{
+		{
+			name:    "split",
+			src:     "```fig\nitems:\n  - split:\n      - box: A\n      - box: B\n```\n",
+			wantMsg: "items[0] is the figure's only item; write layout: split instead",
+		},
+		{
+			name:    "cols",
+			src:     "```fig\nitems:\n  - cols:\n      - box: A\n      - box: B\n```\n",
+			wantMsg: "items[0] is the figure's only item; write layout: cols instead",
+		},
+		{
+			name:    "explicit rows layout",
+			src:     "```fig\nlayout: rows\nitems:\n  - split:\n      - box: A\n      - box: B\n```\n",
+			wantMsg: "write layout: split instead",
+		},
+		{
+			// An item naming two kinds gets the more precise fault.
+			name:    "two kinds still reported as two kinds",
+			src:     "```fig\nitems:\n  - box: A\n    split:\n      - box: B\n      - box: C\n```\n",
+			wantMsg: "names 2 kinds",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, warnings := figConvert(t, c.src)
+			if !strings.Contains(out, `class="language-fig"`) {
+				t.Errorf("want a code-block fallback, got:\n%s", out)
+			}
+			if len(warnings) != 1 {
+				t.Fatalf("want exactly 1 warning, got %v", warnings)
+			}
+			if !strings.Contains(warnings[0], c.wantMsg) {
+				t.Errorf("warning %q should contain %q", warnings[0], c.wantMsg)
+			}
+		})
+	}
+}
+
+// The rule is about the figure's own item list. Anywhere else a lone layout
+// item is not a second spelling of anything.
+func TestFigLoneLayoutItemElsewhereIsLegal(t *testing.T) {
+	for _, src := range []string{
+		"```fig\nitems:\n  - group: G\n    items:\n      - split:\n          - box: A\n          - box: B\n```\n",
+		"```fig\nlayout: cols\nitems:\n  - split:\n      - box: A\n      - box: B\n```\n",
+	} {
+		out, warnings := figConvert(t, src)
+		if len(warnings) != 0 {
+			t.Errorf("%q: want no warnings, got %v", src, warnings)
+		}
+		if !strings.Contains(out, `<div class="fig-split">`) {
+			t.Errorf("%q: want a rendered split, got:\n%s", src, out)
+		}
+	}
+}
+
 // A layout item is validated where it sits. Every case leads with another
 // item so the figure never has a layout item as its only item, which is a
 // separate fault with its own test.

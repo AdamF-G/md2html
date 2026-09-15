@@ -122,6 +122,18 @@ func validateFig(doc figDoc) error {
 	if doc.Layout == "split" && len(doc.Items) != 2 {
 		return fmt.Errorf("a split layout needs exactly 2 items, got %d", len(doc.Items))
 	}
+	// A rows figure whose only item is a layout item is layout: cols or
+	// layout: split written a second way. Checked only once that item names
+	// exactly one kind, so an item naming two still gets the more precise
+	// fault from validateItems.
+	if (doc.Layout == "" || doc.Layout == "rows") && len(doc.Items) == 1 && len(doc.Items[0].kinds()) == 1 {
+		switch it := doc.Items[0]; {
+		case it.Cols != nil:
+			return errors.New("items[0] is the figure's only item; write layout: cols instead")
+		case it.Split != nil:
+			return errors.New("items[0] is the figure's only item; write layout: split instead")
+		}
+	}
 	return validateItems(doc.Items, "items", doc.Layout == "cols")
 }
 
