@@ -1116,19 +1116,34 @@ func TestBrowserCollapsibleContainerDiscloses(t *testing.T) {
 	}
 }
 
-// A cols layout must put its panels side by side on a wide viewport and
-// stack them on a phone. This is the one piece of figure behavior no markup
-// assertion can observe: the stylesheet's only media query decides it.
+// A cols or split layout must put its panels side by side on a wide viewport
+// and stack them on a phone, each stacked panel spanning its container. This
+// is the one piece of figure behavior no markup assertion can observe: the
+// stylesheet's only media query decides it.
 //
 // The rest of this suite exists for JavaScript, which figures ship none of.
 // Layout under a media query is still behavior, and it still needs a real
 // engine to observe, so it earns the one exception.
-func TestBrowserFigColsStackWhenNarrow(t *testing.T) {
-	for _, c := range []struct{ name, src string }{
-		{"cols layout", "```fig\nlayout: cols\nitems:\n  - box: Left\n  - box: Right\n```\n"},
-		// A cols item nested in a rows figure has to stack by the same rule:
-		// the media query targets .fig-cols by class, not by depth.
-		{"cols item", "```fig\nitems:\n  - box: Lead\n  - cols:\n      - box: Left\n      - box: Right\n```\n"},
+func TestBrowserFigPanelsStackWhenNarrow(t *testing.T) {
+	for _, c := range []struct {
+		name, src string
+		// ratio, when set, is the first panel's weight over the second's: the
+		// ratio their content widths must keep while they share a row. Every
+		// panel grows from a zero basis, so the free width is shared out by
+		// weight exactly, and the card's padding and border are added on top.
+		ratio float64
+	}{
+		{name: "cols layout", src: "```fig\nlayout: cols\nitems:\n  - box: Left\n  - box: Right\n```\n"},
+		// Nested layouts have to stack by the same rule: the media query
+		// targets .fig-cols and .fig-split by class, not by depth.
+		{name: "cols item", src: "```fig\nitems:\n  - box: Lead\n  - cols:\n      - box: Left\n      - box: Right\n```\n"},
+		{name: "split layout", src: "```fig\nlayout: split\nboundary: to\nitems:\n  - box: Left\n  - box: Right\n```\n"},
+		{name: "split item", src: "```fig\nitems:\n  - box: Lead\n  - split:\n      - box: Left\n      - box: Right\n    boundary: to\n```\n"},
+		// A chain sizes its other steps to their content; a cols step takes
+		// the width they leave, and its weights must share out all of it.
+		{name: "cols item in a chain", ratio: 3,
+			src: "```fig\nitems:\n  - chain:\n      - box: Request\n      - arrow: \"\"\n" +
+				"      - cols:\n          - box: Primary\n            weight: 3\n          - box: Replica\n```\n"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			page, err := md2html.Convert([]byte(c.src), md2html.Options{})
@@ -1139,40 +1154,70 @@ func TestBrowserFigColsStackWhenNarrow(t *testing.T) {
 
 			ctx := newBrowserCtx(t)
 
-			// Both panels' left edges, read from the live layout.
-			const edges = `(() => {
-				const p = [...document.querySelectorAll(".fig-cols > .fig-panel")];
-				return p.map(e => e.getBoundingClientRect().left).join(",");
+			// Both panels' boxes and their container's width, read from the
+			// live layout.
+			const probe = `(() => {
+				const p = [...document.querySelectorAll(".fig-cols > .fig-panel, .fig-split > .fig-panel")];
+				const box = e => {
+					const r = e.getBoundingClientRect(), s = getComputedStyle(e);
+					const edges = ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"]
+						.reduce((sum, k) => sum + parseFloat(s[k]), 0);
+					return {left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, content: r.width - edges,
+						overflow: e.scrollWidth - e.clientWidth};
+				};
+				return {panels: p.map(box), container: p.length ? p[0].parentElement.getBoundingClientRect().width : 0};
 			})()`
+
+			type rect struct{ Left, Right, Top, Bottom, Width, Content, Overflow float64 }
+			type sample struct {
+				Panels    []rect
+				Container float64
+			}
 
 			// No sleep between the resize and the read: getBoundingClientRect
 			// forces a synchronous layout, and CDP applies the metrics override
 			// before the next evaluation returns. Polling until the assertion
 			// holds would turn a real failure into a timeout, which is worse
 			// diagnostics, not better.
-			var wide, narrow string
+			var wide, narrow sample
 			if err := chromedp.Run(ctx,
 				chromedp.EmulateViewport(1200, 800),
 				chromedp.Navigate(baseURL+"/fig.html"),
-				chromedp.WaitVisible(".fig-cols", chromedp.ByQuery),
-				chromedp.Evaluate(edges, &wide),
+				chromedp.WaitVisible(".fig-panel", chromedp.ByQuery),
+				chromedp.Evaluate(probe, &wide),
 				chromedp.EmulateViewport(390, 800),
-				chromedp.Evaluate(edges, &narrow),
+				chromedp.Evaluate(probe, &narrow),
 			); err != nil {
 				t.Fatalf("browser run: %v", err)
 			}
 
-			wideLeft := strings.Split(wide, ",")
-			narrowLeft := strings.Split(narrow, ",")
-			if len(wideLeft) != 2 || len(narrowLeft) != 2 {
-				t.Fatalf("want two panels, got wide=%q narrow=%q", wide, narrow)
+			if len(wide.Panels) != 2 || len(narrow.Panels) != 2 {
+				t.Fatalf("want two panels, got wide=%+v narrow=%+v", wide.Panels, narrow.Panels)
 			}
-			if wideLeft[0] == wideLeft[1] {
-				t.Errorf("panels should share a row when wide, both left edges at %s", wideLeft[0])
+			if w := wide.Panels; w[1].Left < w[0].Right {
+				t.Errorf("panels should share a row when wide, got %+v then %+v", w[0], w[1])
 			}
-			if narrowLeft[0] != narrowLeft[1] {
-				t.Errorf("panels should stack when narrow, left edges %q vs %q",
-					narrowLeft[0], narrowLeft[1])
+			// Weights can hold exactly while a light panel is still narrower
+			// than its own text, so the ratio alone does not show the panels
+			// fit: each one's content must fit inside it too.
+			for i, p := range wide.Panels {
+				if p.Overflow > 1 {
+					t.Errorf("panel %d's content is %vpx wider than the panel when wide", i, p.Overflow)
+				}
+			}
+			if w := wide.Panels; c.ratio != 0 {
+				if got := w[0].Content / w[1].Content; math.Abs(got-c.ratio) > 0.05 {
+					t.Errorf("panel content widths should keep the %v:1 weight ratio, got %.2f:1 (%v vs %v)",
+						c.ratio, got, w[0].Content, w[1].Content)
+				}
+			}
+			if n := narrow.Panels; n[1].Top < n[0].Bottom {
+				t.Errorf("panels should stack when narrow, got %+v then %+v", n[0], n[1])
+			}
+			for i, p := range narrow.Panels {
+				if math.Abs(p.Width-narrow.Container) > 0.5 {
+					t.Errorf("stacked panel %d should span its container (%v wide), got %v", i, narrow.Container, p.Width)
+				}
 			}
 		})
 	}
@@ -1571,6 +1616,273 @@ func TestBrowserFigPanelCard(t *testing.T) {
 	}
 	if light.Accent == dark.Accent {
 		t.Errorf("--accent did not change between themes (%s); the theme switch is not taking effect", light.Accent)
+	}
+}
+
+// The tint is the only card rule behind @supports, because an engine without
+// color-mix() would keep the unparseable custom property and paint no card
+// background at all. No current Chrome lacks color-mix(), so the test stands
+// in for one by deleting the @supports block from the live stylesheet: what
+// is left must still draw an accented card, in --bg with an --accent border,
+// with the ring's gap falling back to --bg along with it.
+func TestBrowserFigPanelCardWithoutColorMix(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nlayout: cols\nitems:\n"+
+			"  - group: Plain\n    items:\n      - box: Inside\n"+
+			"  - group: Marked\n    accent: true\n    items:\n      - box: Ringed\n        accent: true\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"fallback.html": page})
+	ctx := newBrowserCtx(t)
+
+	// Deletes every @supports rule whose condition names color-mix(), and
+	// reports how many it found, so a stylesheet that stops gating the tint
+	// fails here rather than passing vacuously.
+	const dropSupports = `(() => {
+		let dropped = 0;
+		for (const sheet of document.styleSheets) {
+			for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
+				const r = sheet.cssRules[i];
+				if (r instanceof CSSSupportsRule && r.conditionText.includes("color-mix")) {
+					sheet.deleteRule(i);
+					dropped++;
+				}
+			}
+		}
+		return dropped;
+	})()`
+
+	const probe = figResolveVar + figColorMath + `
+	(() => {
+		const marked = document.querySelectorAll(".fig-panel")[1];
+		const cs = e => getComputedStyle(e);
+		const shadow = cs(marked.querySelector(".fig-box")).boxShadow;
+		const gap = shadow.match(/^(rgba?\([^)]*\)|color\([^)]*\))/);
+		const bg = resolveVar("--bg");
+		return {
+			markedStyle:  cs(marked).borderTopStyle,
+			markedBorder: cs(marked).borderTopColor,
+			markedBg:     cs(marked).backgroundColor,
+			gapDelta:     gap ? channelDelta(gap[1], bg) : -1,
+			shadow:       shadow,
+			accent:       resolveVar("--accent"),
+			bg:           bg,
+		};
+	})()`
+
+	type sample struct {
+		MarkedStyle, MarkedBorder, MarkedBg string
+		GapDelta                            float64
+		Shadow, Accent, Bg                  string
+	}
+	var dropped int
+	var light, dark sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/fallback.html"),
+		chromedp.WaitVisible(".fig-panel", chromedp.ByQuery),
+		chromedp.Evaluate(dropSupports, &dropped),
+		figSetTheme("light"),
+		chromedp.Evaluate(probe, &light),
+		figSetTheme("dark"),
+		chromedp.Evaluate(probe, &dark),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	if dropped != 1 {
+		t.Fatalf("want exactly one @supports block gating color-mix(), found %d", dropped)
+	}
+	for _, c := range []struct {
+		theme string
+		got   sample
+	}{{"light", light}, {"dark", dark}} {
+		g := c.got
+		if g.MarkedStyle != "solid" {
+			t.Errorf("%s: without color-mix() an accented panel should still draw its card, got border style %q", c.theme, g.MarkedStyle)
+		}
+		if g.MarkedBorder != g.Accent {
+			t.Errorf("%s: without color-mix() the card border should still paint in --accent (%s), got %s", c.theme, g.Accent, g.MarkedBorder)
+		}
+		if g.MarkedBg != g.Bg {
+			t.Errorf("%s: without color-mix() the card should paint --bg (%s), got %s", c.theme, g.Bg, g.MarkedBg)
+		}
+		switch {
+		case g.GapDelta < 0:
+			t.Errorf("%s: could not read the ring's gap colour from %q", c.theme, g.Shadow)
+		case g.GapDelta > 0.01:
+			t.Errorf("%s: without color-mix() the ring's gap should fall back to --bg (%s), got %q", c.theme, g.Bg, g.Shadow)
+		}
+	}
+	if light.Accent == dark.Accent {
+		t.Errorf("--accent did not change between themes (%s); the theme switch is not taking effect", light.Accent)
+	}
+}
+
+// A connector between panels draws no card, so its position in the row is
+// the only thing that says where it points from. It must sit at the row's
+// vertical middle when the panels share a row, and at the column's
+// horizontal middle, pointing down, once they stack.
+func TestBrowserFigArrowPanelCentresInItsRow(t *testing.T) {
+	page, err := md2html.Convert([]byte(
+		"```fig\nlayout: cols\nitems:\n"+
+			"  - group: Tall\n    items:\n      - box: One\n      - box: Two\n      - box: Three\n"+
+			"  - arrow: \"\"\n"+
+			"  - group: Short\n    items:\n      - box: Four\n```\n"),
+		md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"arrow.html": page})
+	ctx := newBrowserCtx(t)
+
+	const probe = `(() => {
+		const row = document.querySelector(".fig-cols").getBoundingClientRect();
+		const el = document.querySelector(".fig-panel-arrow > .fig-arrow");
+		const a = el.getBoundingClientRect();
+		return {
+			rowMidY:   row.top + row.height / 2,
+			rowMidX:   row.left + row.width / 2,
+			rowHeight: row.height,
+			arrowMidY: a.top + a.height / 2,
+			arrowMidX: a.left + a.width / 2,
+			arrowHeight: a.height,
+			glyph:     getComputedStyle(el, "::before").content,
+		};
+	})()`
+
+	type sample struct {
+		RowMidY, RowMidX, RowHeight       float64
+		ArrowMidY, ArrowMidX, ArrowHeight float64
+		Glyph                             string
+	}
+	var wide, narrow sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/arrow.html"),
+		chromedp.WaitVisible(".fig-panel-arrow", chromedp.ByQuery),
+		chromedp.Evaluate(probe, &wide),
+		chromedp.EmulateViewport(390, 800),
+		chromedp.Evaluate(probe, &narrow),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	// Without a row much taller than the glyph, top-aligned and centred
+	// would be indistinguishable and the check below would pass either way.
+	if wide.RowHeight < 3*wide.ArrowHeight {
+		t.Fatalf("the fixture row (%vpx) should be much taller than the arrow (%vpx)", wide.RowHeight, wide.ArrowHeight)
+	}
+	if math.Abs(wide.ArrowMidY-wide.RowMidY) > 1 {
+		t.Errorf("a panel-level arrow should sit at the row's vertical middle (%v), got %v", wide.RowMidY, wide.ArrowMidY)
+	}
+	if wide.Glyph != `"→"` {
+		t.Errorf("a panel-level arrow should point right when wide, got %s", wide.Glyph)
+	}
+	if math.Abs(narrow.ArrowMidX-narrow.RowMidX) > 1 {
+		t.Errorf("a stacked arrow should sit at the column's horizontal middle (%v), got %v", narrow.RowMidX, narrow.ArrowMidX)
+	}
+	if narrow.Glyph != `"↓"` {
+		t.Errorf("a stacked arrow should point down, got %s", narrow.Glyph)
+	}
+}
+
+// The gallery is every figure shape in one document, so it is also the
+// widest check that nothing breaks at either end of the width range: no
+// figure widens the page, no part of a figure spills out of the figure or
+// out of the panel card around it, and on a phone every side-by-side
+// container has actually stacked. The per-shape tests above pin why; this
+// one catches the shape nobody wrote a test for.
+func TestBrowserFigGalleryFits(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "testdata", "figures.md"))
+	if err != nil {
+		t.Fatalf("read gallery: %v", err)
+	}
+	page, err := md2html.Convert(src, md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"figures.html": page})
+	ctx := newBrowserCtx(t)
+
+	const probe = `(() => {
+		const vw = document.documentElement.clientWidth;
+		const out = {
+			viewport: vw,
+			scrollWidth: document.documentElement.scrollWidth,
+			figures: document.querySelectorAll("figure.fig").length,
+			spills: [],
+			unstacked: [],
+		};
+		const name = e => e.tagName.toLowerCase() + "." + [...e.classList].join(".") +
+			" (" + e.textContent.trim().slice(0, 30) + ")";
+		document.querySelectorAll("figure.fig").forEach(f => {
+			const fr = f.getBoundingClientRect();
+			if (fr.left < -0.5 || fr.right > vw + 0.5) out.spills.push("figure " + name(f) + " leaves the viewport");
+		});
+		// A card draws its border where its box ends, so content past that
+		// edge is visibly outside the card even when the figure still holds it.
+		document.querySelectorAll("figure.fig, .fig-panel").forEach(c => {
+			const cr = c.getBoundingClientRect();
+			c.querySelectorAll("*").forEach(e => {
+				const r = e.getBoundingClientRect();
+				if (r.width === 0) return;
+				if (r.left < cr.left - 0.5 || r.right > cr.right + 0.5) out.spills.push(name(e) + " spills out of " + name(c));
+			});
+		});
+		// A box can fit its card while its own text runs past its border, and
+		// text has no element box for the check above to measure.
+		document.querySelectorAll("figure.fig *").forEach(e => {
+			if (e.clientWidth > 0 && e.scrollWidth > e.clientWidth + 1) {
+				out.spills.push(name(e) + " has content " + (e.scrollWidth - e.clientWidth) + "px wider than itself");
+			}
+		});
+		document.querySelectorAll(".fig-cols, .fig-split, .fig-chain, .fig-lanes").forEach(c => {
+			const kids = [...c.children];
+			for (let i = 1; i < kids.length; i++) {
+				if (kids[i].getBoundingClientRect().top < kids[i - 1].getBoundingClientRect().bottom - 0.5) {
+					out.unstacked.push(name(kids[i]) + " sits beside its sibling in " + name(c));
+				}
+			}
+		});
+		return out;
+	})()`
+
+	type sample struct {
+		Viewport, ScrollWidth, Figures float64
+		Spills, Unstacked              []string
+	}
+	var desktop, phone sample
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/figures.html"),
+		chromedp.WaitVisible("figure.fig", chromedp.ByQuery),
+		chromedp.Evaluate(probe, &desktop),
+		chromedp.EmulateViewport(390, 800),
+		chromedp.Evaluate(probe, &phone),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+
+	for _, c := range []struct {
+		width string
+		got   sample
+	}{{"desktop", desktop}, {"phone", phone}} {
+		if c.got.Figures == 0 {
+			t.Fatalf("%s: the gallery rendered no figures", c.width)
+		}
+		if c.got.ScrollWidth > c.got.Viewport {
+			t.Errorf("%s: the gallery scrolls sideways: %vpx of content in a %vpx viewport", c.width, c.got.ScrollWidth, c.got.Viewport)
+		}
+		for _, s := range c.got.Spills {
+			t.Errorf("%s: %s", c.width, s)
+		}
+	}
+	// Side by side is the point on a desktop, so stacking is a phone check.
+	for _, s := range phone.Unstacked {
+		t.Errorf("phone: %s", s)
 	}
 }
 

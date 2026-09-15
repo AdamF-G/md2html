@@ -168,6 +168,43 @@ items:
         accent: true
 ```
 
+## A split inside a column
+
+A `split` can be one panel of a `cols` layout. Its own two panels draw their
+cards inside the outer one.
+
+```fig
+caption: A split as one panel of a cols layout
+layout: cols
+items:
+  - group: Unchanged
+    items:
+      - box: Handler
+  - split:
+      - box: Old store
+      - box: New store
+    boundary: copies to
+```
+
+## Columns inside a chain
+
+A chain sizes its boxes and arrows to their content. A `cols` step takes the
+width they leave, and its weights share that out.
+
+```fig
+caption: A cols item as one step of a chain
+items:
+  - chain:
+      - box: Request
+      - arrow: ""
+      - cols:
+          - box: Primary
+            weight: 3
+          - box: Replica
+      - arrow: ""
+      - box: Response
+```
+
 ## Modifiers
 
 ```fig

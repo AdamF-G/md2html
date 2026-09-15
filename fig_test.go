@@ -166,6 +166,8 @@ func TestFigGalleryRenders(t *testing.T) {
 		`A request crosses one trust boundary</div><div class="fig-split">`,
 		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-cols">`,
 		`<div class="fig-panel fig-panel-accent" style="--fig-weight:1"><div class="fig-group fig-accent"><div class="fig-group-title">New layer</div><div class="fig-box fig-accent">Cache</div>`,
+		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-split"><div class="fig-panel" style="--fig-weight:1"><div class="fig-box">Old store</div>`,
+		`<div class="fig-arrow" aria-hidden="true"></div><div class="fig-cols"><div class="fig-panel" style="--fig-weight:3"><div class="fig-box">Primary</div>`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("gallery is missing %q", want)
