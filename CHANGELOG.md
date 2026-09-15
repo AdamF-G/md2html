@@ -9,6 +9,63 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- The `fig` fence can now draw annotated trees, glosses, footnotes,
+  accents and wide figures. Everything below is additive: a figure that uses none of it
+  emits the bytes it emitted before, apart from the panel classes under
+  Changed. See
+  [docs/specs/2026-09-14-fig-vocabulary-extensions-design.md](./docs/specs/2026-09-14-fig-vocabulary-extensions-design.md)
+  and
+  [docs/specs/2026-09-14-fig-nested-layouts-design.md](./docs/specs/2026-09-14-fig-nested-layouts-design.md).
+  - **`tree`**, a new kind: an indented listing, one node per line.
+    ` -- ` splits a label from a trailing note, `* ` accents a line and
+    `- ` de-emphasizes it. Every sigil needs its space, so `*_test.go` stays
+    a literal glob.
+  - **`note` and `accent`** on `box`, `result`, `rail` and `group`: a
+    quieter gloss beside the label, and a ring that marks an item out from
+    its siblings.
+  - **`foot`** on `group`, a trailing line after the group's items, and
+    **`detail`** on a stat tile, a third, quieter line beneath its label.
+  - **`wide: true`** lets a figure break out of the text column. It breaks
+    out of the page's `<main>` measure only; inside a container or under
+    `--fragment` it renders as an ordinary figure.
+  - **`cols` and `split` as item kinds**, so a layout can sit anywhere an
+    item can: context above a split and an outcome below it, a split inside
+    one column, weighted columns inside a chain. A `split` item takes
+    `boundary`, and a `cols` item's children take `weight`. A figure whose
+    only item is a `cols` or `split` item warns and names the `layout:`
+    spelling to use instead.
+
+  A panel that needs a title, an accent or a footnote is a `group` inside
+  it; panels themselves carry no metadata.
+
+### Changed
+
+- **Every `cols` and `split` panel now draws a card** — a border, padding
+  and background around whatever sits in it — so existing figures change
+  appearance without being edited. A panel whose item carries `accent`
+  tints its card and gains the class `fig-panel-accent`; a panel holding an
+  arrow draws no card and gains `fig-panel-arrow`. Those two classes are the
+  only markup change to a figure written for v0.3.0. A browser without
+  `color-mix()` draws the accented card untinted.
+- The card's padding sits outside the width that weights share out, so
+  weighted panels' outer widths no longer hold their exact ratio: a 3:1 row
+  reads as roughly 2.8:1.
+- A panel-level arrow in a `cols` row sits at the row's vertical middle
+  rather than level with the cards' top edges.
+- On a narrow screen, a `split`'s stacked panels span the column as a
+  `cols` layout's do, instead of shrinking to their content.
+
+### Repository
+
+- The browser suite now checks figure layout that was previously left to
+  the eye: card colours and contrast floors in both themes, the
+  no-`color-mix()` fallback, arrow centring, panel stacking for every
+  nested layout, and the whole figure gallery at desktop and phone widths.
+
 ## v0.3.0 — 2026-09-14
 
 ### Added
