@@ -191,7 +191,8 @@ func (r *figRenderer) item(it figItem) string {
 	case it.Group != nil:
 		// A panel or lane that needs a title, an accent, a gloss or a
 		// footnote is a group; this is the only place any of the four is
-		// rendered, so .fig-panel stays a bare weight carrier.
+		// rendered, so .fig-panel carries no metadata of its own — only the
+		// classes panel() reads off the item it wraps.
 		class := "fig-group"
 		if it.Accent {
 			class += " fig-accent"
@@ -249,13 +250,27 @@ func figWeight(n int) int {
 	return n
 }
 
-// panel wraps one top-level item of a cols or split layout. The weight
-// rides on a custom property rather than a raw flex-grow so a caller's
-// --css replacement can reinterpret it instead of being overridden by an
-// inline style it cannot reach.
+// panel wraps one item of a cols or split layout. The weight rides on a
+// custom property rather than a raw flex-grow so a caller's --css
+// replacement can reinterpret it instead of being overridden by an inline
+// style it cannot reach.
+//
+// A panel has no metadata of its own; a panel that needs a title, an accent
+// or a footnote is a group. The two classes added here are read off the
+// item, not written on the panel: fig-panel-accent lets an accented item
+// tint the card the stylesheet draws around it, and fig-panel-arrow lets a
+// connector between panels skip that card. accent is not legal on an arrow,
+// so the two never coincide.
 func (r *figRenderer) panel(it figItem) string {
-	return fmt.Sprintf(`<div class="fig-panel" style="--fig-weight:%d">%s</div>`,
-		figWeight(it.Weight), r.item(it))
+	class := "fig-panel"
+	switch {
+	case it.Accent:
+		class += " fig-panel-accent"
+	case it.Arrow != nil:
+		class += " fig-panel-arrow"
+	}
+	return fmt.Sprintf(`<div class="%s" style="--fig-weight:%d">%s</div>`,
+		class, figWeight(it.Weight), r.item(it))
 }
 
 // layout renders a run of items in one of the three layouts. A figure calls

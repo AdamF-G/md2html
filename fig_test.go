@@ -172,7 +172,7 @@ func TestFigGalleryRenders(t *testing.T) {
 	// wrong if written as `.fig-cols > .fig-arrow`. Without this shape in
 	// the corpus, a dead selector renders a glyphless box and no test
 	// notices.
-	if !strings.Contains(out, `<div class="fig-panel" style="--fig-weight:1"><div class="fig-arrow" aria-hidden="true">`) {
+	if !strings.Contains(out, `<div class="fig-panel fig-panel-arrow" style="--fig-weight:1"><div class="fig-arrow" aria-hidden="true">`) {
 		t.Errorf("gallery must contain a panel-level arrow in a cols layout:\n%s", out)
 	}
 	// The gallery ends with one deliberate failure case.

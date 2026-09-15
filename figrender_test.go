@@ -351,7 +351,8 @@ func TestFigLeafMarkupUnchangedWithoutModifiers(t *testing.T) {
 }
 
 // The panel-metadata rule: a panel's title, accent and footnote all live on
-// the group inside it, so .fig-panel stays a bare weight carrier.
+// the group inside it. The panel carries no metadata of its own; the
+// fig-panel-accent class it gains is read off that group.
 func TestFigGroupCarriesPanelMetadata(t *testing.T) {
 	src := "```fig\nlayout: cols\nitems:\n" +
 		"  - group: Before\n    accent: true\n    foot: the usual pattern\n" +
@@ -363,7 +364,7 @@ func TestFigGroupCarriesPanelMetadata(t *testing.T) {
 		t.Fatalf("want no warnings, got %v", warnings)
 	}
 	for _, want := range []string{
-		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-group fig-accent">`,
+		`<div class="fig-panel fig-panel-accent" style="--fig-weight:1"><div class="fig-group fig-accent">`,
 		`<div class="fig-group-title">Before</div>`,
 		`<div class="fig-group-foot">the usual pattern</div>`,
 	} {
@@ -579,5 +580,57 @@ func TestFigSplitItemMatchesSplitLayout(t *testing.T) {
 	if !strings.Contains(itemOut, want) {
 		t.Errorf("the item form should emit the layout form's split block verbatim\nlayout form:\n%s\nitem form:\n%s",
 			layoutOut, itemOut)
+	}
+}
+
+// A panel carries no metadata of its own, but it does carry two classes
+// read off the item inside it: one so an accented item can tint its card,
+// one so a connector between panels can skip the card entirely.
+func TestFigPanelClassesFollowTheirItem(t *testing.T) {
+	src := "```fig\nlayout: cols\nitems:\n" +
+		"  - box: Plain\n" +
+		"  - arrow: \"\"\n" +
+		"  - box: Marked\n    accent: true\n" +
+		"  - arrow: next\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	for _, want := range []string{
+		`<div class="fig-panel" style="--fig-weight:1"><div class="fig-box">Plain</div></div>`,
+		`<div class="fig-panel fig-panel-arrow" style="--fig-weight:1"><div class="fig-arrow" aria-hidden="true"></div></div>`,
+		`<div class="fig-panel fig-panel-accent" style="--fig-weight:1"><div class="fig-box fig-accent">Marked</div></div>`,
+		`<div class="fig-panel fig-panel-arrow" style="--fig-weight:1"><div class="fig-arrow">next</div></div>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	if n := strings.Count(out, "fig-panel-accent"); n != 1 {
+		t.Errorf("want 1 accented panel, got %d:\n%s", n, out)
+	}
+	if n := strings.Count(out, "fig-panel-arrow"); n != 2 {
+		t.Errorf("want 2 arrow panels, got %d:\n%s", n, out)
+	}
+}
+
+func TestFigSplitItemPanelsCarryTheSameClasses(t *testing.T) {
+	src := "```fig\nitems:\n  - box: Lead\n  - split:\n" +
+		"      - group: Before\n        items:\n          - box: A\n" +
+		"      - group: After\n        accent: true\n        items:\n          - box: B\n```\n"
+	out, warnings := figConvert(t, src)
+
+	if len(warnings) != 0 {
+		t.Fatalf("want no warnings, got %v", warnings)
+	}
+	want := `<div class="fig-panel fig-panel-accent" style="--fig-weight:1"><div class="fig-group fig-accent">`
+	if !strings.Contains(out, want) {
+		t.Errorf("missing %q in:\n%s", want, out)
+	}
+	// The exact attribute value, closing quote included, matches only a
+	// panel with no added class: here, the Before panel.
+	if n := strings.Count(out, `class="fig-panel"`); n != 1 {
+		t.Errorf("want 1 plain panel, got %d:\n%s", n, out)
 	}
 }
