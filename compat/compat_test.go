@@ -20,8 +20,8 @@
 // extensions. It is the closest match by measurement: fenced divs,
 // bracketed spans, fenced code attributes, header attributes, definition
 // lists, footnotes, pipe tables and YAML metadata are all on by default,
-// and it slugs a numbered heading the way md2html does, which Pandoc's own
-// `markdown` dialect does not.
+// and it slugs headings the way md2html does — the rules GitHub and GitLab
+// share — which Pandoc's own `markdown` dialect does not.
 package compat
 
 import (
@@ -161,6 +161,47 @@ func TestAgreeOnNumberedHeadingSlug(t *testing.T) {
 			t.Errorf("%s did not slug to 42-rollback\ngot: %s", doc.name, doc.out)
 		}
 	}
+}
+
+// Every heading id both tools compute must agree, not just a numbered one:
+// punctuation between spaces, underscores, leading punctuation, non-ASCII
+// letters and repeats are where md2html used to differ. Two cases are left
+// out on purpose. Pandoc spells an emoji out by name ("rocket-launch") where
+// GitHub drops it; md2html follows GitHub. And a heading with nothing left to
+// slug gets a positional section-N id here and no id from Pandoc.
+func TestAgreeOnHeadingSlugs(t *testing.T) {
+	const src = "## Why Go / goldmark\n\n## foo_bar baz\n\n## — Intro\n\n" +
+		"## Ünicode — Dashes!\n\n## 日本語の見出し\n\n## Step 1: Init\n\n" +
+		"## x² ½ y\n\n## `code_x` *em*\n\n## Setup\n\n## Setup\n"
+	theirs, mine := headingIDs(t, pandoc(t, src)), headingIDs(t, ours(t, src))
+	if strings.Join(theirs, " ") != strings.Join(mine, " ") {
+		t.Errorf("heading ids differ\npandoc:  %q\nmd2html: %q", theirs, mine)
+	}
+}
+
+// headingIDs returns the id of every <h2> in doc, in document order.
+func headingIDs(t *testing.T, doc string) []string {
+	t.Helper()
+	root, err := html.Parse(strings.NewReader(doc))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var ids []string
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "h2" {
+			for _, a := range n.Attr {
+				if a.Key == "id" {
+					ids = append(ids, a.Val)
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(root)
+	return ids
 }
 
 // Both consume front matter rather than rendering it as body text.

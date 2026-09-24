@@ -133,22 +133,23 @@ func TableScroll() Transform {
 // words carrying diacritics — get meaningful ids rather than being stripped to
 // nothing. HTML5 allows any id without whitespace, and a slug derived from the
 // text stays stable when headings move, which a positional scheme would not.
+//
+// The rules are the ones GitHub, GitLab and Pandoc's commonmark_x share, so
+// an in-page link written against any of them resolves here too: lowercase,
+// drop everything but letters, numbers, marks, hyphens and underscores, and
+// turn each whitespace rune into a hyphen. Nothing is merged or trimmed
+// after that, so "a × b" is "a--b" and "— Intro" is "-intro".
 func slugify(s string) string {
 	var b strings.Builder
-	prevDash := false
 	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
 		switch {
-		case unicode.IsLetter(r), unicode.IsDigit(r):
+		case unicode.IsLetter(r), unicode.IsNumber(r), unicode.IsMark(r), r == '-', r == '_':
 			b.WriteRune(r)
-			prevDash = false
-		case r == '-' || r == '_' || unicode.IsSpace(r):
-			if !prevDash && b.Len() > 0 {
-				b.WriteByte('-')
-				prevDash = true
-			}
+		case unicode.IsSpace(r):
+			b.WriteByte('-')
 		}
 	}
-	return strings.Trim(b.String(), "-")
+	return b.String()
 }
 
 // HeadingAnchors gives every heading a stable id and a linkable anchor.
@@ -183,8 +184,10 @@ func HeadingAnchors() Transform {
 					// resort rather than the general rule.
 					base = fmt.Sprintf("section-%d", i+1)
 				}
+				// Repeats are numbered from 1, as GitHub, GitLab and Pandoc
+				// number them: the second "Setup" is "setup-1".
 				id = base
-				for n := 2; seen[id]; n++ {
+				for n := 1; seen[id]; n++ {
 					id = fmt.Sprintf("%s-%d", base, n)
 				}
 				setAttr(h, "id", id)

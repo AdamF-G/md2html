@@ -64,9 +64,11 @@ func TestHeadingAnchorsPreservesExistingID(t *testing.T) {
 	}
 }
 
+// Repeats are numbered from 1, as GitHub, GitLab and Pandoc number them, so
+// a link to the second "Setup" written against any of them resolves here.
 func TestHeadingAnchorsDeduplicatesSlugs(t *testing.T) {
 	got := apply(t, `<h2>Setup</h2><h2>Setup</h2>`, HeadingAnchors())
-	if !strings.Contains(got, `id="setup"`) || !strings.Contains(got, `id="setup-2"`) {
+	if !strings.Contains(got, `id="setup"`) || !strings.Contains(got, `id="setup-1"`) {
 		t.Errorf("duplicate slugs not disambiguated\ngot: %s", got)
 	}
 }
@@ -84,12 +86,12 @@ func TestHeadingAnchorsAvoidsSuffixCollision(t *testing.T) {
 	}{
 		{
 			name: "generated slug collides with an earlier suffix",
-			in:   `<h2>Setup</h2><h2>Setup</h2><h2>Setup 2</h2>`,
+			in:   `<h2>Setup</h2><h2>Setup</h2><h2>Setup 1</h2>`,
 		},
 		{
 			name:  "generated suffix collides with a later explicit id",
-			in:    `<h2>Setup</h2><h2>Setup</h2><h2 id="setup-2">Other</h2>`,
-			exact: "setup-2",
+			in:    `<h2>Setup</h2><h2>Setup</h2><h2 id="setup-1">Other</h2>`,
+			exact: "setup-1",
 		},
 	}
 	for _, tc := range cases {
@@ -128,17 +130,36 @@ func TestHeadingAnchorsAvoidsSuffixCollision(t *testing.T) {
 // id at all, so nothing in a non-English document was deep-linkable.
 func TestSlugifyKeepsLettersFromAnyScript(t *testing.T) {
 	for _, c := range []struct{ in, want string }{
-		// ASCII behavior must be exactly as before.
 		{"Hello World", "hello-world"},
-		{"Why Go / goldmark", "why-go-goldmark"},
 		{"Step 1: Init", "step-1-init"},
 		// Previously collapsed to "" and lost their anchors entirely.
 		{"日本語の見出し", "日本語の見出し"},
 		{"Привет мир", "привет-мир"},
 		{"Καλημέρα", "καλημέρα"},
 		{"Café Menu", "café-menu"},
-		// Punctuation is still dropped, letters either side still join.
-		{"Ünicode — Dashes!", "ünicode-dashes"},
+	} {
+		if got := slugify(c.in); got != c.want {
+			t.Errorf("slugify(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// Slugs follow the rules GitHub, GitLab and Pandoc's commonmark_x share:
+// punctuation is dropped but the whitespace around it still becomes a
+// hyphen each, and nothing is merged or trimmed afterwards. That is what
+// in-page links written against those renderers already say.
+func TestSlugifyMatchesGitHubRules(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"Why Go / goldmark", "why-go--goldmark"},
+		{"Ünicode — Dashes!", "ünicode--dashes"},
+		{"— Intro", "-intro"},
+		{"foo_bar baz", "foo_bar-baz"},
+		{"a  b", "a--b"},
+		{"a\tb", "a-b"},
+		{"a\u00a0b", "a-b"},
+		{"x² ½ y", "x²-½-y"},
+		{"42 rollback", "42-rollback"},
+		{"+ +", "-"},
 	} {
 		if got := slugify(c.in); got != c.want {
 			t.Errorf("slugify(%q) = %q, want %q", c.in, got, c.want)
