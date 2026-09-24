@@ -10,20 +10,20 @@ Converting this repo's own docs, Markdown source against generated HTML:
 
 | Document | Markdown | HTML | Ratio |
 |---|---|---|---|
-| README.md | 3.8 KB | 8.5 KB | 2.2x |
-| design spec | 15.1 KB | 23.2 KB | 1.5x |
-| implementation plan | 106 KB | 132 KB | 1.2x |
+| README.md | 15.5 KB | 39.1 KB | 2.5x |
+| design spec | 14.7 KB | 37.5 KB | 2.5x |
+| implementation plan | 104 KB | 143 KB | 1.4x |
 
 The ratio shrinks as documents grow, because the stylesheet is a fixed cost.
-So "Markdown is cheaper to write" is true but modest — 1.2x to 2.2x on the
+So "Markdown is cheaper to write" is true but modest — 1.4x to 2.5x on the
 markup itself.
 
 The larger saving is the part that does not appear in that table: you do not
 write the design layer at all. No typography scale, no dark-mode palette, no
 responsive rules, no table overflow handling. That is one embedded stylesheet,
 written once and fixed once. Hand-rolling a stylesheet per document means
-re-deriving those decisions each time, and re-introducing the same bugs — the
-two most recent fixes in this repo were a stylesheet that let long inline code
+re-deriving those decisions each time, and re-introducing the same bugs — two
+early fixes in this repo were a stylesheet that let long inline code
 widen the page, and a slug function that dropped every non-ASCII character.
 Both were fixed in one place, for every document.
 
@@ -588,8 +588,8 @@ A standalone page loads a pinned MermaidJS build from a CDN and initialises it
 against the same light/dark signals the stylesheet uses — you do not need to
 theme the diagram yourself. Only pages that contain a diagram load it.
 
-With `--fragment` nothing is injected, because Artifacts render mermaid
-natively.
+With `--fragment` nothing is injected, because a fragment's host is expected
+to render mermaid itself, as Claude Artifacts do.
 
 ### Structured figures
 
@@ -826,16 +826,13 @@ Supply `--css mine.css` to replace the stylesheet entirely.
 - **Existing HTML is never overwritten.** A file without the tool's provenance
   marker is refused and the run exits non-zero. There is no override flag.
 
-## Artifact-shaped output
+## Fragment output
 
 `--fragment` emits the marker, `<title>`, `<style>`, and body content, with no
-`<!doctype>`, `<html>`, `<head>` or `<body>` — the shape the Artifact tool
-expects, publishable unchanged.
+`<!doctype>`, `<html>`, `<head>` or `<body>` — for a host that supplies the
+document wrapper itself, such as a Claude Artifact, which publishes it
+unchanged.
 
-This is a way to skip hand-writing an artifact's HTML for **document-shaped**
-content: a report, a spec, a guide. It is not a substitute for the
-`artifact-design` skill, which still governs the design decision — and if the
-page wants a bespoke look, an app-like layout, or anything beyond a styled
-document, write it as HTML and use that skill instead. The Artifact tool can
-also publish Markdown directly when a skill instructs it; that path uses
-Claude's own rendering rather than this stylesheet and these transforms.
+This is a way to skip hand-writing HTML for **document-shaped** content: a
+report, a spec, a guide. If the page wants a bespoke look, an app-like layout,
+or anything beyond a styled document, write it as HTML instead.

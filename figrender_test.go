@@ -74,8 +74,7 @@ func TestFigSurvivesFragmentMode(t *testing.T) {
 }
 
 // The other half of that claim — that a fragment carries the figure styles
-// with it — is asserted in Task 8, which is where the stylesheet lands. It
-// cannot be checked before then without failing for the wrong reason.
+// with it — is asserted by TestFigStylesTravelWithAFragment in page_test.go.
 
 func TestFigSimpleLeaves(t *testing.T) {
 	out, warnings := figConvert(t,
@@ -399,8 +398,8 @@ func TestFigLaneAccentRidesOnAGroup(t *testing.T) {
 	}
 }
 
-// A group with neither modifier is unchanged, the same promise Task 1 made
-// for the leaves.
+// A group with neither modifier is unchanged, the same promise
+// TestFigLeafMarkupUnchangedWithoutModifiers makes for the leaves.
 func TestFigGroupMarkupUnchangedWithoutModifiers(t *testing.T) {
 	out, _ := figConvert(t,
 		"```fig\nitems:\n  - group: Server\n    items:\n      - box: A\n```\n")

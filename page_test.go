@@ -517,8 +517,8 @@ func TestDefaultCSSStylesFigures(t *testing.T) {
 
 // The stylesheet has to travel with an Artifact fragment, not just with a
 // standalone page: a figure is plain markup plus CSS, and unlike mermaid
-// there is no host runtime to fall back on. Task 3 pins the markup half of
-// this claim; the styles half can only be checked once the rules exist.
+// there is no host runtime to fall back on. figrender_test.go pins the
+// markup half of this claim; this test checks the styles half.
 func TestFigStylesTravelWithAFragment(t *testing.T) {
 	got, err := Convert([]byte("```fig\nitems:\n  - box: Client\n```\n"),
 		Options{Fragment: true})

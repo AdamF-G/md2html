@@ -124,7 +124,7 @@ func TestContainerNestingPreserved(t *testing.T) {
 	}
 }
 
-// R28: a documented braced form combining an id with several classes must
+// a documented braced form combining an id with several classes must
 // keep every class, not just the kind's own — goldmark-fences merges
 // {#note .callout .compact} into class="callout compact", and applyKind
 // must not clobber that down to just "callout".
@@ -152,7 +152,7 @@ func TestContainerBareTitleBecomesTitleParagraph(t *testing.T) {
 }
 
 // Inline Markdown in the title is already parsed by the time the transform
-// sees it, so it survives as markup rather than as escaped text. R14: the
+// sees it, so it survives as markup rather than as escaped text. The
 // space between the code span and the following word must survive too —
 // only the title's outer edges get trimmed, never whitespace between
 // inline nodes — so this asserts the full rendered title, not just that a
@@ -265,7 +265,7 @@ func TestContainerExampleWithoutTitleIsJustThePrefix(t *testing.T) {
 	}
 }
 
-// R7: braced collapsible kinds get the same <details> treatment as bare
+// braced collapsible kinds get the same <details> treatment as bare
 // ones — the plan calls for the shipped kinds to behave symmetrically in
 // both spellings, and only the frozen callout keeps its div. The braced
 // form never lifts a title (see TestContainerBracedFormNeverLiftsATitle),

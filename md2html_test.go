@@ -67,7 +67,7 @@ func TestConformance(t *testing.T) {
 }
 
 // The sink exists so a transform can report a problem without aborting the
-// document. Nothing warns yet — Task 2 is the first caller — so this
+// document. The transforms that warn test their own warnings; this
 // asserts only that a plain document stays silent and that Convert accepts
 // and threads the callback.
 func TestConvertWarnSinkSilentOnCleanInput(t *testing.T) {

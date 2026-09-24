@@ -291,8 +291,7 @@ Both shells emit `<title>`, preceded only by the provenance marker. The
 page shell wraps everything in a full `<html>/<head>/<body>` document; the
 fragment shell emits marker, `<title>`, `<style>`, then body content, with
 no `<!doctype>`, `<html>`, `<head>`, or `<body>` — the shape the Artifact
-tool expects. The leading comment is harmless there: the Artifact tool
-scans the first 8 KB for `<title>`, so a marker ahead of it is fine.
+tool expects.
 
 ## CLI
 

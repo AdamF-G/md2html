@@ -66,7 +66,7 @@ Flags:
 		outDir    = fs.String("o", "", "output directory (default: write beside each source)")
 		depth     = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
 		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
-		fragment  = fs.Bool("fragment", false, "emit Artifact-shaped fragments instead of full pages")
+		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
 		cssPath   = fs.String("css", "", "replace the embedded stylesheet with this file")
 		noTable   = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
 		noAnchor  = fs.Bool("no-anchors", false, "do not add heading anchors")

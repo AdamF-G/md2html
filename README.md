@@ -32,7 +32,7 @@ attributes, header attributes, definition lists, footnotes, pipe tables and
 YAML front matter** — which is to say Pandoc's `commonmark_x` — plus GitHub
 alerts, status chips, `§` cross-references, `[[toc]]` and `fig`.
 
-That is a measured claim, not an aspiration. `compat/` runs a corpus
+That is a measured claim, not an aspiration. `compat/` runs each construct
 through both tools and sorts every construct into one of three buckets:
 the ones where md2html and `pandoc -f commonmark_x` produce the same
 structure, the ones Pandoc passes through untouched, and the ones Pandoc
@@ -48,7 +48,8 @@ legibly rather than corrupting it.
 The one thing a generated page fetches at view time is MermaidJS, and only
 a page that actually contains a diagram: it loads a pinned build from a CDN.
 Pages without diagrams reference nothing external, and `--fragment` output
-never loads it at all, because Artifacts render mermaid themselves. A build
+never loads it at all, because a fragment's host — a Claude Artifact, for
+one — renders mermaid itself. A build
 that must not reach a CDN can name its own copy — see `Options.MermaidURL`
 below.
 
@@ -60,8 +61,8 @@ and the first of those is measurable.
 
 ### Writing it
 
-Rendering the 13 Markdown files in this repository and counting tokens on
-both sides:
+Rendering the 13 Markdown documents this repository held at v0.2.0 and
+counting tokens on both sides:
 
 | | tokens | vs Markdown |
 |---|---:|---:|
@@ -178,7 +179,7 @@ md2html ./docs -o ./site                     # whole tree
 md2html ./docs --depth 0 -o ./site           # top-level seeds, still follows links
 md2html ./docs/index.md ./guides -o ./site   # mixed entries
 md2html ./docs                               # in place, beside each source
-md2html ./docs -o ./site --fragment          # Artifact-shaped output
+md2html ./docs -o ./site --fragment          # bare fragments, no page shell
 md2html README.md                            # one file, HTML beside it
 
 # The maintained set, plus one scratch directory for this run only,
@@ -245,7 +246,7 @@ unrelated tools that share the name is never claimed.
 | `-o DIR` | output directory; default writes beside each source |
 | `--depth N` | directory levels to seed from a directory entry; `-1` (default) unlimited |
 | `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
-| `--fragment` | emit Artifact-shaped fragments instead of full pages |
+| `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
 | `--css FILE` | replace the embedded stylesheet |
 | `--no-table-scroll` | do not wrap tables |
 | `--no-anchors` | do not add heading anchors |
@@ -369,4 +370,7 @@ records what has changed.
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE). `internal/fences` is vendored from
+`goldmark-fences` and keeps its own MIT licence; `testdata/vendor` holds a
+test-only copy of MermaidJS under its MIT licence, with the notices of the
+libraries it bundles left in place.

@@ -97,7 +97,7 @@ func TestTOCIncludesEveryHeadingInOrder(t *testing.T) {
 	}
 }
 
-// R25: a marker in a document with no linkable headings must degrade to
+// a marker in a document with no linkable headings must degrade to
 // the literal marker text, not to an empty <nav> and not to silent
 // deletion — the spec's stated degradation for this feature is "ugly, but
 // not misleading," and an empty element is exactly the misleading case the
@@ -113,7 +113,7 @@ func TestTOCWithNoHeadingsLeavesTheMarker(t *testing.T) {
 	}
 }
 
-// R3: headingText already excludes both chip spans and the anchor link
+// headingText already excludes both chip spans and the anchor link
 // HeadingAnchors appends, so a heading whose visible text genuinely ends in
 // "#" must not be truncated by any hand-stripping in buildTOC.
 func TestTOCPreservesTrailingHashInLabel(t *testing.T) {

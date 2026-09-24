@@ -63,7 +63,7 @@ func rewriteText(root *html.Node, fn func(string) []*html.Node) {
 // which sees the match's full submatch index slice (as
 // regexp.FindAllStringSubmatchIndex returns it) so it can inspect captured
 // groups. A match render declines — by returning nil — is left as literal
-// text; this is how the §-autolinker (Task 6) leaves a section number alone
+// text; this is how the §-autolinker leaves a section number alone
 // when it names no heading, without needing its own copy of this loop.
 //
 // The text between rendered matches, including any run render declined,

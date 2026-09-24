@@ -156,7 +156,7 @@ func validateItems(items []figItem, path string, inCols bool) error {
 		}
 		// note and accent share a predicate: both are legal on any kind
 		// that has a label to hang them beside. A group's label is its
-		// title, so a group takes both; Task 2 renders them.
+		// title, so a group takes both.
 		if it.Note != "" && !it.takesLabelModifier() {
 			return fmt.Errorf("%s carries note, which only a box, result, rail or group takes", at)
 		}

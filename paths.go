@@ -89,8 +89,8 @@ func isNamePattern(v string) bool {
 // matches one of the name patterns. Only the names below the deepest
 // directory path and base share are tested: base's own ancestors are where
 // the run happens to live, not something the caller was describing, so a
-// pattern like "Dev*" must not exclude the whole run for sitting under
-// ~/Developer. A path outside base still has its names below that shared
+// pattern like "src*" must not exclude the whole run for sitting under
+// ~/src. A path outside base still has its names below that shared
 // directory tested, so a link reaching an excluded name from outside base
 // cannot pull it back in.
 func matchesName(path, base string, names []string) bool {

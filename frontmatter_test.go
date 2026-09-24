@@ -186,7 +186,7 @@ func TestConvertLiftsSubtitlePastLeadingComment(t *testing.T) {
 	}
 }
 
-// R20: the fragile case is a comment BETWEEN the h1 and the italic line,
+// the fragile case is a comment BETWEEN the h1 and the italic line,
 // not one before the h1 (the heading search skips over that regardless).
 func TestConvertLiftsSubtitlePastCommentBetweenHeadingAndItalic(t *testing.T) {
 	got := convert(t, "# Title\n\n<!-- generated -->\n\n*sub*\n\nbody\n", nil)
@@ -205,7 +205,7 @@ func TestConvertDoesNotLiftPartialItalicParagraph(t *testing.T) {
 }
 
 // Front matter wins over the heading lift; the two must not both fire.
-// R18: both facts are asserted independently rather than joined by &&, so
+// both facts are asserted independently rather than joined by &&, so
 // a broken guard on either one is caught rather than the check
 // short-circuiting away.
 func TestConvertFrontMatterSubtitleBeatsItalicLift(t *testing.T) {
@@ -221,7 +221,7 @@ func TestConvertFrontMatterSubtitleBeatsItalicLift(t *testing.T) {
 	}
 }
 
-// R26: the lift is a fallback for documents with no explicit title, not
+// the lift is a fallback for documents with no explicit title, not
 // merely no explicit subtitle. Front matter declaring only "title:" must
 // leave an italic line under the h1 alone, or a title-only document would
 // silently lose a line of body text to a subtitle it never asked for.
@@ -235,7 +235,7 @@ func TestConvertFrontMatterTitleOnlySuppressesItalicLift(t *testing.T) {
 	}
 }
 
-// R26: an explicit Options.Title also suppresses the lift, the same as a
+// an explicit Options.Title also suppresses the lift, the same as a
 // front-matter title.
 func TestConvertOptionsTitleSuppressesItalicLift(t *testing.T) {
 	out, err := Convert([]byte("# T\n\n*just italics*\n"),
@@ -252,8 +252,8 @@ func TestConvertOptionsTitleSuppressesItalicLift(t *testing.T) {
 	}
 }
 
-// R19: front matter supplying a date but no subtitle, combined with an
-// italic line under the h1 (so the lift still fires per R26), must place
+// front matter supplying a date but no subtitle, combined with an
+// italic line under the h1 (so the lift still fires), must place
 // the date AFTER the lifted subtitle. applyDocMeta inserts relative to the
 // heading; if it fires before the lift, or advances its anchor
 // incorrectly, the date lands between the heading and the subtitle.

@@ -157,7 +157,7 @@ func TestFigGalleryRenders(t *testing.T) {
 		`<div class="fig-lane">`,
 		`<span class="fig-stat-value">`, `<dl class="fig-defs">`,
 		`style="--fig-weight:3"`,
-		// added by this plan
+		// modifiers, trees and wide figures
 		`<span class="fig-note">`, `<li class="fig-accent">`,
 		`<div class="fig-group-foot">`, `<span class="fig-stat-detail">`,
 		`<ul class="fig-tree">`, `<span class="fig-tree-label">`,

@@ -113,7 +113,7 @@ func TestCodeFenceOverrideLeavesMermaidAlone(t *testing.T) {
 	}
 }
 
-// R10: goldmark's own fenced-code-block renderer does not honor a trailing
+// goldmark's own fenced-code-block renderer does not honor a trailing
 // {...} attribute today. CodeAttributeFilter (renderer/html) is wired up
 // for inline code spans (renderCodeSpan), not for renderFencedCodeBlock —
 // confirmed by reading goldmark's source and by capturing this exact output

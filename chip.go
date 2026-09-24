@@ -79,7 +79,7 @@ func hasClassTokenPrefix(classes []string, prefix string) bool {
 // nil when s carries none — which is almost every text node in almost every
 // document, so it is the cheap path.
 //
-// The match-splitting itself is splitMatches (Task 4): render is offered
+// The match-splitting itself is splitMatches: render is offered
 // each match and returns nil to decline it (leaving the literal text, as
 // the empty-label "[c:]" case does) or the nodes to substitute otherwise.
 // Declining must be a real nil, never an empty non-nil slice — splitMatches
