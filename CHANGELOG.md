@@ -9,7 +9,7 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
-## Unreleased
+## v0.5.0 — 2026-09-24
 
 ### Added
 
@@ -47,6 +47,8 @@ major version instead.
   `\`; that matches the name at any depth below the base.
 - The warning for a link into an excluded path now ends "excluded" rather
   than "excluded directory", since the match may be a file name.
+- `--fragment`'s help text says what it emits — a bare fragment for a host
+  such as a Claude Artifact — instead of "Artifact-shaped".
 
 ## v0.4.0 — 2026-09-14
 
