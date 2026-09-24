@@ -94,7 +94,7 @@ through md2html. Ask that before picking.
 | Container title | `::: aside Why` / `:::aside[Why]` | Every form now carries a title. Pick the label form when the title needs to stay unambiguous next to an id or classes — it delimits the title instead of reading to end of line, so it is the only spelling a trailing brace-shaped title cannot confuse. |
 | Chip, span | `[proven]` / `[proven]{.chip}` | The bare form covers only the six status words; the attribute form is Pandoc's `bracketed_spans` and takes any label or class. Prefer the attribute form in new writing. |
 | Code caption | `` ```go caption="x" `` / `` ```{.go caption="x"} `` | GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there. The braced form does not highlight on GitHub, but is what Pandoc reads and the only one that can escape a `"` in the caption. |
-| Contents list | `[[toc]]` / `[TOC]` | Neither travels to any other renderer, so choose for the reader of the source. `[[toc]]` is markdown-it and VitePress; `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. |
+| Contents list | `[[toc]]` / `[TOC]` | GitLab builds its own list from `[TOC]`, so use that for a document also read there; GitHub builds one from neither. Otherwise choose for the reader of the source. `[[toc]]` is markdown-it and VitePress; `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. |
 | Title, subtitle | front matter / italic line under the `<h1>` | Front matter is machine-readable and hidden by GitHub, and is the only one that can carry a date. The italic line is visible prose everywhere. |
 
 A form another renderer does not understand should still degrade to

@@ -103,7 +103,7 @@ only here.
 | Container title | `::: aside Why` — `:::aside[Why]` | **Whether the title needs to be unambiguous next to attributes.** Every container form now carries a title — see Containers. The label form is still the only one that *delimits* it, so it is what to reach for when a title might itself end in something that looks like a brace group, or when a directive-reading tool (remark-directive, Docusaurus) needs to parse the title out on its own. It is the CommonMark generic directives syntax. |
 | Chip, span | `[proven]` — `[proven]{.chip}` — `[c:proven]` | **Vocabulary.** The bare form only works for the six status words. The attribute form is Pandoc's `bracketed_spans`, works for any label or class, and is the form to prefer in new writing. `[c:…]` predates it and still parses. |
 | Code caption | `` ```go caption="x" `` — `` ```{.go caption="x"} `` | **Syntax highlighting elsewhere, and quoting.** GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there; the braced form does not highlight on GitHub but is what Pandoc and MyST read, and is the only one that can escape a `"` inside the caption. |
-| Contents list | `[[toc]]` — `[TOC]` | **Neither travels.** No other renderer produces a list from either, so pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
+| Contents list | `[[toc]]` — `[TOC]` | **Whether the source is read on GitLab.** GitLab renders its own list from `[TOC]`, and GitHub from neither. Otherwise pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
 | Title, subtitle | front matter — an italic line under the `<h1>` | **Whether the metadata is data.** Front matter is machine-readable and hidden by GitHub; the italic line is visible prose everywhere and cannot carry a date. |
 
 Two rules cut across all of them. A form that another renderer does not
@@ -419,13 +419,14 @@ exist — `[[toc]]` is markdown-it and VitePress, `[TOC]` is
 Python-Markdown and so MkDocs, as well as Typora and StackEdit — and a
 document written for one should not have to be rewritten for this tool.
 
-Neither spelling travels — no other renderer builds a list from either — so
-the choice is about the humans reading the source. This repo writes
-`[[toc]]`.
+For a document that is also read on GitLab, write `[TOC]`: GitLab builds
+its own contents list from that spelling, so the marker works in both
+places. GitHub builds a list from neither. Otherwise the choice is about the
+humans reading the source. This repo writes `[[toc]]`.
 
-GitLab's `[[_TOC_]]` is **not** recognized: its underscores are emphasis
-delimiters, so the marker never arrives as the single unbroken run of text
-this feature requires.
+GitLab's other spelling, `[[_TOC_]]`, is **not** recognized: its
+underscores are emphasis delimiters, so the marker never arrives as the
+single unbroken run of text this feature requires.
 
 Flat, not nested: heading level travels only as a `toc-h3`/`toc-h4`/… class
 on the `<li>`, so a document that jumps from `h2` to `h4` doesn't produce

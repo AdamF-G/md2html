@@ -27,6 +27,9 @@ major version instead.
 
 ### Changed
 
+- The authoring guide said no other renderer builds a contents list from
+  `[TOC]`. GitLab does, so it now recommends `[TOC]` for documents also read
+  there.
 - **breaking:** an `--exclude` value containing `*`, `?` or `[` used to be
   a literal directory path, and is now a name pattern. To exclude a
   directory whose name contains one of those characters, escape it with
