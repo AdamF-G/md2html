@@ -13,6 +13,10 @@ major version instead.
 
 ### Added
 
+- **A `details` container kind**, the bare collapsible. It renders as
+  `<details class="container">`, and a titled block's `<summary>` is exactly
+  its title, with none of the prefix or fallback wording `aside` and
+  `example` add; a titleless one falls back to "Details".
 - **`--exclude` accepts name globs.** A value containing `*`, `?` or `[`
   is matched, with Go's `filepath.Match` syntax, against every file and
   directory name below the base instead of being taken as a directory

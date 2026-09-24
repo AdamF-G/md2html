@@ -139,8 +139,9 @@ Same thing.
 :::
 ```
 
-The shipped vocabulary is six kinds: `callout`, `warning` and `card`
-(`<div>`), `aside` and `example` (`<details>`), and `nav` (`<nav>`):
+The shipped vocabulary is seven kinds: `callout`, `warning` and `card`
+(`<div>`), `details`, `aside` and `example` (`<details>`), and `nav`
+(`<nav>`):
 
 ```markdown
 ::: warning
@@ -213,8 +214,10 @@ A label form naming an unknown kind falls through to the bare form's rules
 and warns there, so `:::housestyle[Title]` is reported, not silently
 dropped.
 
-`aside` with no title falls back to "Aside" in its `<summary>`; `example`
-falls back to "Example", or "Example — Title" when one is given.
+`details` carries no prefix at all — a titled block's `<summary>` is exactly
+its title, and a titleless one falls back to "Details". `aside` with no
+title falls back to "Aside" in its `<summary>`; `example` falls back to
+"Example", or "Example — Title" when one is given.
 
 **Classes merge, they never replace.** A braced container's extra classes
 and id survive alongside the kind's own:

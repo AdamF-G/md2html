@@ -36,8 +36,10 @@ half and the next block inheriting the wrong language.
 ::: house-style    -> <div>, and the run warns
 ```
 
-The shipped kinds are `callout`, `warning`, `card`, `aside`, `example` and
-`nav`. `aside` and `example` are collapsible `<details>`; `nav` is a `<nav>`
+The shipped kinds are `callout`, `warning`, `card`, `details`, `aside`,
+`example` and `nav`. `details`, `aside` and `example` are collapsible
+`<details>` — `details` uses its title as the `<summary>` verbatim, the other
+two add wording of their own; `nav` is a `<nav>`
 landmark and the one kind that adds no class of its own — name it with
 `aria-label` (`::: nav {aria-label="Section"}`) whenever it is not the only
 `<nav>` on the page, which it usually isn't: `[[toc]]` already emits its own
@@ -126,6 +128,7 @@ from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 |---|---|
 | Callout | `::: callout` … `:::` |
 | Warning | `> [!WARNING]` in a repo file; `::: warning` otherwise |
+| Collapsible block | `::: details Title` … `:::` |
 | Collapsible aside | `::: aside Title` … `:::` |
 | Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
 | Worked example | `::: example Title` … `:::` |
