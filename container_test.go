@@ -225,6 +225,28 @@ func TestContainerAsideWithoutTitleUsesFallbackSummary(t *testing.T) {
 	}
 }
 
+// details is the bare collapsible: a titled block's summary is exactly its
+// title, with no editorializing prefix the way aside and example add one.
+func TestContainerDetailsSummaryIsExactlyItsTitle(t *testing.T) {
+	got := convert(t, "::: details Why this matters\nbecause\n:::\n", nil)
+	if !strings.Contains(got, `<details class="container">`) {
+		t.Errorf("not a details element\ngot: %s", got)
+	}
+	if !strings.Contains(got, "<summary>Why this matters</summary>") {
+		t.Errorf("summary should be exactly the title, no prefix\ngot: %s", got)
+	}
+	if !strings.Contains(got, "because") {
+		t.Errorf("body lost\ngot: %s", got)
+	}
+}
+
+func TestContainerDetailsWithoutTitleUsesFallbackSummary(t *testing.T) {
+	got := convert(t, "::: details\nbecause\n:::\n", nil)
+	if !strings.Contains(got, "<summary>Details</summary>") {
+		t.Errorf("no fallback summary\ngot: %s", got)
+	}
+}
+
 // The example kind is the same shape with a different label prefix.
 func TestContainerExamplePrefixesItsSummary(t *testing.T) {
 	got := convert(t, "::: example Rolling back\nsteps\n:::\n", nil)

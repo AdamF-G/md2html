@@ -33,6 +33,12 @@ var containerKinds = map[string]containerKind{
 	"callout": {tag: "div", class: "callout"},
 	"warning": {tag: "div", class: "callout callout-warning"},
 	"card":    {tag: "div", class: "card"},
+	// details is the bare collapsible: no prefix, so a titled block's
+	// <summary> is exactly its title (toDetails's neither-prefix-nor-empty
+	// case), unlike aside or example, which always editorialize the title
+	// with a fallback or a prefix. Its fallback only fires on the titleless
+	// form, the same as aside's.
+	"details": {tag: "details", class: "container", fallback: "Details"},
 	"aside":   {tag: "details", class: "container aside", fallback: "Aside"},
 	"example": {tag: "details", class: "container example", prefix: "Example"},
 	// nav is the one kind that adds no class of its own: the element *is*
