@@ -121,6 +121,9 @@ There is no sidebar or site index, and no cross-document navigation. A
 per-page contents list does exist — `[[toc]]` alone on a line —
 but heading slugs are still worth knowing: they are stable and keep letters
 from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
+They follow GitHub's and GitLab's rules, so an in-page link written against
+either resolves here: `## Sizes: small × large` is `#sizes-small--large`,
+and the second `## Setup` is `#setup-1`.
 
 ## Quick reference
 

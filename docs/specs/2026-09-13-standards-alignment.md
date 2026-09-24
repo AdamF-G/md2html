@@ -56,6 +56,13 @@ Heading slugs match too: `commonmark_x` slugs `## 4.2 Rollback` to
 `42-rollback`, exactly as we do. Pandoc's `markdown` reader gives
 `rollback` instead — a reason to cite `commonmark_x` and not `markdown`.
 
+> **Correction, 2026-09-24.** That one heading was the only case measured,
+> and it has nothing to merge. `commonmark_x` keeps a hyphen for every
+> space, keeps underscores and leading punctuation hyphens, and numbers
+> repeats from `-1` — GitHub's and GitLab's rules — where md2html merged
+> runs, trimmed ends and numbered from `-2`. md2html now uses the shared
+> rules, and `TestAgreeOnHeadingSlugs` in `compat/` checks them.
+
 ### 2.2 Where our extensions degrade cleanly
 
 Pandoc passes these through without corrupting them. This is the outcome we

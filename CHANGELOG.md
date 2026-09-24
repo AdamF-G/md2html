@@ -27,6 +27,17 @@ major version instead.
 
 ### Changed
 
+- **breaking:** heading ids follow the rules GitHub, GitLab and Pandoc's
+  `commonmark_x` share, so in-page links written against any of them now
+  resolve. Each space becomes a hyphen and runs are no longer merged
+  (`Why Go / goldmark` is `why-go--goldmark`, not `why-go-goldmark`),
+  underscores are kept (`foo_bar`, not `foo-bar`), leading and trailing
+  hyphens are kept (`— Intro` is `-intro`), and a repeated heading is
+  numbered from `-1` rather than `-2`. That last change moves a link
+  rather than breaking it: an old `#setup-2` now lands on the third
+  `Setup`, not the second, so check links to repeated headings. Headings
+  with plain words and single spaces keep their ids. Explicit `{#id}`s are
+  unaffected.
 - The authoring guide said no other renderer builds a contents list from
   `[TOC]`. GitLab does, so it now recommends `[TOC]` for documents also read
   there.

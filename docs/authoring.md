@@ -553,6 +553,16 @@ Slugs keep letters and digits from any script, so `## 日本語の見出し` get
 `id="日本語の見出し"` and a working anchor. A heading with no letters or digits
 at all falls back to a positional `section-N` id.
 
+Otherwise slugs follow the rules GitHub, GitLab and Pandoc's `commonmark_x`
+share, so an in-page link written against any of them resolves here too.
+Punctuation is dropped, but each space still becomes a hyphen and nothing is
+merged afterwards: `## Sizes: small × large` is `#sizes-small--large`, and
+`## — Intro` is `#-intro`. Underscores are kept. A repeated heading is
+numbered `-1`, `-2`…, so the second `## Setup` is `#setup-1`. Two small
+differences remain: an emoji is dropped, as GitHub does, where Pandoc spells
+it out by name, and chips stay out of the slug, which no other renderer
+knows to do.
+
 One thing that looks wrong in the output and is not: a link you write yourself
 to a non-ASCII heading is percent-encoded, while the generated anchor beside
 the heading stays literal.
