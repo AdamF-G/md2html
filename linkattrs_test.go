@@ -126,3 +126,20 @@ func TestExternalLinksMergesRawRel(t *testing.T) {
 		t.Errorf("raw rel not merged\ngot: %s", got)
 	}
 }
+
+// HTML attribute names are case-insensitive, so a block's names are
+// lowercased: HREF is refused like href, and Title replaces the title the
+// link already has instead of adding a second one the browser ignores.
+func TestLinkAttrsNamesAreCaseInsensitive(t *testing.T) {
+	var warns []string
+	got := convert(t, "[y](b.md){HREF=evil.md} [x](u \"old\"){Title=new}\n", func(m string) { warns = append(warns, m) })
+	if strings.Contains(got, "evil.md") {
+		t.Errorf("HREF got past the refusal\ngot: %s", got)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "cannot be set") {
+		t.Errorf("warnings = %v, want one refusal", warns)
+	}
+	if !strings.Contains(got, `title="new"`) || strings.Contains(got, "old") || strings.Contains(got, "Title=") {
+		t.Errorf("Title did not replace title\ngot: %s", got)
+	}
+}

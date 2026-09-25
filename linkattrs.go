@@ -63,6 +63,23 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		return
 	}
 
+	// HTML attribute names are case-insensitive and x/net/html lowercases
+	// the ones it parses, so a name is lowercased before it is checked or
+	// set: HREF is refused like href, and Title replaces the link's title
+	// rather than adding a second attribute the browser ignores.
+	kv := make(map[string]string, len(a.kv))
+	for k, v := range a.kv {
+		kv[strings.ToLower(k)] = v
+	}
+	if v, ok := kv["id"]; ok {
+		a.id = v
+		delete(kv, "id")
+	}
+	if v, ok := kv["class"]; ok {
+		a.classes = append(a.classes, strings.Fields(v)...)
+		delete(kv, "class")
+	}
+
 	if a.id != "" {
 		setAttr(el, "id", a.id)
 	}
@@ -70,13 +87,13 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		existing, _ := attr(el, "class")
 		setAttr(el, "class", strings.Join(mergeTokens(existing, strings.Join(a.classes, " ")), " "))
 	}
-	for _, k := range sortedKeys(a.kv) {
+	for _, k := range sortedKeys(kv) {
 		switch {
 		case k == "href" || k == "src":
 			warn(fmt.Sprintf("%s cannot be set from an attribute block on a %s; "+
 				"write the target in the link itself", k, linkKind(el)))
 		case safeAttrName(k):
-			setAttr(el, k, a.kv[k])
+			setAttr(el, k, kv[k])
 		}
 	}
 
