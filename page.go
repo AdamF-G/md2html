@@ -13,7 +13,7 @@ import (
 )
 
 // Version is stamped into the provenance marker.
-const Version = "v0.7.0"
+const Version = "v0.8.0"
 
 // modulePath names the Markdown dialect an embedded source is written in:
 // plain Markdown plus this tool's extensions, as of the version beside it.
