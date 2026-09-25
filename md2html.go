@@ -62,6 +62,14 @@ type Options struct {
 	// floats, and Fragment output is always inline: an Artifact carries no
 	// script, so it could not offer the side control.
 	TOC string
+	// NoSource leaves the original Markdown out of the page. By default a
+	// full page carries it, byte for byte and front matter included, in a
+	// hidden element with the id SourceID, so whoever receives the HTML can
+	// hand the source to their own agent or convert it again. Turn it off
+	// when the source holds something the rendered page leaves out and that
+	// should not travel with it, such as a front matter key the page does
+	// not use. Fragment output never carries the source.
+	NoSource bool
 	// Transforms to run. Nil means the default list.
 	//
 	// A list supplied here is used as given, except that any builtin in it
@@ -145,6 +153,13 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// key itself is silently dropped: there is nowhere in the page for it
 	// to go yet, and warning about a key the format doesn't forbid would
 	// be noise, not a diagnostic.
+	// The page embeds the file as written, so keep it before front matter
+	// comes off. Copied into a non-nil slice: nil tells renderPage to embed
+	// nothing, and an empty document still has a source, if an empty one.
+	var source []byte
+	if !opt.Fragment && !opt.NoSource {
+		source = append([]byte{}, src...)
+	}
 	meta, src, malformed := splitFrontMatter(src)
 	if malformed && opt.Warn != nil {
 		opt.Warn("front matter block is not flat key: value; rendering it as body text")
@@ -217,5 +232,5 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if mermaidURL == "" {
 		mermaidURL = mermaidCDN
 	}
-	return renderPage(body, title, pageLang(meta["lang"], opt.Lang, opt.Warn), css, mermaidURL), nil
+	return renderPage(body, title, pageLang(meta["lang"], opt.Lang, opt.Warn), css, mermaidURL, source), nil
 }

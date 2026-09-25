@@ -67,6 +67,7 @@ Flags:
 		depth     = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
 		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
 		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
+		noSource  = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
 		cssPath   = fs.String("css", "", "replace the embedded stylesheet with this file")
 		lang      = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
 		toc       = fs.String("toc", "", "contents list layout, inline or float (beside the text on a wide screen), unless front matter sets toc (default inline)")
@@ -180,7 +181,7 @@ Flags:
 			// the sink needs no locking and lines from two documents can
 			// never interleave.
 			var warnings []string
-			opts := buildOptions(d, *fragment, css, *lang, *toc, *noTable, *noAnchor, *noExt,
+			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *noTable, *noAnchor, *noExt,
 				func(m string) { warnings = append(warnings, m) })
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
@@ -248,7 +249,7 @@ Flags:
 // single place this run names its sink, and Convert rebuilds the builtins
 // that report against it. TestRunReportsContainerWarningToStderr covers the
 // one diagnostic that travels that way.
-func buildOptions(d md2html.Doc, fragment bool, css, lang, toc string,
+func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc string,
 	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
 	skip := map[string]bool{
@@ -266,6 +267,7 @@ func buildOptions(d md2html.Doc, fragment bool, css, lang, toc string,
 
 	return md2html.Options{
 		Fragment:   fragment,
+		NoSource:   noSource,
 		SourcePath: d.Src,
 		CSS:        css,
 		Lang:       lang,

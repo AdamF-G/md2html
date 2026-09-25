@@ -2354,3 +2354,37 @@ func TestBrowserTOCLevelsAreChevronsAndWrapsHang(t *testing.T) {
 		}
 	}
 }
+
+// The embedded Markdown must come back from a real browser exactly as it
+// was written, including what an HTML parser would otherwise change — a
+// leading newline, a closing textarea tag, entities, CRLF line endings —
+// and it must take up no room on the page. It is read through textContent:
+// a textarea's value normalizes line endings to LF by specification, so
+// value would lose the CRs whatever the page held.
+func TestBrowserEmbeddedSourceRoundTrips(t *testing.T) {
+	src := "\n---\ntitle: Kept\n---\n# Doc\r\n\r\nRaw <b>x</b> &amp; </textarea> stays.\r\n"
+	page, err := md2html.Convert([]byte(src), md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"index.html": page})
+
+	sel := fmt.Sprintf("document.getElementById(%q)", md2html.SourceID)
+	ctx := newBrowserCtx(t)
+	var value string
+	var boxes int
+	err = chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Evaluate(sel+".textContent", &value),
+		chromedp.Evaluate(sel+".getClientRects().length", &boxes),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	if value != src {
+		t.Errorf("source read back from the page differs\n got: %q\nwant: %q", value, src)
+	}
+	if boxes != 0 {
+		t.Errorf("source element renders %d box(es), want none", boxes)
+	}
+}

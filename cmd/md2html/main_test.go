@@ -243,7 +243,7 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 // the CLI side too — without it, a reordering here would ship green while
 // the library stayed correct.
 func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", "", false, false, false, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", false, false, false, nil)
 	want := md2html.Builtins()
 	if len(opts.Transforms) != len(want) {
 		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
@@ -258,7 +258,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // Each --no-* flag must drop exactly its own transform and nothing else,
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", "", true, true, true, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", true, true, true, nil)
 	want := []string{"containers", "alerts", "linkAttrs", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
@@ -567,5 +567,32 @@ func TestRunLangFlagRejectsNonTag(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "site", "a.html")); err == nil {
 		t.Error("a page was written despite the bad flag")
+	}
+}
+
+// Pages carry their Markdown unless told not to; fragments never do.
+func TestRunNoSourceFlag(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		flags []string
+		want  bool
+	}{
+		{"default", nil, true},
+		{"opted out", []string{"--no-source"}, false},
+		{"fragment", []string{"--fragment"}, false},
+	} {
+		root := tree(t, map[string]string{"docs/a.md": "# A\n\nsecret-ish words\n"})
+		args := append([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site")}, c.flags...)
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 0 {
+			t.Fatalf("%s: exit %d, stderr: %s", c.name, code, errb.String())
+		}
+		b, err := os.ReadFile(filepath.Join(root, "site", "a.html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if has := strings.Contains(string(b), `id="`+md2html.SourceID+`"`); has != c.want {
+			t.Errorf("%s: source embedded = %v, want %v", c.name, has, c.want)
+		}
 	}
 }

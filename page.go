@@ -15,6 +15,10 @@ import (
 // Version is stamped into the provenance marker.
 const Version = "v0.7.0"
 
+// modulePath names the Markdown dialect an embedded source is written in:
+// plain Markdown plus this tool's extensions, as of the version beside it.
+const modulePath = "github.com/AdamF-G/md2html"
+
 // MarkerPrefix is the stable portion of the provenance marker. Detection
 // matches this prefix only, so files written by older versions are still
 // recognized. It carries the full repository URL rather than the bare tool
@@ -246,10 +250,15 @@ func hasFloatingTOC(body []byte) bool {
 
 // renderPage wraps body in a complete HTML document. mermaidURL is the
 // build the mermaid runtime imports, and is only consulted for a body that
-// actually carries a diagram.
-func renderPage(body []byte, title, lang, css, mermaidURL string) []byte {
+// actually carries a diagram. A non-nil source is embedded after the
+// content, and a comment beside the marker says where, so an agent reading
+// from the top learns of it before it reaches the end.
+func renderPage(body []byte, title, lang, css, mermaidURL string, source []byte) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
+	if source != nil {
+		fmt.Fprintf(&b, "\n<!-- original Markdown: textContent of the textarea #%s at the end of the body -->", SourceID)
+	}
 	fmt.Fprintf(&b, "\n<!doctype html>\n<html lang=\"%s\">\n<head>\n", html.EscapeString(lang))
 	b.WriteString(`<meta charset="utf-8">` + "\n")
 	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
@@ -259,6 +268,9 @@ func renderPage(body []byte, title, lang, css, mermaidURL string) []byte {
 	b.WriteString("\n</style>\n</head>\n<body>\n<main>\n")
 	b.Write(body)
 	b.WriteString("\n</main>\n")
+	if source != nil {
+		b.WriteString(sourceElement(source))
+	}
 	if hasMermaid(body) {
 		b.WriteString(mermaidRuntime(mermaidURL))
 	}
@@ -323,4 +335,27 @@ func pageLang(front, opt string, warn func(string)) string {
 		}
 	}
 	return "en"
+}
+
+// SourceID is the id of the hidden element that carries a page's original
+// Markdown. See Options.NoSource.
+const SourceID = "md2html-source"
+
+// sourceEscaper escapes Markdown for a textarea. A textarea's content is
+// text, not markup, and ends only at "</textarea", so escaping "<" is what
+// keeps a document that mentions one from closing it early; "&" goes too,
+// since entities are decoded there. "\r" is escaped because a parser folds
+// CRLF into LF, which would lose a Windows file's line endings, and a
+// character reference is exempt from that.
+var sourceEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", "\r", "&#13;")
+
+// sourceElement renders src as the hidden element an agent or a script can
+// read the original Markdown back from: textContent gives the source byte
+// for byte. Its value does not — a textarea's value normalizes line endings
+// to LF. The newline after the start tag is there to be dropped — a
+// parser discards one leading newline in a textarea — so a source that
+// itself begins with a newline keeps it.
+func sourceElement(src []byte) string {
+	return fmt.Sprintf("<textarea hidden id=\"%s\" data-format=\"text/markdown\" data-dialect=\"%s@%s\">\n%s</textarea>\n",
+		SourceID, modulePath, Version, sourceEscaper.Replace(string(src)))
 }
