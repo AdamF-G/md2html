@@ -4,6 +4,8 @@ How to write `.md` that converts well with `md2html`. Every claim here was
 checked against the binary; where something silently does nothing, it is
 called out rather than left to be discovered.
 
+[[toc]]
+
 ## Why write Markdown instead of HTML
 
 Converting this repo's own docs, Markdown source against generated HTML:
