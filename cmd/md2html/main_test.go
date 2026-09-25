@@ -243,7 +243,7 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 // the CLI side too — without it, a reordering here would ship green while
 // the library stayed correct.
 func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", false, false, false, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", "", false, false, false, nil)
 	want := md2html.Builtins()
 	if len(opts.Transforms) != len(want) {
 		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
@@ -258,7 +258,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // Each --no-* flag must drop exactly its own transform and nothing else,
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", true, true, true, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", "", true, true, true, nil)
 	want := []string{"containers", "alerts", "linkAttrs", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
@@ -513,6 +513,43 @@ func TestRunLangFlag(t *testing.T) {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("%s: missing %s", file, want)
 		}
+	}
+}
+
+func TestRunTOCFlag(t *testing.T) {
+	root := tree(t, map[string]string{
+		"docs/a.md": "# A\n\n[TOC]\n\n## One",
+		"docs/b.md": "---\ntoc: inline\n---\n# B\n\n[TOC]\n\n## One",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site"), "--toc", "float"}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	for file, float := range map[string]bool{"a.html": true, "b.html": false} {
+		b, err := os.ReadFile(filepath.Join(root, "site", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(b), `class="toc toc-float"`); got != float {
+			t.Errorf("%s: floating = %v, want %v", file, got, float)
+		}
+	}
+}
+
+// A bad --toc is caught before anything is written, like a bad --lang.
+func TestRunTOCFlagRejectsUnknownLayout(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": "# A"})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site"), "--toc", "sidebar"}, &out, &errb)
+	if code != 2 {
+		t.Errorf("exit %d, want 2", code)
+	}
+	if !strings.Contains(errb.String(), "--toc") {
+		t.Errorf("stderr does not name the flag: %s", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "site", "a.html")); err == nil {
+		t.Error("a page was written despite the bad flag")
 	}
 }
 

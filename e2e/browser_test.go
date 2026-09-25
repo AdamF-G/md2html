@@ -13,6 +13,7 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -2094,5 +2095,180 @@ func TestBrowserFigTreeEmphasisFollowsTheme(t *testing.T) {
 	}
 	if light.AccentVar == dark.AccentVar {
 		t.Errorf("--accent did not change between themes (%s)", light.AccentVar)
+	}
+}
+
+// tocFloatPage is a long page with a floating contents list and a wide
+// figure, the one element that already breaks out of the text column.
+func tocFloatPage(t *testing.T) string {
+	t.Helper()
+	var src strings.Builder
+	src.WriteString("# Doc\n\n[TOC]\n\n```fig\nwide: true\nitems:\n  - box: Wide\n```\n\n")
+	for i := 1; i <= 12; i++ {
+		fmt.Fprintf(&src, "## Section %d\n\n%s\n\n", i, strings.Repeat("Body text runs on. ", 60))
+	}
+	page, err := md2html.Convert([]byte(src.String()), md2html.Options{TOC: "float"})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	return serveGenerated(t, map[string][]byte{"toc.html": page})
+}
+
+// tocGeometry reports the list's position mode, whether its side toggle is
+// shown, and its box beside the text column's and the wide figure's.
+const tocGeometry = `(() => {
+	const nav = document.querySelector("nav.toc");
+	const btn = nav.querySelector(".toc-side-toggle");
+	const r = (el) => el.getBoundingClientRect();
+	const n = r(nav), m = r(document.querySelector("main")), w = r(document.querySelector("figure.fig-wide"));
+	return JSON.stringify({
+		position: getComputedStyle(nav).position,
+		toggle: btn !== null && getComputedStyle(btn).display !== "none",
+		nav: [n.left, n.right, n.top], main: [m.left, m.right], wide: [w.left, w.right],
+		viewport: document.documentElement.clientWidth,
+	});
+})()`
+
+type tocBoxes struct {
+	Position string
+	Toggle   bool
+	Nav      [3]float64
+	Main     [2]float64
+	Wide     [2]float64
+	Viewport float64
+}
+
+func readTOC(t *testing.T, raw string) tocBoxes {
+	t.Helper()
+	var g tocBoxes
+	if err := json.Unmarshal([]byte(raw), &g); err != nil {
+		t.Fatalf("parsing %q: %v", raw, err)
+	}
+	return g
+}
+
+// sideOf says which side of the text column the list is on, failing the
+// test if it overlaps the column or the wide figure, or leaves the screen.
+func sideOf(t *testing.T, label string, g tocBoxes) string {
+	t.Helper()
+	l, r := g.Nav[0], g.Nav[1]
+	if l < 0 || r > g.Viewport {
+		t.Errorf("%s: floating list leaves the viewport: [%v, %v] in %v", label, l, r, g.Viewport)
+	}
+	switch {
+	case l >= g.Main[1] && l >= g.Wide[1]:
+		return "right"
+	case r <= g.Main[0] && r <= g.Wide[0]:
+		return "left"
+	}
+	t.Errorf("%s: floating list [%v, %v] overlaps the column %v or the wide figure %v", label, l, r, g.Main, g.Wide)
+	return ""
+}
+
+// At every width the list either floats clear of the text and the wide
+// figure, or has gone back inline without its side control: never a panel
+// laid over the page's own content.
+func TestBrowserTOCFloatNeverCoversTheText(t *testing.T) {
+	baseURL := tocFloatPage(t)
+	ctx := newBrowserCtx(t)
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1440, 900),
+		chromedp.Navigate(baseURL+"/toc.html"),
+		chromedp.WaitVisible("nav.toc", chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	floated := false
+	for _, w := range []int64{390, 800, 1024, 1100, 1200, 1280, 1440, 1920} {
+		var raw string
+		if err := chromedp.Run(ctx, chromedp.EmulateViewport(w, 900), chromedp.Evaluate(tocGeometry, &raw)); err != nil {
+			t.Fatalf("browser run at %d: %v", w, err)
+		}
+		g := readTOC(t, raw)
+		label := fmt.Sprintf("width %d", w)
+		switch g.Position {
+		case "fixed":
+			floated = true
+			if !g.Toggle {
+				t.Errorf("%s: floating list has no side toggle", label)
+			}
+			if side := sideOf(t, label, g); side != "" && side != "right" {
+				t.Errorf("%s: floating list starts on the %s, want right", label, side)
+			}
+		case "static":
+			if g.Toggle {
+				t.Errorf("%s: inline list shows a side toggle it cannot use", label)
+			}
+		default:
+			t.Errorf("%s: position = %q, want fixed or static", label, g.Position)
+		}
+	}
+	if !floated {
+		t.Error("the list never floated, even at 1920px")
+	}
+	var raw390 string
+	if err := chromedp.Run(ctx, chromedp.EmulateViewport(390, 900), chromedp.Evaluate(tocGeometry, &raw390)); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	if g := readTOC(t, raw390); g.Position != "static" {
+		t.Errorf("a phone-width screen must keep the list inline, got position %q", g.Position)
+	}
+}
+
+// On a wide screen the list stays in view while the page scrolls, its
+// toggle moves it to the other side, and the choice outlives a reload.
+func TestBrowserTOCFloatSideToggle(t *testing.T) {
+	baseURL := tocFloatPage(t)
+	ctx := newBrowserCtx(t)
+	geometry := func(label string) tocBoxes {
+		t.Helper()
+		var raw string
+		if err := chromedp.Run(ctx, chromedp.Evaluate(tocGeometry, &raw)); err != nil {
+			t.Fatalf("%s: %v", label, err)
+		}
+		return readTOC(t, raw)
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1440, 900),
+		chromedp.Navigate(baseURL+"/toc.html"),
+		chromedp.WaitVisible(".toc-side-toggle", chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	start := geometry("start")
+	if start.Position != "fixed" || sideOf(t, "start", start) != "right" {
+		t.Fatalf("want a fixed list on the right at 1440px, got %+v", start)
+	}
+
+	var ignored any
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight)`, &ignored)); err != nil {
+		t.Fatal(err)
+	}
+	if scrolled := geometry("scrolled"); scrolled.Nav[2] != start.Nav[2] {
+		t.Errorf("the list moved while scrolling: top %v, then %v", start.Nav[2], scrolled.Nav[2])
+	}
+
+	if err := chromedp.Run(ctx, chromedp.Click(".toc-side-toggle", chromedp.ByQuery, chromedp.NodeVisible)); err != nil {
+		t.Fatal(err)
+	}
+	if side := sideOf(t, "after toggle", geometry("after toggle")); side != "left" {
+		t.Errorf("toggle left the list on the %s, want left", side)
+	}
+
+	if err := chromedp.Run(ctx,
+		chromedp.Reload(),
+		chromedp.WaitVisible(".toc-side-toggle", chromedp.ByQuery),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if side := sideOf(t, "after reload", geometry("after reload")); side != "left" {
+		t.Errorf("reload forgot the chosen side: list on the %s, want left", side)
+	}
+
+	if err := chromedp.Run(ctx, chromedp.Click(".toc-side-toggle", chromedp.ByQuery, chromedp.NodeVisible)); err != nil {
+		t.Fatal(err)
+	}
+	if side := sideOf(t, "toggled back", geometry("toggled back")); side != "right" {
+		t.Errorf("second toggle left the list on the %s, want right", side)
 	}
 }

@@ -286,3 +286,116 @@ func TestTOCTitleReachesCallerSuppliedTransforms(t *testing.T) {
 		t.Errorf("toc-title lost with a caller-supplied list\ngot: %s", out)
 	}
 }
+
+// floatingNav is the opening tag of a list marked to float. Tests look for
+// the tag, not the class name alone: a full page embeds the stylesheet,
+// which names toc-float in its own rules.
+const floatingNav = `<nav class="toc toc-float"`
+
+// Float mode marks the list it builds, so the stylesheet can pin it beside
+// the text column; the list inside is the same one inline mode builds.
+func TestTOCFloatOptionMarksTheNav(t *testing.T) {
+	out, err := Convert([]byte("# Doc\n\n[TOC]\n\n## Eins\n"), Options{TOC: "float"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `<nav class="toc toc-float" aria-label="Table of Contents">`) {
+		t.Errorf("float mode did not mark the nav\ngot: %s", out)
+	}
+}
+
+func TestTOCInlineIsTheDefault(t *testing.T) {
+	for _, mode := range []string{"", "inline"} {
+		out, err := Convert([]byte("# Doc\n\n[TOC]\n\n## Eins\n"), Options{TOC: mode})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(out), floatingNav) || !strings.Contains(string(out), `<nav class="toc"`) {
+			t.Errorf("TOC %q: want a plain inline nav\ngot: %s", mode, out)
+		}
+	}
+}
+
+// Front matter is the document speaking for itself, so it wins over the
+// run-wide option in both directions, the order lang already follows.
+func TestTOCFrontMatterBeatsOptions(t *testing.T) {
+	cases := []struct {
+		name, src, opt string
+		float          bool
+	}{
+		{"page opts out", "---\ntoc: inline\n---\n# Doc\n\n[TOC]\n\n## Eins\n", "float", false},
+		{"page opts in", "---\ntoc: float\n---\n# Doc\n\n[TOC]\n\n## Eins\n", "inline", true},
+	}
+	for _, c := range cases {
+		out, err := Convert([]byte(c.src), Options{TOC: c.opt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(out), floatingNav); got != c.float {
+			t.Errorf("%s: floating = %v, want %v", c.name, got, c.float)
+		}
+	}
+}
+
+// An unknown mode is a typo, not a layout: it is reported and the next
+// source down is used.
+func TestTOCInvalidModeFallsBackAndWarns(t *testing.T) {
+	cases := []struct {
+		name, src, opt string
+		float          bool
+	}{
+		{"front matter falls to options", "---\ntoc: sidebar\n---\n# Doc\n\n[TOC]\n\n## Eins\n", "float", true},
+		{"front matter falls to default", "---\ntoc: Float!\n---\n# Doc\n\n[TOC]\n\n## Eins\n", "", false},
+		{"options falls to default", "# Doc\n\n[TOC]\n\n## Eins\n", "floating", false},
+	}
+	for _, c := range cases {
+		var warns []string
+		out, err := Convert([]byte(c.src), Options{TOC: c.opt, Warn: func(s string) { warns = append(warns, s) }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(out), floatingNav); got != c.float {
+			t.Errorf("%s: floating = %v, want %v", c.name, got, c.float)
+		}
+		if len(warns) != 1 || !strings.Contains(warns[0], "inline or float") {
+			t.Errorf("%s: warnings = %v, want one naming inline or float", c.name, warns)
+		}
+	}
+}
+
+// Only one list can hold the fixed position; a second would sit on top of
+// the first. Later markers stay inline.
+func TestTOCFloatsOnlyTheFirstMarker(t *testing.T) {
+	out, err := Convert([]byte("# Doc\n\n[TOC]\n\n## Eins\n\n[[toc]]\n\n## Zwei\n"), Options{TOC: "float"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Count(s, `<nav class="toc toc-float"`) != 1 || strings.Count(s, `<nav class="toc" `) != 1 {
+		t.Errorf("want one floating and one inline nav\ngot: %s", s)
+	}
+}
+
+// Fragments are published as Artifacts and never carry a script, so the
+// side toggle could not exist there: the list stays inline.
+func TestTOCFragmentStaysInline(t *testing.T) {
+	out, err := Convert([]byte("---\ntoc: float\n---\n# Doc\n\n[TOC]\n\n## Eins\n"), Options{Fragment: true, TOC: "float"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), floatingNav) {
+		t.Errorf("fragment floated its contents list\ngot: %s", out)
+	}
+}
+
+// A caller who assembled their own transform list from Builtins() gets the
+// float mode too, as they get toc-title.
+func TestTOCFloatReachesCallerSuppliedTransforms(t *testing.T) {
+	out, err := Convert([]byte("# Doc\n\n[TOC]\n\n## Eins\n"), Options{TOC: "float", Transforms: Builtins()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), floatingNav) {
+		t.Errorf("float mode lost with a caller-supplied list\ngot: %s", out)
+	}
+}

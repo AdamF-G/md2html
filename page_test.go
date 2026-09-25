@@ -645,3 +645,44 @@ func TestFragmentIgnoresLang(t *testing.T) {
 		t.Errorf("fragment carries a lang attribute:\n%s", out)
 	}
 }
+
+// The side toggle ships only where there is a floating list to move: an
+// inline list has no side, and a fragment never floats.
+func TestTOCSideRuntimeInjectedOnlyForPagesThatNeedIt(t *testing.T) {
+	const doc = "# Doc\n\n[TOC]\n\n## Eins\n"
+	for _, c := range []struct {
+		name string
+		src  string
+		opt  Options
+		want bool
+	}{
+		{"floating list", doc, Options{TOC: "float"}, true},
+		{"inline list", doc, Options{}, false},
+		{"float mode, no marker", "# Doc\n\n## Eins\n", Options{TOC: "float"}, false},
+		{"fragment in float mode", doc, Options{Fragment: true, TOC: "float"}, false},
+	} {
+		got, err := Convert([]byte(c.src), c.opt)
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", c.name, err)
+		}
+		if has := strings.Contains(string(got), "md2html-toc-side"); has != c.want {
+			t.Errorf("%s: toc side runtime present = %v, want %v", c.name, has, c.want)
+		}
+	}
+}
+
+// The toggle is a real button with a name that says where it moves the
+// list, and the choice outlives the page, so a reader who prefers the left
+// keeps it across every page of a site.
+func TestTOCSideRuntimeIsAnAccessibleButtonThatPersists(t *testing.T) {
+	page, err := Convert([]byte("# Doc\n\n[TOC]\n\n## Eins\n"), Options{TOC: "float"})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	s := string(page)
+	for _, want := range []string{`"button"`, "aria-label", "toc-left", "localStorage"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("page missing %q for the side toggle", want)
+		}
+	}
+}

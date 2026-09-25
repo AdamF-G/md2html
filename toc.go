@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"fmt"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -31,7 +32,7 @@ var tocMarkers = map[string]bool{
 // than a visible heading: a heading would change the look of every page
 // that has a contents list, and would itself take a slug, an anchor and an
 // entry in the list it introduces. A page in another language renames it
-// with the toc-title front matter key, which Convert passes to tocLabeled.
+// with the toc-title front matter key, which Convert passes to tocWith.
 const tocLabel = "Table of Contents"
 
 // isTOCMarker reports whether s, already trimmed, is one of them.
@@ -48,15 +49,20 @@ func isTOCMarker(s string) bool {
 // without the markup having to be a hierarchy.
 //
 // This is a table of contents for one page and nothing more. Cross-document
-// navigation, a sidebar and a site index stay out of scope — see
-// docs/specs/2026-09-11-extended-content-model.md, item 6.
-func TOC() Transform { return tocLabeled(tocLabel) }
+// navigation, a site sidebar and a site index stay out of scope — see
+// docs/specs/2026-09-11-extended-content-model.md, item 6. Float mode
+// (tocWith) changes only where this same list sits on the screen.
+func TOC() Transform { return tocWith(tocLabel, false) }
 
-// tocLabeled is TOC with its list named label. Convert rebuilds the TOC in
-// a transform list with a page's toc-title (withTOCLabel), the way it
-// rebuilds a warning builtin with Options.Warn, so the label goes on the
-// list TOC builds and nowhere else.
-func tocLabeled(label string) Transform {
+// tocWith is TOC with its list named label and, when float is set, its
+// first list marked toc-float for the stylesheet to pin beside the text
+// column. Convert rebuilds the TOC in a transform list with a page's
+// toc-title and layout (withTOC), the way it rebuilds a warning builtin
+// with Options.Warn, so both reach the list TOC builds and nowhere else.
+//
+// Only the first list floats: a fixed position holds one box, and a second
+// floating list would sit on top of the first.
+func tocWith(label string, float bool) Transform {
 	return Transform{Name: "toc", Fn: func(root *html.Node) error {
 		var markers []*html.Node
 		walk(root, func(n *html.Node) {
@@ -85,8 +91,8 @@ func tocLabeled(label string) Transform {
 			return nil
 		}
 		heads := headingNodes(root)
-		for _, m := range markers {
-			nav := buildTOC(heads, label)
+		for i, m := range markers {
+			nav := buildTOC(heads, label, float && i == 0)
 			if nav == nil {
 				// Nothing to list. Leave the marker as literal text rather
 				// than remove it: the spec's own degradation for this
@@ -105,7 +111,7 @@ func tocLabeled(label string) Transform {
 // buildTOC renders the nav, or nil when there is nothing to list — a
 // document whose marker has no headings with an id (none present, or
 // --no-anchors suppressed every one) to point at.
-func buildTOC(heads []*html.Node, label string) *html.Node {
+func buildTOC(heads []*html.Node, label string, float bool) *html.Node {
 	list := &html.Node{Type: html.ElementNode, DataAtom: atom.Ol, Data: "ol"}
 	n := 0
 	for _, h := range heads {
@@ -133,17 +139,25 @@ func buildTOC(heads []*html.Node, label string) *html.Node {
 	if n == 0 {
 		return nil
 	}
+	class := "toc"
+	if float {
+		class = "toc toc-float"
+	}
 	nav := &html.Node{Type: html.ElementNode, DataAtom: atom.Nav, Data: "nav",
-		Attr: []html.Attribute{{Key: "class", Val: "toc"}, {Key: "aria-label", Val: label}}}
+		Attr: []html.Attribute{{Key: "class", Val: class}, {Key: "aria-label", Val: label}}}
 	nav.AppendChild(list)
 	return nav
 }
 
-// withTOCLabel returns ts with its TOC rebuilt to name its list label, or
-// ts itself when label is empty. Like withWarn, it never writes to ts.
-func withTOCLabel(ts []Transform, label string) []Transform {
-	if label == "" {
+// withTOC returns ts with its TOC rebuilt to name its list label (the
+// default when empty) and float its first list, or ts itself when neither
+// changes anything. Like withWarn, it never writes to ts.
+func withTOC(ts []Transform, label string, float bool) []Transform {
+	if label == "" && !float {
 		return ts
+	}
+	if label == "" {
+		label = tocLabel
 	}
 	out, copied := ts, false
 	for i, t := range ts {
@@ -154,7 +168,32 @@ func withTOCLabel(ts []Transform, label string) []Transform {
 			out = append([]Transform(nil), ts...)
 			copied = true
 		}
-		out[i] = tocLabeled(label)
+		out[i] = tocWith(label, float)
 	}
 	return out
+}
+
+// IsTOCMode reports whether s names a contents list layout: "inline" or
+// "float".
+func IsTOCMode(s string) bool { return s == "inline" || s == "float" }
+
+// tocFloats resolves a page's contents list layout from its front matter,
+// then the run-wide option, then the inline default — the order pageLang
+// follows. A value naming no layout is warned about and skipped.
+func tocFloats(front, opt string, warn func(string)) bool {
+	for _, c := range []struct{ val, from string }{
+		{front, "front matter toc"},
+		{opt, "TOC option"},
+	} {
+		if c.val == "" {
+			continue
+		}
+		if IsTOCMode(c.val) {
+			return c.val == "float"
+		}
+		if warn != nil {
+			warn(fmt.Sprintf("%s %q is not a contents list layout (inline or float); ignoring it", c.from, c.val))
+		}
+	}
+	return false
 }

@@ -248,6 +248,51 @@ nav.toc .toc-h3 { padding-left: 1.25rem; }
 nav.toc .toc-h4 { padding-left: 2.5rem; }
 nav.toc .toc-h5, nav.toc .toc-h6 { padding-left: 3.75rem; }
 
+/* A floating list (toc: float) is pinned beside the text column once there
+   is room for it, and stays in view while the page scrolls; on a narrower
+   screen, and in print, it is the inline list above. It sits past the wide
+   figure breakout as well as the column, so it can never cover either, and
+   its width is whatever the viewport leaves. --measure is in ch, which
+   resolves against an element's own font, so the nav keeps the body size
+   and only its list is set smaller. The side toggle is added by script and
+   is only shown here, where there is a side to change. */
+nav.toc .toc-side-toggle { display: none; }
+@media screen and (min-width: 80rem) {
+  nav.toc-float {
+    --toc-offset: calc(var(--measure) / 2 + 4rem + 1.5rem);
+    position: fixed;
+    top: 2rem;
+    left: calc(50% + var(--toc-offset));
+    width: min(18rem, calc(50vw - var(--toc-offset) - 1rem));
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0.75rem 2rem 0.75rem 1rem;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--bg);
+  }
+  nav.toc-float.toc-left { left: auto; right: calc(50% + var(--toc-offset)); }
+  nav.toc-float ol { font-size: 0.85em; line-height: 1.45; }
+  nav.toc-float .toc-side-toggle {
+    display: block;
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    padding: 0.15rem 0.35rem;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  nav.toc-float .toc-side-toggle:hover,
+  nav.toc-float .toc-side-toggle:focus-visible { color: var(--accent); background: var(--code-bg); }
+}
+
 /* Document metadata sits under the title, where a reader expects a
    standfirst — not above it, which is why these are body nodes rather than
    a slot in the page shell. */

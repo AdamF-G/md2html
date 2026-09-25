@@ -200,6 +200,50 @@ func hasExpandableMedia(body []byte) bool {
 	return bytes.Contains(body, []byte("<img")) || bytes.Contains(body, []byte("<svg"))
 }
 
+// tocSideRuntime gives a floating contents list its side control: a small
+// arrow button in the list's corner that moves it between the right of the
+// text column and the left. The choice is kept in localStorage, so it
+// holds across every page of a site; storage that throws (a private
+// window, a file:// page in some browsers) only costs that memory.
+//
+// The button is added on every screen, but the stylesheet shows it only
+// where the list actually floats: on a narrow screen the list is back
+// inline and has no side to change. Like the other runtimes, this loads
+// only on a page that needs it — see hasFloatingTOC.
+const tocSideRuntime = `<script>
+(() => {
+  const toc = document.querySelector("nav.toc-float");
+  if (!toc) return;
+  const key = "md2html-toc-side";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "toc-side-toggle";
+  const apply = (left) => {
+    toc.classList.toggle("toc-left", left);
+    btn.textContent = left ? "\u2192" : "\u2190";
+    const label = left ? "Move contents to the right" : "Move contents to the left";
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  };
+  let stored = null;
+  try { stored = localStorage.getItem(key); } catch (e) {}
+  apply(stored === "left");
+  btn.addEventListener("click", () => {
+    const left = !toc.classList.contains("toc-left");
+    try { localStorage.setItem(key, left ? "left" : "right"); } catch (e) {}
+    apply(left);
+  });
+  toc.prepend(btn);
+})();
+</script>
+`
+
+// hasFloatingTOC reports whether the rendered body carries a contents list
+// the TOC transform marked to float.
+func hasFloatingTOC(body []byte) bool {
+	return bytes.Contains(body, []byte(`<nav class="toc toc-float"`))
+}
+
 // renderPage wraps body in a complete HTML document. mermaidURL is the
 // build the mermaid runtime imports, and is only consulted for a body that
 // actually carries a diagram.
@@ -220,6 +264,9 @@ func renderPage(body []byte, title, lang, css, mermaidURL string) []byte {
 	}
 	if hasExpandableMedia(body) {
 		b.WriteString(mediaExpandRuntime)
+	}
+	if hasFloatingTOC(body) {
+		b.WriteString(tocSideRuntime)
 	}
 	b.WriteString("</body>\n</html>\n")
 	return []byte(b.String())

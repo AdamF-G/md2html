@@ -54,6 +54,14 @@ type Options struct {
 	// favor of the next source. Fragment output has no <html> element, so
 	// it ignores both.
 	Lang string
+	// TOC is how a contents list is laid out: "inline" (the default) where
+	// its marker stands, or "float", pinned beside the text column on a wide
+	// screen with a control to move it to the other side. A document's own
+	// "toc:" front matter key overrides it; any other value is warned about
+	// and skipped in favor of the next source. Only the first list on a page
+	// floats, and Fragment output is always inline: an Artifact carries no
+	// script, so it could not offer the side control.
+	TOC string
 	// Transforms to run. Nil means the default list.
 	//
 	// A list supplied here is used as given, except that any builtin in it
@@ -131,7 +139,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
 	//
-	// Only title/subtitle/date/lang/toc-title are read below. A block carrying some other
+	// Only title/subtitle/date/lang/toc/toc-title are read below. A block carrying some other
 	// flat key (an "author:" line, say) is still accepted and still
 	// stripped from the body — it parsed as valid front matter — but the
 	// key itself is silently dropped: there is nowhere in the page for it
@@ -179,7 +187,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	} else if opt.Warn != nil {
 		transforms = withWarn(transforms, opt.Warn)
 	}
-	transforms = withTOCLabel(transforms, meta["toc-title"])
+	// Resolved even for a fragment, so a bad value is still reported; a
+	// fragment then stays inline, since it can carry no side control.
+	float := tocFloats(meta["toc"], opt.TOC, opt.Warn) && !opt.Fragment
+	transforms = withTOC(transforms, meta["toc-title"], float)
 	if opt.LinkMap != nil {
 		// Full-slice expression: never append into the caller's array.
 		transforms = append(transforms[:len(transforms):len(transforms)],
