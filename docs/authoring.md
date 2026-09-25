@@ -37,7 +37,8 @@ You get, without asking:
 
 - every heading gets a stable `id` and a hover anchor link
 - every table is wrapped in a horizontal scroll container
-- off-site links get `target="_blank" rel="noopener noreferrer"`
+- off-site links get `target="_blank" rel="noopener noreferrer"`, added to
+  any `rel` you wrote, and a `target` you wrote is kept
 - `.md` links become `.html` links that resolve inside the output tree
 - a `<title>` from the first `<h1>`, or the filename if there is none
 
@@ -82,6 +83,21 @@ prints a summary of everything it pulled in from outside.
 syntax safely.
 
 **A link to a missing `.md` warns and is left alone.** The build continues.
+
+**A link or image can carry attributes.** Write a `{#id .class key=value}`
+block straight after it, with no space. This is Pandoc's `link_attributes`:
+
+```markdown
+[Intro](./intro.md){aria-current=page}  -> <a href="intro.html" aria-current="page">
+![Chart](./chart.png){width=50% .wide}  -> <img ... class="wide" width="50%">
+```
+
+The usual reason on a link is `aria-current="page"`, marking the page you
+are on inside a hand-written `::: nav`. md2html cannot work that out itself,
+because only you know which page a navigation block is on. A block with a
+space before it, or with no attributes in it (`{}`), stays as literal text.
+`href` and `src` cannot be set this way, and warn: write the target in the
+link, where `.md` rewriting can see it.
 
 ## Features, with the syntax that actually works
 
@@ -160,12 +176,13 @@ assistive tech otherwise has no way to tell two landmarks apart:
 
 ```markdown
 ::: nav {aria-label="Section contents"}
-- [One](./one.md)
+- [One](./one.md){aria-current=page}
 - [Two](./two.md)
 :::
 ```
 
-renders `<nav aria-label="Section contents">`.
+renders `<nav aria-label="Section contents">`, with the link to the page
+you are on marked `aria-current="page"` (see Links).
 
 **`stats`, `defs` and `group` are the figure kinds of the same names as
 containers.** Use them whenever one does not sit inside a diagram, and keep

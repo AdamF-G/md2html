@@ -36,8 +36,19 @@ major version instead.
   tell it apart from a hand-written `::: nav`. Nothing visible changes. A
   `toc-title:` front matter key, Pandoc's key for the same label, renames it.
 
+- **Attributes on links and images.** Pandoc's `link_attributes`:
+  `[text](url){#id .class key=value}` and `![alt](src){width=50%}` set those
+  attributes on the `<a>` or `<img>`. The usual use is
+  `aria-current=page` on a link in a `::: nav`. The block must touch the
+  link, as in Pandoc. `href` and `src` can't be set this way and warn, and
+  attribute names are checked the same way a container's are.
+
 ### Changed
 
+- Off-site links keep an author's `rel` and `target`. `rel` gets
+  `noopener noreferrer` added to what was written instead of replacing it,
+  so `rel="me"` survives, and a `target` already set is left alone. This
+  applies to raw HTML links too.
 - A braced `::: {.stats}`, `::: {.defs}` or `::: {.group}` used to be an
   ordinary classed div. It is now the shipped kind: a `stats` one has its
   definition list regrouped into tiles, and all three pick up the default

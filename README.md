@@ -28,8 +28,8 @@ for layouts a mermaid graph cannot express.
 ## The dialect
 
 md2html reads **CommonMark plus fenced divs, bracketed spans, fenced code
-attributes, header attributes, definition lists, footnotes, pipe tables and
-YAML front matter** — which is to say Pandoc's `commonmark_x` — plus GitHub
+attributes, header attributes, link attributes, definition lists, footnotes,
+pipe tables and YAML front matter** — which is to say Pandoc's `commonmark_x` — plus GitHub
 alerts, status chips, `§` cross-references, `[[toc]]` and `fig`.
 
 That is a measured claim, not an aspiration. `compat/` runs each construct

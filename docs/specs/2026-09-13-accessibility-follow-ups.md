@@ -6,9 +6,10 @@ date: 2026-09-13
 
 # Accessibility follow-ups
 
-**Status:** Item 1 shipped, with the fixed label recommended below and
-Pandoc's `toc-title` front matter key as the override for a page in
-another language. Item 2 is still a proposal.
+**Status:** Both shipped. Item 1 took the fixed label recommended below,
+with Pandoc's `toc-title` front matter key as the override for a page in
+another language. Item 2 took the shape proposed below, and covers images
+as well as links, as Pandoc's extension does.
 
 ## Purpose
 
