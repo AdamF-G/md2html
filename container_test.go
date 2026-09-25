@@ -946,3 +946,100 @@ func TestContainerUnbalancedBraceInTitleKeepsTheBlockLiteral(t *testing.T) {
 		t.Errorf("balanced braces in a title blocked the attributes\ngot: %s", balanced)
 	}
 }
+
+// flat drops the newlines goldmark puts between block elements, so a test
+// can assert on nesting without spelling out where each one falls.
+func flat(s string) string { return strings.ReplaceAll(s, "\n", "") }
+
+// warnsAbout converts src and reports whether any warning mentions want.
+func warnsAbout(t *testing.T, src, want string) (string, bool) {
+	t.Helper()
+	var found bool
+	got := convert(t, src, func(m string) {
+		if strings.Contains(m, want) {
+			found = true
+		}
+	})
+	return got, found
+}
+
+// A stats container's definition list is regrouped into one tile per term:
+// the term is the value, the first definition the label, and a second the
+// detail. The <dl> survives, with each group a <div> inside it, which HTML
+// permits precisely so a list can be styled without losing its semantics.
+func TestContainerStatsGroupsEachTermIntoATile(t *testing.T) {
+	got := flat(convert(t, "::: stats\n99.9%\n: uptime\n: over the last 90 days\n\n4\n: regions\n:::\n", nil))
+	want := `<div class="stats"><dl>` +
+		`<div class="stat"><dt>99.9%</dt><dd>uptime</dd><dd>over the last 90 days</dd></div>` +
+		`<div class="stat"><dt>4</dt><dd>regions</dd></div>` +
+		`</dl></div>`
+	if !strings.Contains(got, want) {
+		t.Errorf("stats not grouped into tiles\nwant: %s\ngot:  %s", want, got)
+	}
+}
+
+// The point of promotion: a definition holds block Markdown, not just
+// inline text as the fig form's label does.
+func TestContainerStatsDefinitionKeepsBlockMarkdown(t *testing.T) {
+	got := flat(convert(t, "::: stats\n12\n\n:   services\n\n    - api\n    - worker\n:::\n", nil))
+	if !strings.Contains(got, `<div class="stat"><dt>12</dt><dd><p>services</p><ul><li>api</li><li>worker</li></ul></dd></div>`) {
+		t.Errorf("block content in a definition lost or ungrouped\ngot: %s", got)
+	}
+}
+
+func TestContainerStatsTakesATitle(t *testing.T) {
+	got := flat(convert(t, "::: stats[Q3]\n4\n: regions\n:::\n", nil))
+	if !strings.Contains(got, `<div class="stats"><p class="container-title">Q3</p><dl><div class="stat">`) {
+		t.Errorf("titled stats wrong\ngot: %s", got)
+	}
+}
+
+func TestContainerBracedStatsIsGroupedToo(t *testing.T) {
+	got := flat(convert(t, "::: {.stats #kpi}\n4\n: regions\n:::\n", nil))
+	if !strings.Contains(got, `<div class="stat"><dt>4</dt>`) || !strings.Contains(got, `id="kpi"`) {
+		t.Errorf("braced stats not grouped\ngot: %s", got)
+	}
+}
+
+// A definition list nested deeper than the container's own is prose the
+// author wrote, not a row of tiles.
+func TestContainerStatsLeavesNestedListsAlone(t *testing.T) {
+	got := flat(convert(t, "::: stats\n4\n\n:   regions\n\n    Term\n    : def\n:::\n", nil))
+	if strings.Count(got, `class="stat"`) != 1 {
+		t.Errorf("nested definition list regrouped\ngot: %s", got)
+	}
+}
+
+// defs needs no regrouping: its markup is already a definition list, and
+// the kind only supplies the class the stylesheet hangs the grid on.
+func TestContainerDefsWrapsTheListUnchanged(t *testing.T) {
+	got := flat(convert(t, "::: defs\nfence\n: a line of colons\n:::\n", nil))
+	if !strings.Contains(got, `<div class="defs"><dl><dt>fence</dt><dd>a line of colons</dd></dl></div>`) {
+		t.Errorf("defs wrong\ngot: %s", got)
+	}
+}
+
+func TestContainerGroupIsATitledPanel(t *testing.T) {
+	got := flat(convert(t, "::: group[Ingest]\nbody\n:::\n", nil))
+	if !strings.Contains(got, `<div class="group"><p class="container-title">Ingest</p><p>body</p></div>`) {
+		t.Errorf("group wrong\ngot: %s", got)
+	}
+}
+
+// stats and defs are defined to hold a definition list. Without one the
+// container still renders, classed, but the author is told why it does not
+// look like tiles or a grid.
+func TestContainerStatsAndDefsWithoutAListWarn(t *testing.T) {
+	for _, kind := range []string{"stats", "defs"} {
+		got, found := warnsAbout(t, "::: "+kind+"\njust prose\n:::\n", kind+" container has no definition list")
+		if !found {
+			t.Errorf("%s: no warning for a body without a definition list", kind)
+		}
+		if !strings.Contains(got, `<div class="`+kind+`">`) {
+			t.Errorf("%s: lost its class\ngot: %s", kind, got)
+		}
+	}
+	if _, found := warnsAbout(t, "::: group\njust prose\n:::\n", "definition list"); found {
+		t.Error("group warned about a definition list it does not need")
+	}
+}

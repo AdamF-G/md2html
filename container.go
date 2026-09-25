@@ -22,6 +22,9 @@ type containerKind struct {
 	prefix string
 	// fallback is the summary text when the author gave no title.
 	fallback string
+	// list marks a kind defined to hold a definition list, which is warned
+	// about when its body has none.
+	list bool
 }
 
 // containerKinds is the shipped vocabulary: a fixed set, not an open one.
@@ -46,6 +49,14 @@ var containerKinds = map[string]containerKind{
 	// stylesheet, and an author who wants to style theirs writes
 	// "::: nav {.sidebar}".
 	"nav": {tag: "nav", class: ""},
+	// stats, defs and group are the fig kinds of the same names promoted to
+	// containers, so their content is block Markdown rather than a YAML
+	// string's worth of inline text. The fig forms keep working. stats has
+	// its list regrouped into tiles (statTiles); defs is styled as it
+	// stands.
+	"stats": {tag: "div", class: "stats", list: true},
+	"defs":  {tag: "div", class: "defs", list: true},
+	"group": {tag: "div", class: "group"},
 }
 
 // fenceDivs collects every container the fence extension produced, before
@@ -149,6 +160,7 @@ func Containers(warn func(string)) Transform {
 					continue
 				}
 				applyKind(div, k, detachParsedTitle(div, titled))
+				listKind(div, kind, k, warn)
 				continue
 			}
 
@@ -161,6 +173,7 @@ func Containers(warn func(string)) Transform {
 					if k, known := containerKinds[f[0]]; known {
 						removeClassToken(div, f[0])
 						applyKind(div, k, detachParsedTitle(div, titled))
+						listKind(div, f[0], k, warn)
 					}
 					continue
 				}
@@ -349,5 +362,62 @@ func detachParsedTitle(div *html.Node, titled bool) []*html.Node {
 func declassParsedTitle(div *html.Node, titled bool) {
 	if tp := parsedTitleNode(div, titled); tp != nil {
 		removeAttr(tp, "class")
+	}
+}
+
+// listKind finishes a kind defined to hold a definition list: it warns when
+// the container has none, and regroups a stats container's into tiles. It
+// is a no-op for every other kind.
+//
+// Only the container's own children are looked at. A definition list
+// nested inside a definition, or inside a nested container, is content the
+// author wrote there, not the list the kind is about.
+func listKind(div *html.Node, name string, k containerKind, warn func(string)) {
+	if !k.list {
+		return
+	}
+	var lists []*html.Node
+	for c := div.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode && c.DataAtom == atom.Dl {
+			lists = append(lists, c)
+		}
+	}
+	if len(lists) == 0 {
+		warn(fmt.Sprintf("%s container has no definition list: "+
+			"write each entry as a term line followed by \": \" definition lines", name))
+		return
+	}
+	if name == "stats" {
+		for _, dl := range lists {
+			statTiles(dl)
+		}
+	}
+}
+
+// statTiles wraps each term of a stats list, with the definitions that
+// follow it, in a <div class="stat">: the term is the tile's value, the
+// first definition its label, and any second one its detail.
+//
+// HTML permits a <div> around each term group inside a <dl> for exactly
+// this — so a list can be laid out as tiles without stopping being a list
+// to a screen reader. Whitespace between a group's elements moves with
+// them; whitespace before a term stays between the tiles.
+func statTiles(dl *html.Node) {
+	var tile *html.Node
+	for c := dl.FirstChild; c != nil; {
+		next := c.NextSibling
+		switch {
+		case c.Type == html.ElementNode && c.DataAtom == atom.Dt:
+			tile = &html.Node{Type: html.ElementNode, DataAtom: atom.Div, Data: "div",
+				Attr: []html.Attribute{{Key: "class", Val: "stat"}}}
+			dl.InsertBefore(tile, c)
+			dl.RemoveChild(c)
+			tile.AppendChild(c)
+		case tile != nil && !(c.Type == html.TextNode && next != nil &&
+			next.Type == html.ElementNode && next.DataAtom == atom.Dt):
+			dl.RemoveChild(c)
+			tile.AppendChild(c)
+		}
+		c = next
 	}
 }

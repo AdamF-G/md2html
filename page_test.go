@@ -500,7 +500,7 @@ func TestDefaultCSSStylesFigures(t *testing.T) {
 	// figure. It also has to undo the generic `dl dt { margin-top: 1rem }`
 	// earlier in this stylesheet, which otherwise stacks a full rem on top
 	// of the figure's own gap for every term.
-	defs := regexp.MustCompile(`\.fig-defs\s*\{[^}]*\}`).FindString(defaultCSS)
+	defs := regexp.MustCompile(`\.fig-defs(?:,[^{]*)?\s*\{[^}]*\}`).FindString(defaultCSS)
 	if defs == "" {
 		t.Fatal("default.css has no .fig-defs rule")
 	}
@@ -509,7 +509,7 @@ func TestDefaultCSSStylesFigures(t *testing.T) {
 			t.Errorf(".fig-defs needs %s so it reads as part of the figure: %q", prop, defs)
 		}
 	}
-	dt := regexp.MustCompile(`\.fig-defs dt\s*\{[^}]*\}`).FindString(defaultCSS)
+	dt := regexp.MustCompile(`\.fig-defs dt(?:,[^{]*)?\s*\{[^}]*\}`).FindString(defaultCSS)
 	if !strings.Contains(dt, "margin-top: 0") {
 		t.Errorf(".fig-defs dt must reset the generic dl dt margin-top: %q", dt)
 	}
@@ -527,5 +527,25 @@ func TestFigStylesTravelWithAFragment(t *testing.T) {
 	}
 	if !strings.Contains(string(got), ".fig-box") {
 		t.Error("a fragment must carry the figure styles with it")
+	}
+}
+
+// The promoted stats, defs and group containers are styled by sharing the
+// fig rules, so a missing selector would leave one rendering as a bare
+// definition list or an unboxed div with nothing else noticing.
+func TestDefaultCSSStylesPromotedContainers(t *testing.T) {
+	for _, sel := range []string{
+		".fig-stats, .stats > dl",
+		".fig-stat, .stat",
+		".fig-stat-value, .stat > dt",
+		".fig-stat-label, .stat > dd",
+		".fig-stat-detail, .stat > dd ~ dd",
+		".fig-defs, .defs > dl",
+		".fig-defs dt, .defs > dl > dt",
+		".group > .container-title",
+	} {
+		if !strings.Contains(defaultCSS, sel) {
+			t.Errorf("default.css is missing %q", sel)
+		}
 	}
 }

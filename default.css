@@ -194,6 +194,25 @@ details.container.example { border-left: 3px solid var(--accent); }
 
 .container-title { font-weight: 600; margin: 0 0 0.5rem; }
 
+/* The stats, defs and group containers are the fig kinds of the same names
+   promoted to block Markdown, and they share the fig rules below rather
+   than restating them, so the two forms cannot drift apart. What is here
+   is only what a container needs that a figure item does not: the vertical
+   margin every block container has, and the group's own box. */
+.stats, .defs, .group { margin: 1.5rem 0; }
+.group {
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  padding: 0.6rem 0.9rem;
+}
+.group > .container-title {
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Status chips: a short marker attached to a claim or a heading. Sized in
    em so one sitting in an h2 scales with it instead of shrinking to noise. */
 .chip {
@@ -414,8 +433,12 @@ main > figure.fig-wide {
   box-shadow: 0 0 0 2px var(--fig-surface, var(--bg)), 0 0 0 3px var(--accent);
 }
 
-.fig-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.fig-stat {
+/* A stats container's tiles are its definition list's term groups
+   (statTiles in container.go): the term is the value, the first definition
+   the label, a second the detail. The child combinators keep a list nested
+   inside a definition an ordinary list. */
+.fig-stats, .stats > dl { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; }
+.fig-stat, .stat {
   flex: 1 1 0;
   min-width: 6rem;
   border: 1px solid var(--rule);
@@ -423,14 +446,18 @@ main > figure.fig-wide {
   padding: 0.5rem;
   text-align: center;
 }
-.fig-stat-value {
+.fig-stat-value, .stat > dt {
   display: block;
   font-size: 1.35rem;
   font-weight: 600;
   color: var(--accent);
 }
-.fig-stat-label { display: block; font-size: 0.8rem; color: var(--muted); }
-.fig-stat-detail {
+.stat > dt { margin: 0; }
+.fig-stat-label, .stat > dd { display: block; font-size: 0.8rem; color: var(--muted); }
+.stat > dd { margin: 0; }
+.stat > dd > :first-child { margin-top: 0; }
+.stat > dd > :last-child { margin-bottom: 0; }
+.fig-stat-detail, .stat > dd ~ dd {
   display: block;
   margin-top: 0.2rem;
   font-size: 0.72rem;
@@ -446,25 +473,25 @@ main > figure.fig-wide {
    The margin-top reset is not tidying: `dl dt { margin-top: 1rem }` earlier
    in this stylesheet still applies here, and would stack a full rem on top
    of the figure's own flex gap in front of every term. */
-.fig-defs {
+.fig-defs, .defs > dl {
   margin: 0;
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 0.5rem 0.75rem;
   background: var(--code-bg);
 }
-.fig-defs dt {
+.fig-defs dt, .defs > dl > dt {
   font-weight: 600;
   margin-top: 0;
   padding-top: 0.5rem;
   border-top: 1px solid var(--rule);
 }
-.fig-defs dt:first-child {
+.fig-defs dt:first-child, .defs > dl > dt:first-child {
   padding-top: 0;
   border-top: 0;
 }
-.fig-defs dd { margin: 0.15rem 0 0.5rem; color: var(--muted); }
-.fig-defs dd:last-child { margin-bottom: 0; }
+.fig-defs dd, .defs > dl > dd { margin: 0.15rem 0 0.5rem; color: var(--muted); }
+.fig-defs dd:last-child, .defs > dl > dd:last-child { margin-bottom: 0; }
 
 /* A tree is a real nested list, so the list semantics are reset visually
    and the nesting is carried by indentation alone — the same thing the
