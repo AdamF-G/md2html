@@ -9,7 +9,7 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
-## Unreleased
+## v0.7.0 — 2026-09-25
 
 ### Added
 
