@@ -45,8 +45,10 @@ func isTOCMarker(s string) bool {
 //
 // Flat, not nested by heading level: a document that jumps h2 to h4 would
 // otherwise produce either invalid list nesting or a silently wrong tree.
-// Level travels as a class on the list item, so the stylesheet can indent
-// without the markup having to be a hierarchy.
+// Each list item carries its heading's tag (toc-h2) and its depth in the
+// page's outline below the title (toc-d0 for a top-level section), and the
+// title's item is also marked toc-title, so the stylesheet can mark depth
+// without the markup being a hierarchy.
 //
 // This is a table of contents for one page and nothing more. Cross-document
 // navigation, a site sidebar and a site index stay out of scope — see
@@ -112,8 +114,11 @@ func tocWith(label string, float bool) Transform {
 // document whose marker has no headings with an id (none present, or
 // --no-anchors suppressed every one) to point at.
 func buildTOC(heads []*html.Node, label string, float bool) *html.Node {
-	list := &html.Node{Type: html.ElementNode, DataAtom: atom.Ol, Data: "ol"}
-	n := 0
+	type entry struct {
+		id, label, tag string
+		level          int
+	}
+	var entries []entry
 	for _, h := range heads {
 		id, ok := attr(h, "id")
 		if !ok || id == "" {
@@ -123,22 +128,56 @@ func buildTOC(heads []*html.Node, label string, float bool) *html.Node {
 		// link HeadingAnchors appends (see chip.go), so there is no
 		// trailing "#" to strip here — and no risk of truncating a heading
 		// whose visible text genuinely ends in one, like "Sharp C#".
-		label := strings.TrimSpace(headingText(h))
-		if label == "" {
+		text := strings.TrimSpace(headingText(h))
+		if text == "" {
 			continue
 		}
-		li := &html.Node{Type: html.ElementNode, DataAtom: atom.Li, Data: "li",
-			Attr: []html.Attribute{{Key: "class", Val: "toc-" + h.Data}}}
-		a := &html.Node{Type: html.ElementNode, DataAtom: atom.A, Data: "a",
-			Attr: []html.Attribute{{Key: "href", Val: "#" + id}}}
-		a.AppendChild(&html.Node{Type: html.TextNode, Data: label})
-		li.AppendChild(a)
-		list.AppendChild(li)
-		n++
+		entries = append(entries, entry{id, text, h.Data, int(h.Data[1] - '0')})
 	}
-	if n == 0 {
+	if len(entries) == 0 {
 		return nil
 	}
+
+	// The page title is the first entry when it is shallower than every
+	// other: an h1 over h2 sections, or an h2 over h3 ones on a page that
+	// titles itself with ##. It is marked, and left out of the outline, so
+	// the sections under it are depth 0 just as on a page with no title.
+	// Two headings at the top level, or a shallower one later, means the
+	// page has no title in this sense and its top headings are sections.
+	title := len(entries) > 1
+	for _, e := range entries[1:] {
+		if e.level <= entries[0].level {
+			title = false
+			break
+		}
+	}
+
+	list := &html.Node{Type: html.ElementNode, DataAtom: atom.Ol, Data: "ol"}
+	// open holds the levels of the listed headings still enclosing the
+	// current one, shallowest first; its length is the current depth.
+	var open []int
+	for i, e := range entries {
+		class := fmt.Sprintf("toc-%s toc-d0 toc-title", e.tag)
+		if !title || i > 0 {
+			// Depth is the entry's place in the outline, not its tag: one
+			// more than the nearest listed heading above it with a higher
+			// level. A level skipped for its look (h2 straight to h4) adds
+			// no depth.
+			for len(open) > 0 && open[len(open)-1] >= e.level {
+				open = open[:len(open)-1]
+			}
+			class = fmt.Sprintf("toc-%s toc-d%d", e.tag, len(open))
+			open = append(open, e.level)
+		}
+		li := &html.Node{Type: html.ElementNode, DataAtom: atom.Li, Data: "li",
+			Attr: []html.Attribute{{Key: "class", Val: class}}}
+		a := &html.Node{Type: html.ElementNode, DataAtom: atom.A, Data: "a",
+			Attr: []html.Attribute{{Key: "href", Val: "#" + e.id}}}
+		a.AppendChild(&html.Node{Type: html.TextNode, Data: e.label})
+		li.AppendChild(a)
+		list.AppendChild(li)
+	}
+
 	class := "toc"
 	if float {
 		class = "toc toc-float"

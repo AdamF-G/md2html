@@ -480,10 +480,26 @@ GitLab's other spelling, `[[_TOC_]]`, is **not** recognized: its
 underscores are emphasis delimiters, so the marker never arrives as the
 single unbroken run of text this feature requires.
 
-Flat, not nested: heading level travels only as a `toc-h3`/`toc-h4`/… class
-on the `<li>`, so a document that jumps from `h2` to `h4` doesn't produce
-broken list nesting. Chips and the heading's own anchor link are excluded
-from the link text.
+Flat, not nested: each `<li>` carries its heading's tag as a
+`toc-h2`/`toc-h3`/… class and its depth in the page's outline as a
+`toc-d0`/`toc-d1`/… class, and the title's also carries `toc-title`, so a
+document that jumps from `h2` to `h4` doesn't produce broken list nesting.
+Chips and the heading's own anchor link are excluded from the link text.
+
+The title is the first entry when it is shallower than every other one:
+an `h1` over `h2` sections, or an `h2` over `h3` sections on a page that
+titles itself with `##`. It stands apart from the outline, so the
+top-level sections under it are depth 0, as they are on a page with no
+title. Below those, depth is the entry's place in the outline, not its
+tag: one more than the nearest heading above it with a higher level. A
+level skipped for how it looks adds no depth, so an `h4` directly under an
+`h2` section is depth 1, as an `h3` would be. Depth shows as chevrons
+rather than indentation: every entry starts at the same edge, the title
+and top-level sections are bare, and each deeper entry leads with one `›`
+per level of depth, up to three. A long heading's wrapped lines hang further in than any
+entry's start, so a continuation never passes for the next entry. The
+chevrons are styling, hidden from screen readers, and not part of the link
+text.
 
 The list is named for screen readers, as `<nav class="toc"
 aria-label="Table of Contents">`, so it can be told apart from a

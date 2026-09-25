@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -44,8 +45,54 @@ func TestTOCIsFlatAndCarriesLevelAsAClass(t *testing.T) {
 	if strings.Count(got, "<ol") != 1 {
 		t.Errorf("nested lists\ngot: %s", got)
 	}
-	if !strings.Contains(got, `class="toc-h2"`) || !strings.Contains(got, `class="toc-h4"`) {
+	if !strings.Contains(got, `class="toc-h2 `) || !strings.Contains(got, `class="toc-h4 `) {
 		t.Errorf("no level classes\ngot: %s", got)
+	}
+}
+
+// tocDepths returns each entry's depth class, with " title" appended for
+// the entry marked as the page title, in order.
+func tocDepths(t *testing.T, in string) []string {
+	t.Helper()
+	var out []string
+	for _, m := range regexp.MustCompile(`<li class="toc-h\d (toc-d\d)( toc-title)?">`).FindAllStringSubmatch(toc(t, in), -1) {
+		out = append(out, m[1]+strings.Replace(m[2], " toc-", " ", 1))
+	}
+	return out
+}
+
+// Depth is the entry's place in the outline below the page title, not its
+// heading tag. The title is the first entry when it is shallower than every
+// other; it is marked, and counts for nothing, so the sections under it are
+// depth 0 as they would be on a page with no title. Past that, an entry is
+// one deeper than the nearest heading above it with a higher level, so a
+// level skipped for its look adds no depth.
+func TestTOCDepthFollowsTheOutlineNotTheTag(t *testing.T) {
+	cases := []struct {
+		name, in string
+		want     []string
+	}{
+		{"title and sections", `<p>[[toc]]</p><h1>T</h1><h2>A</h2><h3>B</h3><h2>C</h2>`,
+			[]string{"toc-d0 title", "toc-d0", "toc-d1", "toc-d0"}},
+		{"skipped level", `<p>[[toc]]</p><h1>T</h1><h2>A</h2><h4>B</h4><h4>C</h4>`,
+			[]string{"toc-d0 title", "toc-d0", "toc-d1", "toc-d1"}},
+		{"climbs back out", `<p>[[toc]]</p><h1>T</h1><h2>A</h2><h4>B</h4><h3>C</h3><h4>D</h4><h2>E</h2>`,
+			[]string{"toc-d0 title", "toc-d0", "toc-d1", "toc-d1", "toc-d2", "toc-d0"}},
+		{"title one level down", `<p>[[toc]]</p><h2>Title</h2><h3>A</h3><h4>B</h4>`,
+			[]string{"toc-d0 title", "toc-d0", "toc-d1"}},
+		{"no title, sections only", `<p>[[toc]]</p><h2>A</h2><h3>B</h3><h2>C</h2>`,
+			[]string{"toc-d0", "toc-d1", "toc-d0"}},
+		{"two top headings, no title", `<p>[[toc]]</p><h1>A</h1><h2>B</h2><h1>C</h1>`,
+			[]string{"toc-d0", "toc-d1", "toc-d0"}},
+		{"shallower later, no title", `<p>[[toc]]</p><h3>A</h3><h2>B</h2><h3>C</h3>`,
+			[]string{"toc-d0", "toc-d0", "toc-d1"}},
+		{"deepest", `<p>[[toc]]</p><h1>1</h1><h2>2</h2><h3>3</h3><h4>4</h4><h5>5</h5><h6>6</h6>`,
+			[]string{"toc-d0 title", "toc-d0", "toc-d1", "toc-d2", "toc-d3", "toc-d4"}},
+	}
+	for _, c := range cases {
+		if got := tocDepths(t, c.in); strings.Join(got, ",") != strings.Join(c.want, ",") {
+			t.Errorf("%s: depths %v, want %v", c.name, got, c.want)
+		}
 	}
 }
 

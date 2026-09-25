@@ -239,14 +239,25 @@ details.container.example { border-left: 3px solid var(--accent); }
    points inside the page the reader is already on. */
 a.xref { text-decoration: underline dotted; text-underline-offset: 0.2em; }
 
-/* Flat by construction: indentation comes from the level class, so an
-   h2→h4 jump indents without the markup pretending to be a hierarchy. */
+/* Flat by construction: each entry's depth in the page's outline comes as
+   a class (toc-d0 for an entry nothing encloses), so a skipped heading
+   level reads correctly without the markup pretending to be a hierarchy.
+   Depth is shown by chevrons, not indentation: every entry starts at the
+   same edge and leads with one chevron per level of depth, up to three.
+   A line a long heading wraps onto hangs 1rem in, so it never lines up
+   with an entry's start and never reads as the next entry; the padding
+   carries that 1rem and the negative text-indent pulls the first line
+   back out of it. The chevrons are generated content with empty
+   alternative text, so assistive technology reads only the links. */
 nav.toc { margin: 2rem 0; }
 nav.toc ol { list-style: none; margin: 0; padding-left: 0; }
-nav.toc li { margin: 0.15rem 0; }
-nav.toc .toc-h3 { padding-left: 1.25rem; }
-nav.toc .toc-h4 { padding-left: 2.5rem; }
-nav.toc .toc-h5, nav.toc .toc-h6 { padding-left: 3.75rem; }
+nav.toc li { margin: 0.15rem 0; padding-left: 1rem; text-indent: -1rem; }
+nav.toc li::before { color: var(--muted); }
+nav.toc .toc-d1::before { content: "\203A\00A0"; content: "\203A\00A0" / ""; }
+nav.toc .toc-d2::before { content: "\203A\203A\00A0"; content: "\203A\203A\00A0" / ""; }
+nav.toc .toc-d3::before, nav.toc .toc-d4::before, nav.toc .toc-d5::before {
+  content: "\203A\203A\203A\00A0"; content: "\203A\203A\203A\00A0" / "";
+}
 
 /* A floating list (toc: float) is pinned beside the text column once there
    is room for it, and stays in view while the page scrolls; on a narrower
@@ -275,6 +286,9 @@ nav.toc .toc-side-toggle { display: none; }
   }
   nav.toc-float.toc-left { left: auto; right: calc(50% + var(--toc-offset)); }
   nav.toc-float ol { font-size: 0.85em; line-height: 1.45; }
+  /* Narrow, so long headings wrap often here: a little more space between
+     entries than inside one keeps each entry a visible unit. */
+  nav.toc-float li { margin: 0.35rem 0; }
   nav.toc-float .toc-side-toggle {
     display: block;
     position: absolute;

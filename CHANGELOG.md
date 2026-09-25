@@ -27,6 +27,20 @@ major version instead.
   exposes the check. The marker itself is unchanged, so `[TOC]` still works
   on GitLab.
 
+### Changed
+
+- **Contents list depth is shown by chevrons, not indentation.** Every
+  entry now starts at the same edge. The page title and the top-level
+  sections are bare, and each entry below them leads with one `›` per
+  level of depth, up to three. Depth follows the outline, not the heading
+  tag: a skipped level adds none, so an `h4` directly under an `h2`
+  section gets one chevron, and a page titled with `##` over `###`
+  sections reads like one titled with `#`. Each entry gains a
+  `toc-d0`…`toc-d5` class for this, and the title `toc-title`; the
+  `toc-h*` class is unchanged, so a replacement stylesheet that styled it keeps working. A
+  long heading's wrapped lines hang in, so they no longer line up with, and
+  read as, the next entry. The chevrons are hidden from screen readers.
+
 ## v0.6.0 — 2026-09-24
 
 ### Added

@@ -2272,3 +2272,85 @@ func TestBrowserTOCFloatSideToggle(t *testing.T) {
 		t.Errorf("second toggle left the list on the %s, want right", side)
 	}
 }
+
+// Outline depth is shown by chevrons, not indentation: every entry starts
+// at the same left edge, the title and top-level sections are bare, an
+// entry below them leads with one chevron per level (up to three), depth
+// follows the outline rather than the tag, so a skipped heading level adds
+// none, and a line a long heading wraps onto
+// hangs further in than any entry's start, so it never reads as the next
+// entry.
+func TestBrowserTOCLevelsAreChevronsAndWrapsHang(t *testing.T) {
+	var src strings.Builder
+	src.WriteString("# Doc\n\n[TOC]\n\n## Short\n\ntext\n\n")
+	src.WriteString("## A section heading long enough that the floating list has to wrap it onto more lines\n\ntext\n\n")
+	src.WriteString("### A subsection heading also long enough to wrap inside the floating list\n\ntext\n\n")
+	src.WriteString("#### Deeper\n\ntext\n\n")
+	src.WriteString("## Parent\n\ntext\n\n#### Skipped to\n\ntext\n")
+	page, err := md2html.Convert([]byte(src.String()), md2html.Options{TOC: "float"})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"levels.html": page})
+	ctx := newBrowserCtx(t)
+
+	// Per entry: where its first line starts (the content box plus the
+	// first-line indent, which is where a ::before marker sits), where the
+	// link's first and last lines start, how many lines it takes, and the
+	// marker text.
+	const entries = `JSON.stringify([...document.querySelectorAll("nav.toc li")].map((li) => {
+		const cs = getComputedStyle(li);
+		const start = li.getBoundingClientRect().left + parseFloat(cs.paddingLeft) + parseFloat(cs.textIndent);
+		const rects = [...li.querySelector("a").getClientRects()];
+		const marker = getComputedStyle(li, "::before").content;
+		return {start, first: rects[0].left, last: rects[rects.length - 1].left, lines: rects.length, marker};
+	}))`
+	type entry struct {
+		Start, First, Last float64
+		Lines              int
+		Marker             string
+	}
+	for _, w := range []int64{1440, 390} {
+		var raw string
+		if err := chromedp.Run(ctx,
+			chromedp.EmulateViewport(w, 900),
+			chromedp.Navigate(baseURL+"/levels.html"),
+			chromedp.WaitVisible("nav.toc", chromedp.ByQuery),
+			chromedp.Evaluate(entries, &raw),
+		); err != nil {
+			t.Fatalf("browser run at %d: %v", w, err)
+		}
+		var got []entry
+		if err := json.Unmarshal([]byte(raw), &got); err != nil {
+			t.Fatalf("parsing %q: %v", raw, err)
+		}
+		// Doc (h1), Short (h2), long h2, long h3, Deeper (h4), Parent (h2),
+		// Skipped to (h4 directly under an h2).
+		if len(got) != 7 {
+			t.Fatalf("width %d: want 7 entries, got %+v", w, got)
+		}
+		if w == 1440 && (got[2].Lines < 2 || got[3].Lines < 2) {
+			t.Fatalf("width %d: the long entries did not wrap, so the test proves nothing: %+v", w, got)
+		}
+		// The title and the top-level sections are bare; chevrons start
+		// one level below them.
+		chevrons := []int{0, 0, 0, 1, 2, 0, 1}
+		for i, e := range got {
+			if math.Abs(e.Start-got[0].Start) > 0.5 {
+				t.Errorf("width %d: entry %d starts at %v, the first at %v; levels must not indent", w, i, e.Start, got[0].Start)
+			}
+			if n := strings.Count(e.Marker, "\u203a"); n != chevrons[i] {
+				t.Errorf("width %d: entry %d marker %s has %d chevrons, want %d", w, i, e.Marker, n, chevrons[i])
+			}
+			if chevrons[i] == 0 && math.Abs(e.First-e.Start) > 0.5 {
+				t.Errorf("width %d: depth-0 entry %d text starts at %v, not at the edge %v", w, i, e.First, e.Start)
+			}
+			if chevrons[i] > 0 && e.First <= e.Start+2 {
+				t.Errorf("width %d: nested entry %d text at %v leaves no room for its chevron at %v", w, i, e.First, e.Start)
+			}
+			if e.Lines > 1 && e.Last < e.Start+8 {
+				t.Errorf("width %d: entry %d wraps back to %v from an entry start of %v; a wrapped line must hang", w, i, e.Last, e.Start)
+			}
+		}
+	}
+}
