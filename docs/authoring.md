@@ -467,6 +467,19 @@ on the `<li>`, so a document that jumps from `h2` to `h4` doesn't produce
 broken list nesting. Chips and the heading's own anchor link are excluded
 from the link text.
 
+The list is named for screen readers, as `<nav class="toc"
+aria-label="Table of Contents">`, so it can be told apart from a
+hand-written `::: nav` on the same page. Nothing about it is visible. A page
+in another language renames it with the `toc-title` front matter key, which
+is Pandoc's key for the same label:
+
+```markdown
+---
+lang: de
+toc-title: Inhalt
+---
+```
+
 The marker must be the paragraph's *entire* content. Wrapped in a link or a
 code span, it is left alone — `` `[[toc]]` `` and a link whose text happens
 to be `[[toc]]` both stay literal. A document with no linkable headings —
@@ -480,7 +493,7 @@ scope.
 ### Front matter
 
 A leading `---`-delimited block of flat `key: value` lines sets `title`,
-`subtitle`, `date` and `lang`:
+`subtitle`, `date`, `lang` and `toc-title`:
 
 ```markdown
 ---
@@ -493,10 +506,11 @@ lang: en-GB
 # Reference
 ```
 
-Only those four keys do anything; any other key is silently stripped from
+Only those five keys do anything; any other key is silently stripped from
 the body and dropped. A repeated key keeps the last value. `subtitle` and
 `date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
 under the document's leading `<h1>` — body nodes, not a page-shell slot.
+`toc-title` names the contents list; see Contents list.
 
 `lang` is the page's `<html lang>`, which screen readers use to pick a
 voice and browsers use for hyphenation and spell-checking. It is the key

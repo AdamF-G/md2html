@@ -292,7 +292,7 @@ func TestRunResolvesChipsSectionLinksAndTOC(t *testing.T) {
 	if !strings.Contains(got, `id="1-setup"`) {
 		t.Errorf("chip leaked into heading slug\ngot: %s", got)
 	}
-	if !strings.Contains(got, `<nav class="toc">`) {
+	if !strings.Contains(got, `<nav class="toc"`) {
 		t.Errorf("toc marker not replaced\ngot: %s", got)
 	}
 	if !strings.Contains(got, `<a class="xref" href="#1-setup">§1</a>`) {

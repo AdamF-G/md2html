@@ -131,7 +131,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
 	//
-	// Only title/subtitle/date/lang are read below. A block carrying some other
+	// Only title/subtitle/date/lang/toc-title are read below. A block carrying some other
 	// flat key (an "author:" line, say) is still accepted and still
 	// stripped from the body — it parsed as valid front matter — but the
 	// key itself is silently dropped: there is nowhere in the page for it
@@ -189,6 +189,8 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
 		}
 	}
+
+	relabelTOC(root, meta["toc-title"])
 
 	body, err := renderTree(root)
 	if err != nil {

@@ -6,8 +6,9 @@ date: 2026-09-13
 
 # Accessibility follow-ups
 
-**Status:** Both are proposals. Neither is scheduled, and neither is part of
-the fence-line-capture branch's acceptance.
+**Status:** Item 1 shipped, with the fixed label recommended below and
+Pandoc's `toc-title` front matter key as the override for a page in
+another language. Item 2 is still a proposal.
 
 ## Purpose
 

@@ -25,7 +25,7 @@ func toc(t *testing.T, in string) string {
 
 func TestTOCReplacesMarkerWithNav(t *testing.T) {
 	got := toc(t, `<h1>Doc</h1><p>[[toc]]</p><h2>First</h2><h2>Second</h2>`)
-	if !strings.Contains(got, `<nav class="toc">`) {
+	if !strings.Contains(got, `<nav class="toc"`) {
 		t.Errorf("no nav\ngot: %s", got)
 	}
 	if strings.Contains(got, "[[toc]]") {
@@ -155,7 +155,7 @@ func TestTOCLeavesCodeSpanAlone(t *testing.T) {
 // left behind as a stray marker once the first has been expanded.
 func TestTOCExpandsEveryMarker(t *testing.T) {
 	got := toc(t, `<p>[[toc]]</p><h2>A</h2><p>[[toc]]</p><h2>B</h2>`)
-	if strings.Count(got, `<nav class="toc">`) != 2 {
+	if strings.Count(got, `<nav class="toc"`) != 2 {
 		t.Errorf("want two navs, one per marker\ngot: %s", got)
 	}
 	if strings.Contains(got, "[[toc]]") {
@@ -193,7 +193,7 @@ func TestTOCWithHeadingsButNoIDsLeavesTheMarker(t *testing.T) {
 func TestTOCAlternateMarkers(t *testing.T) {
 	for _, marker := range []string{"[[toc]]", "[TOC]", "[toc]", "[[TOC]]"} {
 		got := convert(t, "# Doc\n\n"+marker+"\n\n## One\n", nil)
-		if !strings.Contains(got, `<nav class="toc">`) {
+		if !strings.Contains(got, `<nav class="toc"`) {
 			t.Errorf("%s did not produce a contents list\ngot: %s", marker, got)
 		}
 		if strings.Contains(got, marker) {
@@ -205,7 +205,7 @@ func TestTOCAlternateMarkers(t *testing.T) {
 // The marker must still be the paragraph's entire content.
 func TestTOCAlternateMarkerMidSentenceStaysLiteral(t *testing.T) {
 	got := convert(t, "# Doc\n\nsee [TOC] here\n\n## One\n", nil)
-	if strings.Contains(got, `<nav class="toc">`) {
+	if strings.Contains(got, `<nav class="toc"`) {
 		t.Errorf("mid-sentence marker produced a contents list\ngot: %s", got)
 	}
 }
@@ -213,7 +213,7 @@ func TestTOCAlternateMarkerMidSentenceStaysLiteral(t *testing.T) {
 // A marker inside a code span documents the feature and must stay literal.
 func TestTOCAlternateMarkerInCodeStaysLiteral(t *testing.T) {
 	got := convert(t, "# Doc\n\n`[TOC]`\n\n## One\n", nil)
-	if strings.Contains(got, `<nav class="toc">`) {
+	if strings.Contains(got, `<nav class="toc"`) {
 		t.Errorf("marker in a code span produced a contents list\ngot: %s", got)
 	}
 }
@@ -227,7 +227,39 @@ func TestTOCAlternateMarkerInCodeStaysLiteral(t *testing.T) {
 // rather than surprising.
 func TestTOCGitLabMarkerIsNotSupported(t *testing.T) {
 	got := convert(t, "# Doc\n\n[[_TOC_]]\n\n## One\n", nil)
-	if strings.Contains(got, `<nav class="toc">`) {
+	if strings.Contains(got, `<nav class="toc"`) {
 		t.Errorf("[[_TOC_]] unexpectedly produced a contents list\ngot: %s", got)
+	}
+}
+
+// The contents list is a landmark, and an unnamed one is announced as just
+// "navigation" — indistinguishable from a hand-written ::: nav on the same
+// page. A label names it without adding a visible heading, which would
+// change every page's look and itself need an anchor and a contents entry.
+func TestTOCNavHasAnAccessibleName(t *testing.T) {
+	got := toc(t, `<h1>Doc</h1><p>[[toc]]</p><h2>First</h2>`)
+	if !strings.Contains(got, `<nav class="toc" aria-label="Table of Contents">`) {
+		t.Errorf("contents list has no accessible name\ngot: %s", got)
+	}
+}
+
+// toc-title is Pandoc's front matter key for the same label, so a page in
+// another language can name its contents list in that language.
+func TestTOCTitleFrontMatterSetsTheLabel(t *testing.T) {
+	got := convert(t, "---\nlang: de\ntoc-title: Inhalt\n---\n# Doc\n\n[[toc]]\n\n## Eins\n", nil)
+	if !strings.Contains(got, `<nav class="toc" aria-label="Inhalt">`) {
+		t.Errorf("toc-title not applied\ngot: %s", got)
+	}
+	if strings.Contains(got, "Table of Contents") {
+		t.Errorf("default label left behind\ngot: %s", got)
+	}
+}
+
+// The label only lands on the generated list: a hand-written nav keeps
+// whatever name its author gave it, or none.
+func TestTOCTitleLeavesOtherNavsAlone(t *testing.T) {
+	got := convert(t, "---\ntoc-title: Inhalt\n---\n# Doc\n\n::: nav {aria-label=\"Site\"}\n- [Home](./home.md)\n:::\n\n[[toc]]\n\n## Eins\n", nil)
+	if !strings.Contains(got, `<nav aria-label="Site">`) {
+		t.Errorf("hand-written nav's label changed\ngot: %s", got)
 	}
 }

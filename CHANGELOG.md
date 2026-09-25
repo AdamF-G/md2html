@@ -31,6 +31,11 @@ major version instead.
   with status 2 before anything is written. `IsLangTag` exposes the check.
   `--fragment` output has no `<html>` element and is unchanged.
 
+- **The contents list has an accessible name.** `[[toc]]` emits
+  `<nav class="toc" aria-label="Table of Contents">`, so screen readers can
+  tell it apart from a hand-written `::: nav`. Nothing visible changes. A
+  `toc-title:` front matter key, Pandoc's key for the same label, renames it.
+
 ### Changed
 
 - A braced `::: {.stats}`, `::: {.defs}` or `::: {.group}` used to be an

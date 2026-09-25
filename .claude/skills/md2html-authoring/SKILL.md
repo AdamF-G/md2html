@@ -148,6 +148,7 @@ and the second `## Setup` is `#setup-1`.
 | Contents list | `[[toc]]` alone on a line (`[TOC]` also accepted) |
 | Title/subtitle/date | `---` front matter; an italic line under the H1 shows elsewhere but carries no date |
 | Page language | `lang: de` in front matter, or `--lang` for the whole run; default `en` |
+| Contents list's name, non-English page | `toc-title: Inhalt` in front matter; default `Table of Contents` |
 | Code caption | ` ```go caption="server.go" ` — keeps GitHub highlighting |
 | Code caption, Pandoc form | ` ```{.go caption="server.go"} ` — needed to escape a `"` |
 | Stable anchor | `## Title {#my-id}` |

@@ -27,6 +27,13 @@ var tocMarkers = map[string]bool{
 	"[toc]":   true,
 }
 
+// tocLabel is the contents list's accessible name. It is a label rather
+// than a visible heading: a heading would change the look of every page
+// that has a contents list, and would itself take a slug, an anchor and an
+// entry in the list it introduces. A page in another language renames it
+// with the toc-title front matter key (relabelTOC).
+const tocLabel = "Table of Contents"
+
 // isTOCMarker reports whether s, already trimmed, is one of them.
 func isTOCMarker(s string) bool {
 	return tocMarkers[strings.ToLower(s)]
@@ -121,7 +128,30 @@ func buildTOC(heads []*html.Node) *html.Node {
 		return nil
 	}
 	nav := &html.Node{Type: html.ElementNode, DataAtom: atom.Nav, Data: "nav",
-		Attr: []html.Attribute{{Key: "class", Val: "toc"}}}
+		Attr: []html.Attribute{{Key: "class", Val: "toc"}, {Key: "aria-label", Val: tocLabel}}}
 	nav.AppendChild(list)
 	return nav
+}
+
+// relabelTOC gives every generated contents list the label a document's
+// toc-title front matter asked for, Pandoc's key for the same thing.
+//
+// It runs after the transforms rather than inside TOC because TOC is a
+// builtin with no per-document input, and front matter is per document.
+// A generated list is recognized by carrying the default label, which a
+// hand-written nav only has if its author wrote that exact label on a
+// .toc nav, in which case renaming it with the page's toc-title is what
+// they would want anyway.
+func relabelTOC(root *html.Node, label string) {
+	if label == "" {
+		return
+	}
+	walk(root, func(n *html.Node) {
+		if n.Type != html.ElementNode || n.DataAtom != atom.Nav || !hasClass(n, "toc") {
+			return
+		}
+		if v, _ := attr(n, "aria-label"); v == tocLabel {
+			setAttr(n, "aria-label", label)
+		}
+	})
 }
