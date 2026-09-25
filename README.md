@@ -92,8 +92,8 @@ with no page shell, ready to drop into a Claude Artifact.
   code fences, `[proven]`-style status chips, and `§4.2` cross-references
   that link to numbered headings.
 - **The source travels with the page.** Each page carries its original
-  Markdown, hidden, so whoever you send it to can hand the source to their
-  own agent.
+  Markdown, with Copy and Download controls, so whoever you send it to can
+  hand the source to their own agent.
 - **Safety for your files.** Every generated file is marked, and a file
   without the marker is never overwritten.
 
@@ -304,11 +304,18 @@ after the content:
           data-dialect="github.com/AdamF-G/md2html@v0.7.0">…</textarea>
 ```
 
-A comment beside the provenance marker points to it, so an agent reading
-the file from the top knows it is there. In a browser,
+A reader gets it with the Copy and Download controls in the screen's
+bottom corner. Download saves it under the page's own name, `.md` for
+`.html`. They stay in that corner on every page, a floating contents list
+stops short of them, and they do not print.
+
+A comment beside the provenance marker points to the element, so an agent
+reading the file from the top knows it is there. In a script,
 `document.getElementById("md2html-source").textContent` returns the
 Markdown exactly; the element's `value` does not, because a textarea
-normalizes line endings to LF. `data-dialect` says which extensions the
+normalizes line endings to LF. For the same reason, Copy on a page served
+over plain `http` puts LF line endings on the clipboard; over `https`, on
+`localhost` and from a local file it is exact. `data-dialect` says which extensions the
 source may use — callouts, `fig` fences, chips — and in which version.
 
 The source can hold things the page does not show, such as a front matter

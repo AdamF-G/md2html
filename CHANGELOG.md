@@ -23,6 +23,12 @@ major version instead.
   `textContent`, not `value`, which normalizes line endings.
   `--no-source` (`Options.NoSource`) leaves it out, and `--fragment` output
   never carries it. `SourceID` exports the element's id.
+- **Copy and Download for the source.** A page that carries its Markdown
+  shows two controls in the screen's bottom corner: Copy puts the source on
+  the clipboard, and Download saves it as the page's name with `.md`. A
+  floating contents list stops short of them, and they are hidden in
+  print. Over plain `http` Copy falls back to a method that turns CRLF
+  line endings into LF; Download is exact everywhere.
 
 ## v0.7.0 — 2026-09-25
 

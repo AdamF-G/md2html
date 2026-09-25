@@ -42,8 +42,9 @@ You get, without asking:
 - `.md` links become `.html` links that resolve inside the output tree
 - a `<title>` from the first `<h1>`, or the filename if there is none
 - the Markdown itself, verbatim and front matter included, hidden at the end
-  of the page so a reader can hand it to their own agent (`--no-source`
-  leaves it out; `--fragment` output never has it)
+  of the page with Copy and Download controls, so a reader can hand it to
+  their own agent (`--no-source` leaves it out; `--fragment` output never
+  has it)
 
 ## Links
 
