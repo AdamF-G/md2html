@@ -99,8 +99,8 @@ func splitFrontMatter(src []byte) (map[string]string, []byte, bool) {
 // Front matter is written as YAML, where `lang: "de"` is an ordinary way to
 // write the value de; keeping the quotes made that lang fail the language
 // tag check and put literal quotes in a title. Only the two escapes an
-// author is likely to meet are honoured — \" and \\ in double quotes, ''
-// in single quotes — since this reads flat strings, not YAML. Quotes that
+// author is likely to meet are honoured — \" and \\ in double quotes, a
+// doubled single quote in single quotes — since this reads flat strings, not YAML. Quotes that
 // do not wrap the whole value are part of it.
 func unquote(v string) string {
 	if len(v) < 2 || (v[0] != '"' && v[0] != '\'') || v[len(v)-1] != v[0] {

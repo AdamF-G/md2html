@@ -327,8 +327,8 @@ func TestConvertMalformedFrontMatterNilWarnSinkIsSafe(t *testing.T) {
 // Front matter is written as YAML, where quoting a value is ordinary, and
 // the quotes are YAML syntax rather than part of the value. So one pair
 // around the whole value is removed, with YAML's escapes inside it: \" and
-// \\ in double quotes, '' in single quotes. Quotes that do not wrap the
-// whole value are text.
+// \\ in double quotes, a doubled single quote in single quotes. Quotes
+// that do not wrap the whole value are text.
 func TestSplitFrontMatterUnquotesValues(t *testing.T) {
 	meta, _, _ := splitFrontMatter([]byte("---\n" +
 		"lang: \"de\"\n" +
