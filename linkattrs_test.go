@@ -83,17 +83,19 @@ func TestLinkAttrsLeavesBlocksWithUnsafeNamesLiteral(t *testing.T) {
 	}
 }
 
-// href and src are what link rewriting keys on, as written in the source.
-// Letting a block replace them would route a link around that rewrite, so
+// href and src are what link rewriting keys on, as written in the source,
+// and srcset names images the same way. Letting a block set one would
+// route a link or image around that rewrite and the missing-file check, so
 // the block cannot, and says why.
 func TestLinkAttrsRefusesHrefAndSrc(t *testing.T) {
 	for _, c := range []struct{ src, attr string }{
 		{"[x](a.md){href=b.md}\n", `href="a.md"`},
 		{"![x](a.png){src=b.png}\n", `src="a.png"`},
+		{"![x](a.png){srcset=b.png}\n", `src="a.png"`},
 	} {
 		var warns []string
 		got := convert(t, c.src, func(m string) { warns = append(warns, m) })
-		if !strings.Contains(got, c.attr) {
+		if !strings.Contains(got, c.attr) || strings.Contains(got, `="b.`) {
 			t.Errorf("%q: target overridden\ngot: %s", c.src, got)
 		}
 		if len(warns) != 1 || !strings.Contains(warns[0], "cannot be set") {

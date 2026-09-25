@@ -97,7 +97,7 @@ are on inside a hand-written `::: nav`. md2html cannot work that out itself,
 because only you know which page a navigation block is on. A block with a
 space before it, with no attributes in it (`{}`), or with something that
 cannot be an attribute name (`{{version}}`, `{a, b}`) stays as literal text.
-`href` and `src` cannot be set this way, and warn: write the target in the
+`href`, `src` and `srcset` cannot be set this way, and warn: write the target in the
 link, where `.md` rewriting can see it.
 
 ## Features, with the syntax that actually works

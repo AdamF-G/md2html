@@ -22,7 +22,7 @@ import (
 // safe attribute name, stays as literal text, as "[x]{}" does for a
 // bracketed span.
 //
-// href and src are refused, with a warning. LinkRewrite looks links up by
+// href, src and srcset are refused, with a warning. LinkRewrite looks links up by
 // their target exactly as the source wrote it, so a block replacing one
 // would route the link around the .md-to-.html rewrite. The block itself
 // can never become part of that key: it is a separate text node, never in
@@ -99,7 +99,7 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 	}
 	for _, k := range sortedKeys(kv) {
 		switch {
-		case k == "href" || k == "src":
+		case targetAttrs[k]:
 			warn(fmt.Sprintf("%s cannot be set from an attribute block on a %s; "+
 				"write the target in the link itself", k, linkKind(el)))
 		default:
@@ -112,6 +112,11 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		text.Parent.RemoveChild(text)
 	}
 }
+
+// targetAttrs are the attributes that name what a link or image points
+// at. LinkRewrite and the crawler's missing-file check see only the target
+// the Markdown wrote, so none of them may come from an attribute block.
+var targetAttrs = map[string]bool{"href": true, "src": true, "srcset": true}
 
 // linkKind names el the way an author wrote it, for a warning.
 func linkKind(el *html.Node) string {

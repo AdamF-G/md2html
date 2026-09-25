@@ -40,7 +40,7 @@ major version instead.
   `[text](url){#id .class key=value}` and `![alt](src){width=50%}` set those
   attributes on the `<a>` or `<img>`. The usual use is
   `aria-current=page` on a link in a `::: nav`. The block must touch the
-  link, as in Pandoc. `href` and `src` can't be set this way and warn, and
+  link, as in Pandoc. `href`, `src` and `srcset` can't be set this way and warn, and
   attribute names are checked the same way a container's are.
 
 ### Changed
