@@ -40,6 +40,37 @@ func isTOCMarker(s string) bool {
 	return tocMarkers[strings.ToLower(s)]
 }
 
+// findTOCMarkers returns every standalone [[toc]]/[TOC] paragraph in root,
+// in document order. Shared by tocWith, which replaces each one, and the
+// front matter warning in Convert, which only needs to know whether any
+// exist before a transform has had the chance to remove them.
+func findTOCMarkers(root *html.Node) []*html.Node {
+	var markers []*html.Node
+	walk(root, func(n *html.Node) {
+		if n.Type != html.ElementNode || n.DataAtom != atom.P {
+			return
+		}
+		// Alone on its own line: the marker must be the paragraph's
+		// entire content, structurally as well as textually. Matching
+		// on flattened text (textOf) would also match a real link or
+		// code span whose visible text happens to be "[[toc]]" —
+		// e.g. "[[[toc]]](http://example.com)" — and eat it along
+		// with its href. Requiring the paragraph's one and only child
+		// to be a text node rules that out: an <a> or <code> wrapping
+		// the marker is an element child, not a text child, so it is
+		// left as prose. A marker inside a sentence is likewise
+		// excluded (extra text-node siblings), and one inside a fence
+		// is this feature's own documentation — the fence is a <pre>,
+		// never a <p>, so it is excluded by construction.
+		if n.FirstChild != nil && n.FirstChild == n.LastChild &&
+			n.FirstChild.Type == html.TextNode &&
+			isTOCMarker(strings.TrimSpace(n.FirstChild.Data)) {
+			markers = append(markers, n)
+		}
+	})
+	return markers
+}
+
 // TOC replaces a marker paragraph with a flat list of the current
 // document's own headings.
 //
@@ -66,29 +97,7 @@ func TOC() Transform { return tocWith(tocLabel, false) }
 // floating list would sit on top of the first.
 func tocWith(label string, float bool) Transform {
 	return Transform{Name: "toc", Fn: func(root *html.Node) error {
-		var markers []*html.Node
-		walk(root, func(n *html.Node) {
-			if n.Type != html.ElementNode || n.DataAtom != atom.P {
-				return
-			}
-			// Alone on its own line: the marker must be the paragraph's
-			// entire content, structurally as well as textually. Matching
-			// on flattened text (textOf) would also match a real link or
-			// code span whose visible text happens to be "[[toc]]" —
-			// e.g. "[[[toc]]](http://example.com)" — and eat it along
-			// with its href. Requiring the paragraph's one and only child
-			// to be a text node rules that out: an <a> or <code> wrapping
-			// the marker is an element child, not a text child, so it is
-			// left as prose. A marker inside a sentence is likewise
-			// excluded (extra text-node siblings), and one inside a fence
-			// is this feature's own documentation — the fence is a <pre>,
-			// never a <p>, so it is excluded by construction.
-			if n.FirstChild != nil && n.FirstChild == n.LastChild &&
-				n.FirstChild.Type == html.TextNode &&
-				isTOCMarker(strings.TrimSpace(n.FirstChild.Data)) {
-				markers = append(markers, n)
-			}
-		})
+		markers := findTOCMarkers(root)
 		if len(markers) == 0 {
 			return nil
 		}

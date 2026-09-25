@@ -410,6 +410,40 @@ func TestTOCInvalidModeFallsBackAndWarns(t *testing.T) {
 	}
 }
 
+// A front matter toc value only sets layout for a marker that already
+// exists in the document; on its own it renders nothing, so a document
+// that sets it without a marker is warned about rather than left silent.
+func TestTOCFrontMatterWithoutMarkerWarns(t *testing.T) {
+	var warns []string
+	out, err := Convert([]byte("---\ntoc: float\n---\n# Doc\n\n## Eins\n"), Options{
+		Warn: func(s string) { warns = append(warns, s) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), floatingNav) {
+		t.Errorf("expected no toc nav without a marker, got %s", out)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "toc") || !strings.Contains(warns[0], "no effect") {
+		t.Errorf("warnings = %v, want one calling out the missing marker", warns)
+	}
+}
+
+// A marker present anywhere in the document, even a later one when only
+// the first floats, satisfies the front matter and stays quiet.
+func TestTOCFrontMatterWithMarkerStaysQuiet(t *testing.T) {
+	var warns []string
+	_, err := Convert([]byte("---\ntoc: float\n---\n# Doc\n\n[TOC]\n\n## Eins\n"), Options{
+		Warn: func(s string) { warns = append(warns, s) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 0 {
+		t.Errorf("warnings = %v, want none", warns)
+	}
+}
+
 // Only one list can hold the fixed position; a second would sit on top of
 // the first. Later markers stay inline.
 func TestTOCFloatsOnlyTheFirstMarker(t *testing.T) {

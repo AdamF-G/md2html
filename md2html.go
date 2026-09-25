@@ -205,6 +205,14 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Resolved even for a fragment, so a bad value is still reported; a
 	// fragment then stays inline, since it can carry no side control.
 	float := tocFloats(meta["toc"], opt.TOC, opt.Warn) && !opt.Fragment
+	// A front matter toc value only sets layout for a marker that already
+	// exists; on its own it renders nothing, and silently — the mismatch
+	// (front matter says the page has a contents list, the page doesn't)
+	// is exactly what warnings are for. Checked here, before the "toc"
+	// transform below has a chance to remove any marker present.
+	if opt.Warn != nil && IsTOCMode(meta["toc"]) && len(findTOCMarkers(root)) == 0 {
+		opt.Warn(fmt.Sprintf("front matter toc %q has no [[toc]] or [TOC] marker in the document; it has no effect", meta["toc"]))
+	}
 	transforms = withTOC(transforms, meta["toc-title"], float)
 	if opt.LinkMap != nil {
 		// Full-slice expression: never append into the caller's array.
