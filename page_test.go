@@ -535,7 +535,7 @@ func TestFigStylesTravelWithAFragment(t *testing.T) {
 // definition list or an unboxed div with nothing else noticing.
 func TestDefaultCSSStylesPromotedContainers(t *testing.T) {
 	for _, sel := range []string{
-		".fig-stats, .stats > dl",
+		".fig-stats, .stats > dl:has(> .stat)",
 		".fig-stat, .stat",
 		".fig-stat-value, .stat > dt",
 		".fig-stat-label, .stat > dd",
@@ -547,6 +547,13 @@ func TestDefaultCSSStylesPromotedContainers(t *testing.T) {
 		if !strings.Contains(defaultCSS, sel) {
 			t.Errorf("default.css is missing %q", sel)
 		}
+	}
+	// The kind is read from a container's first class only, so a list in
+	// "::: {.wide .stats}" is never grouped into tiles. Laying out an
+	// ungrouped list as a row would scatter its terms and definitions as
+	// unrelated boxes, so the row must be scoped to a grouped list.
+	if regexp.MustCompile(`\.stats > dl\s*[,{]`).MatchString(defaultCSS) {
+		t.Error("default.css lays out an ungrouped .stats list as a row of tiles")
 	}
 }
 

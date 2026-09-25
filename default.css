@@ -436,8 +436,11 @@ main > figure.fig-wide {
 /* A stats container's tiles are its definition list's term groups
    (statTiles in container.go): the term is the value, the first definition
    the label, a second the detail. The child combinators keep a list nested
-   inside a definition an ordinary list. */
-.fig-stats, .stats > dl { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; }
+   inside a definition an ordinary list. The row is scoped to a list that
+   was grouped: "::: {.wide .stats}" is not the stats kind, since the kind
+   is read from the first class, and its ungrouped terms and definitions
+   laid out as a row would read as unrelated boxes. */
+.fig-stats, .stats > dl:has(> .stat) { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; }
 .fig-stat, .stat {
   flex: 1 1 0;
   min-width: 6rem;
