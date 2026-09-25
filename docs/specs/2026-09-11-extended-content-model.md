@@ -247,7 +247,9 @@ text matches what a reader actually sees in each heading.
 **Explicitly still out of scope even if this lands:** any *cross-document*
 navigation, sidebar, or site index. This item is "table of contents for
 the page you're on," nothing broader — widening it is a different, much
-larger feature.
+larger feature. (A later addition, `toc: float`, changes only where that
+same list sits on the screen, pinned beside the text; it still lists the
+current page's headings and nothing else, so it does not reopen this.)
 
 **Degrades to:** a literal marker line sitting in the rendered body,
 visible as plain text — ugly, but not misleading, and an easy thing to

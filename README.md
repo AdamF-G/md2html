@@ -88,7 +88,7 @@ with no page shell, ready to drop into a Claude Artifact.
   asides and examples, and named `<nav>` landmarks. GitHub alerts
   (`> [!WARNING]`) work as an alias.
 - **Document furniture.** A `[[toc]]` or `[TOC]` marker for a per-page
-  contents list, `title`/`subtitle`/`date` front matter, `caption="…"` on
+  contents list, inline or floating beside the text, `title`/`subtitle`/`date` front matter, `caption="…"` on
   code fences, `[proven]`-style status chips, and `§4.2` cross-references
   that link to numbered headings.
 - **Safety for your files.** Every generated file is marked, and a file
@@ -299,6 +299,7 @@ unrelated tools that share the name is never claimed.
 | `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
 | `--css FILE` | replace the embedded stylesheet |
 | `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
+| `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`. Ignored with `--fragment` |
 | `--no-table-scroll` | do not wrap tables |
 | `--no-anchors` | do not add heading anchors |
 | `--no-external-links` | do not mark external links |

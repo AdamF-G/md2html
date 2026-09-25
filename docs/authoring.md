@@ -498,6 +498,26 @@ toc-title: Inhalt
 ---
 ```
 
+On a long page the list can float instead: `toc: float` in front matter,
+or `--toc float` for a whole run, pins it beside the text column on a wide
+screen, where it stays in view as the page scrolls:
+
+```markdown
+---
+toc: float
+---
+```
+
+An arrow in the list's corner moves it to the other side of the column, and
+the reader's choice is remembered across pages. The list sits clear of wide
+figures as well as the text, and is as wide as the space beside them allows.
+On a narrower screen, and in print, it is the inline list again, where the
+marker stands. `toc: inline` opts one page out of a floating run. Only a
+page's first list floats, and `--fragment` output never does: an Artifact
+carries no script, so it could not offer the side control. Any other value
+warns and is ignored. The marker is the same either way, so `[TOC]` still
+builds GitLab's own list.
+
 The marker must be the paragraph's *entire* content. Wrapped in a link or a
 code span, it is left alone — `` `[[toc]]` `` and a link whose text happens
 to be `[[toc]]` both stay literal. A document with no linkable headings —
@@ -511,7 +531,7 @@ scope.
 ### Front matter
 
 A leading `---`-delimited block of flat `key: value` lines sets `title`,
-`subtitle`, `date`, `lang` and `toc-title`:
+`subtitle`, `date`, `lang`, `toc` and `toc-title`:
 
 ```markdown
 ---
@@ -525,11 +545,12 @@ lang: en-GB
 ```
 
 A value may be quoted, as YAML allows: `title: "Rollback: why"` is the
-title `Rollback: why`, without the quotes. Only those five keys do anything; any other key is silently stripped from
+title `Rollback: why`, without the quotes. Only those six keys do anything; any other key is silently stripped from
 the body and dropped. A repeated key keeps the last value. `subtitle` and
 `date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
 under the document's leading `<h1>` — body nodes, not a page-shell slot.
-`toc-title` names the contents list; see Contents list.
+`toc` sets the contents list's layout and `toc-title` names it; see
+Contents list.
 
 `lang` is the page's `<html lang>`, which screen readers use to pick a
 voice and browsers use for hyphenation and spell-checking. It is the key
@@ -905,7 +926,8 @@ Supply `--css mine.css` to replace the stylesheet entirely.
   own tool produced — which is the point — but nothing checks that it did.
   The run warns once per such link.
 - **No cross-document navigation is generated.** There is still no sidebar
-  or site index. `[[toc]]` gives a per-page contents list; anything that
+  or site index. `[[toc]]` gives a per-page contents list, and `toc: float`
+  only moves that same list beside the text; anything that
   reaches across documents you still write yourself with anchor links — the
   heading ids are stable and predictable, so this is reliable.
 - **Several entry points build as one set.** `md2html -o ./site ./docs

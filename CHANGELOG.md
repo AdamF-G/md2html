@@ -9,6 +9,24 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- **A floating contents list.** `toc: float` in front matter, or `--toc float`
+  (`Options.TOC`) for the whole run, pins the page's contents list beside the
+  text column on a wide screen, where it stays in view while the page
+  scrolls. An arrow in its corner moves it to the other side of the column,
+  and the choice is remembered across pages. It sits clear of wide figures
+  as well as the text. On a narrower screen, and in print, it is the inline
+  list as before. The default is still `inline`, which front matter can also
+  set to opt one page out of a floating run. Only a page's first list
+  floats. `--fragment` output stays inline, since an Artifact carries no
+  script. A value other than `inline` or `float` warns and is ignored, and a
+  bad `--toc` exits with status 2 before anything is written. `IsTOCMode`
+  exposes the check. The marker itself is unchanged, so `[TOC]` still works
+  on GitLab.
+
 ## v0.6.0 — 2026-09-24
 
 ### Added

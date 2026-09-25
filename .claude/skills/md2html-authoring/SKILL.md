@@ -122,7 +122,8 @@ not for images.
 ## What has no shortcut
 
 There is no sidebar or site index, and no cross-document navigation. A
-per-page contents list does exist — `[[toc]]` alone on a line —
+per-page contents list does exist — `[[toc]]` alone on a line, floating
+beside the text with `toc: float` —
 but heading slugs are still worth knowing: they are stable and keep letters
 from any script, so `## 日本語の見出し` yields `#日本語の見出し`.
 They follow GitHub's and GitLab's rules, so an in-page link written against
@@ -149,6 +150,7 @@ and the second `## Setup` is `#setup-1`.
 | Contents list | `[[toc]]` alone on a line (`[TOC]` also accepted) |
 | Title/subtitle/date | `---` front matter; an italic line under the H1 shows elsewhere but carries no date |
 | Page language | `lang: de` in front matter, or `--lang` for the whole run; default `en` |
+| Contents list pinned beside the text | `toc: float` in front matter, or `--toc float` for the whole run; `toc: inline` opts a page out |
 | Contents list's name, non-English page | `toc-title: Inhalt` in front matter; default `Table of Contents` |
 | Code caption | ` ```go caption="server.go" ` — keeps GitHub highlighting |
 | Code caption, Pandoc form | ` ```{.go caption="server.go"} ` — needed to escape a `"` |
