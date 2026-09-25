@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	nethtml "golang.org/x/net/html"
@@ -202,10 +203,10 @@ func hasExpandableMedia(body []byte) bool {
 // renderPage wraps body in a complete HTML document. mermaidURL is the
 // build the mermaid runtime imports, and is only consulted for a body that
 // actually carries a diagram.
-func renderPage(body []byte, title, css, mermaidURL string) []byte {
+func renderPage(body []byte, title, lang, css, mermaidURL string) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
-	b.WriteString("\n<!doctype html>\n<html lang=\"en\">\n<head>\n")
+	fmt.Fprintf(&b, "\n<!doctype html>\n<html lang=\"%s\">\n<head>\n", html.EscapeString(lang))
 	b.WriteString(`<meta charset="utf-8">` + "\n")
 	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
@@ -239,4 +240,40 @@ func renderFragment(body []byte, title, css string) []byte {
 	b.Write(body)
 	b.WriteString("\n")
 	return []byte(b.String())
+}
+
+// langTag is the shape of a BCP 47 language tag: a primary subtag of two to
+// eight letters, or the single-letter x (private use) or i (grandfathered),
+// then any number of hyphenated subtags of one to eight letters or digits.
+// It checks shape, not registry membership — "qq" passes — because the
+// point is to catch a typo like en_US or a stray sentence, not to ship the
+// IANA registry.
+var langTag = regexp.MustCompile(`^(?:[A-Za-z]{2,8}|[xXiI])(?:-[A-Za-z0-9]{1,8})*$`)
+
+// IsLangTag reports whether s is shaped like a BCP 47 language tag, the
+// check Options.Lang is held to. It is exported so a caller taking a
+// language from its own user, as the CLI's --lang does, can refuse a bad
+// one up front instead of getting a warning per document.
+func IsLangTag(s string) bool { return langTag.MatchString(s) }
+
+// pageLang picks a page's language: the document's front matter, then the
+// run-wide option, then English. An unusable value is reported and passed
+// over rather than written, so a typo costs a warning, not a page that
+// claims a language no reader supports.
+func pageLang(front, opt string, warn func(string)) string {
+	for _, c := range []struct{ val, from string }{
+		{front, "front matter lang"},
+		{opt, "Lang option"},
+	} {
+		if c.val == "" {
+			continue
+		}
+		if IsLangTag(c.val) {
+			return c.val
+		}
+		if warn != nil {
+			warn(fmt.Sprintf("%s %q is not a language tag (such as en or pt-BR); ignoring it", c.from, c.val))
+		}
+	}
+	return "en"
 }

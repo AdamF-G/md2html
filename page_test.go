@@ -24,7 +24,7 @@ func TestExtractTitleFallsBackToFilename(t *testing.T) {
 }
 
 func TestPageShellIsCompleteDocument(t *testing.T) {
-	got := string(renderPage([]byte(`<p>hi</p>`), "T", "body{}", mermaidCDN))
+	got := string(renderPage([]byte(`<p>hi</p>`), "T", "en", "body{}", mermaidCDN))
 	for _, want := range []string{"<!doctype html>", "<html", "<head>", "<title>T</title>", "<body", "<p>hi</p>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("page missing %q\ngot: %s", want, got)
@@ -50,7 +50,7 @@ func TestFragmentShellOmitsDocumentWrapper(t *testing.T) {
 
 func TestBothShellsStartWithMarker(t *testing.T) {
 	for name, got := range map[string][]byte{
-		"page":     renderPage([]byte(`<p>x</p>`), "T", "", mermaidCDN),
+		"page":     renderPage([]byte(`<p>x</p>`), "T", "en", "", mermaidCDN),
 		"fragment": renderFragment([]byte(`<p>x</p>`), "T", ""),
 	} {
 		if !strings.HasPrefix(string(got), MarkerPrefix) {
@@ -547,5 +547,94 @@ func TestDefaultCSSStylesPromotedContainers(t *testing.T) {
 		if !strings.Contains(defaultCSS, sel) {
 			t.Errorf("default.css is missing %q", sel)
 		}
+	}
+}
+
+// langOf converts src as a full page and returns its <html lang> value,
+// with every warning collected.
+func langOf(t *testing.T, src string, opt Options) (string, []string) {
+	t.Helper()
+	var warns []string
+	opt.Warn = func(m string) { warns = append(warns, m) }
+	out, err := Convert([]byte(src), opt)
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	m := regexp.MustCompile(`<html lang="([^"]*)">`).FindSubmatch(out)
+	if m == nil {
+		t.Fatalf("no <html lang> in page:\n%s", out)
+	}
+	return string(m[1]), warns
+}
+
+// A page with nothing to say about its language is English, as every page
+// was before the language could be set.
+func TestPageLangDefaultsToEnglish(t *testing.T) {
+	if got, _ := langOf(t, "# T\n", Options{}); got != "en" {
+		t.Errorf("lang = %q, want en", got)
+	}
+}
+
+func TestPageLangFromOptions(t *testing.T) {
+	if got, _ := langOf(t, "# T\n", Options{Lang: "pt-BR"}); got != "pt-BR" {
+		t.Errorf("lang = %q, want pt-BR", got)
+	}
+}
+
+// Front matter is the document speaking for itself, so it wins over a
+// run-wide default — the same order title already follows.
+func TestPageLangFrontMatterBeatsOptions(t *testing.T) {
+	got, _ := langOf(t, "---\nlang: de\n---\n# T\n", Options{Lang: "fr"})
+	if got != "de" {
+		t.Errorf("lang = %q, want de", got)
+	}
+}
+
+// A value that is not shaped like a language tag is a typo, not a language:
+// it is reported and the next source down is used, rather than written
+// into the attribute.
+func TestPageLangInvalidFallsBackAndWarns(t *testing.T) {
+	cases := []struct {
+		name, src string
+		opt       Options
+		want      string
+	}{
+		{"front matter falls to options", "---\nlang: \"><script>\n---\n# T\n", Options{Lang: "fr"}, "fr"},
+		{"front matter falls to default", "---\nlang: english please\n---\n# T\n", Options{}, "en"},
+		{"options falls to default", "# T\n", Options{Lang: "en_US"}, "en"},
+	}
+	for _, c := range cases {
+		got, warns := langOf(t, c.src, c.opt)
+		if got != c.want {
+			t.Errorf("%s: lang = %q, want %q", c.name, got, c.want)
+		}
+		if len(warns) != 1 || !strings.Contains(warns[0], "language tag") {
+			t.Errorf("%s: warnings = %v, want one about the language tag", c.name, warns)
+		}
+	}
+}
+
+func TestIsLangTag(t *testing.T) {
+	for _, s := range []string{"en", "EN", "pt-BR", "zh-Hant", "zh-Hant-TW", "es-419", "sgn-BE-FR", "x-klingon"} {
+		if !IsLangTag(s) {
+			t.Errorf("IsLangTag(%q) = false, want true", s)
+		}
+	}
+	for _, s := range []string{"", "e", "en_US", "en-", "-en", "en--US", "en US", "abcdefghi", "en-abcdefghi", `en"`} {
+		if IsLangTag(s) {
+			t.Errorf("IsLangTag(%q) = true, want false", s)
+		}
+	}
+}
+
+// A fragment has no <html> element to carry a language, so Lang must not
+// leak into it some other way.
+func TestFragmentIgnoresLang(t *testing.T) {
+	out, err := Convert([]byte("---\nlang: de\n---\n# T\n"), Options{Fragment: true, Lang: "fr"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "lang=") {
+		t.Errorf("fragment carries a lang attribute:\n%s", out)
 	}
 }

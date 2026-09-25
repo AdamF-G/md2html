@@ -48,6 +48,12 @@ type Options struct {
 	// still imports nothing, and Fragment output never imports at all,
 	// because Artifacts render mermaid themselves.
 	MermaidURL string
+	// Lang is the page's language, written as <html lang>. A document's own
+	// "lang:" front matter key overrides it; empty means "en". A value not
+	// shaped like a BCP 47 language tag is warned about and skipped in
+	// favor of the next source. Fragment output has no <html> element, so
+	// it ignores both.
+	Lang string
 	// Transforms to run. Nil means the default list.
 	//
 	// A list supplied here is used as given, except that any builtin in it
@@ -72,10 +78,11 @@ type Options struct {
 	// file) would have the first rewrite turned into the second.
 	LinkMap map[string]string
 	// Warn, when non-nil, receives one message per non-fatal problem found
-	// while converting this document. Three things report so far: a front
-	// matter block that is not flat key: value, a container naming a kind
-	// that does not exist, and a fig fence whose body does not parse or
-	// does not validate.
+	// while converting this document. Things that report so far: a front
+	// matter block that is not flat key: value, a language that is not a
+	// language tag, a container naming a kind that does not exist or
+	// missing the definition list it is defined to hold, and a fig fence
+	// whose body does not parse or does not validate.
 	//
 	// Convert never writes to stderr itself: it is a library, and the CLI
 	// emits every document's output in parallel, so a transform printing
@@ -124,7 +131,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
 	//
-	// Only title/subtitle/date are read below. A block carrying some other
+	// Only title/subtitle/date/lang are read below. A block carrying some other
 	// flat key (an "author:" line, say) is still accepted and still
 	// stripped from the body — it parsed as valid front matter — but the
 	// key itself is silently dropped: there is nowhere in the page for it
@@ -198,5 +205,5 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if mermaidURL == "" {
 		mermaidURL = mermaidCDN
 	}
-	return renderPage(body, title, css, mermaidURL), nil
+	return renderPage(body, title, pageLang(meta["lang"], opt.Lang, opt.Warn), css, mermaidURL), nil
 }

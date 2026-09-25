@@ -243,7 +243,7 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 // the CLI side too — without it, a reordering here would ship green while
 // the library stayed correct.
 func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", false, false, false, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", false, false, false, nil)
 	want := md2html.Builtins()
 	if len(opts.Transforms) != len(want) {
 		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
@@ -258,7 +258,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // Each --no-* flag must drop exactly its own transform and nothing else,
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", true, true, true, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", true, true, true, nil)
 	want := []string{"containers", "alerts", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
@@ -491,4 +491,44 @@ func readFile(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// --lang sets every page's language, and a document's own front matter
+// still overrides it.
+func TestRunLangFlag(t *testing.T) {
+	root := tree(t, map[string]string{
+		"docs/a.md": "# A",
+		"docs/b.md": "---\nlang: de\n---\n# B",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site"), "--lang", "fr"}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	for file, want := range map[string]string{"a.html": `<html lang="fr">`, "b.html": `<html lang="de">`} {
+		b, err := os.ReadFile(filepath.Join(root, "site", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), want) {
+			t.Errorf("%s: missing %s", file, want)
+		}
+	}
+}
+
+// A bad --lang is a mistake on the command line, caught before anything is
+// written, not a warning repeated once per document.
+func TestRunLangFlagRejectsNonTag(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": "# A"})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site"), "--lang", "en_US"}, &out, &errb)
+	if code != 2 {
+		t.Errorf("exit %d, want 2", code)
+	}
+	if !strings.Contains(errb.String(), "--lang") {
+		t.Errorf("stderr does not name the flag: %s", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "site", "a.html")); err == nil {
+		t.Error("a page was written despite the bad flag")
+	}
 }

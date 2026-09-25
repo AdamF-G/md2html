@@ -68,6 +68,7 @@ Flags:
 		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
 		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
 		cssPath   = fs.String("css", "", "replace the embedded stylesheet with this file")
+		lang      = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
 		noTable   = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
 		noAnchor  = fs.Bool("no-anchors", false, "do not add heading anchors")
 		noExt     = fs.Bool("no-external-links", false, "do not mark external links")
@@ -115,6 +116,11 @@ Flags:
 	}
 	if len(entries) == 0 {
 		fs.Usage()
+		return 2
+	}
+
+	if *lang != "" && !md2html.IsLangTag(*lang) {
+		fmt.Fprintf(stderr, "md2html: --lang %q is not a language tag (such as en or pt-BR)\n", *lang)
 		return 2
 	}
 
@@ -169,7 +175,7 @@ Flags:
 			// the sink needs no locking and lines from two documents can
 			// never interleave.
 			var warnings []string
-			opts := buildOptions(d, *fragment, css, *noTable, *noAnchor, *noExt,
+			opts := buildOptions(d, *fragment, css, *lang, *noTable, *noAnchor, *noExt,
 				func(m string) { warnings = append(warnings, m) })
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
@@ -237,7 +243,7 @@ Flags:
 // single place this run names its sink, and Convert rebuilds the builtins
 // that report against it. TestRunReportsContainerWarningToStderr covers the
 // one diagnostic that travels that way.
-func buildOptions(d md2html.Doc, fragment bool, css string,
+func buildOptions(d md2html.Doc, fragment bool, css, lang string,
 	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
 	skip := map[string]bool{
@@ -257,6 +263,7 @@ func buildOptions(d md2html.Doc, fragment bool, css string,
 		Fragment:   fragment,
 		SourcePath: d.Src,
 		CSS:        css,
+		Lang:       lang,
 		Transforms: ts,
 		LinkMap:    d.LinkMap,
 		Warn:       warn,
