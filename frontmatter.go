@@ -77,7 +77,7 @@ func splitFrontMatter(src []byte) (map[string]string, []byte, bool) {
 		// same rule a Go map assignment gives for free, and treating a
 		// duplicate as malformed would make this stricter than the tool
 		// needs to be for three flat keys.
-		meta[strings.ToLower(key)] = strings.TrimSpace(v)
+		meta[strings.ToLower(key)] = unquote(strings.TrimSpace(v))
 	}
 	if end < 0 {
 		// No closing delimiter: this was an <hr>, not front matter, so it
@@ -92,6 +92,25 @@ func splitFrontMatter(src []byte) (map[string]string, []byte, bool) {
 	}
 	body := strings.Join(lines[end+1:], "\n")
 	return meta, []byte(strings.TrimLeft(body, "\n")), false
+}
+
+// unquote removes one pair of quotes wrapping a whole front matter value.
+//
+// Front matter is written as YAML, where `lang: "de"` is an ordinary way to
+// write the value de; keeping the quotes made that lang fail the language
+// tag check and put literal quotes in a title. Only the two escapes an
+// author is likely to meet are honoured — \" and \\ in double quotes, ''
+// in single quotes — since this reads flat strings, not YAML. Quotes that
+// do not wrap the whole value are part of it.
+func unquote(v string) string {
+	if len(v) < 2 || (v[0] != '"' && v[0] != '\'') || v[len(v)-1] != v[0] {
+		return v
+	}
+	inner := v[1 : len(v)-1]
+	if v[0] == '\'' {
+		return strings.ReplaceAll(inner, "''", "'")
+	}
+	return strings.NewReplacer(`\"`, `"`, `\\`, `\`).Replace(inner)
 }
 
 // firstHeading returns the document's first <h1>, or nil.

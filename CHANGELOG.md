@@ -45,6 +45,9 @@ major version instead.
 
 ### Changed
 
+- A quoted front matter value loses its quotes, as in YAML: `title: "Rollback"`
+  used to put the quotes in the page title. `\"` and `\\` inside double
+  quotes and `''` inside single quotes are unescaped.
 - Off-site links keep an author's `rel` and `target`. `rel` gets
   `noopener noreferrer` added to what was written instead of replacing it,
   so `rel="me"` survives, and a `target` already set is left alone. This

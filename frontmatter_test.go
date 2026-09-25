@@ -323,3 +323,41 @@ func TestConvertMalformedFrontMatterNilWarnSinkIsSafe(t *testing.T) {
 		t.Fatalf("Convert: %v", err)
 	}
 }
+
+// Front matter is written as YAML, where quoting a value is ordinary, and
+// the quotes are YAML syntax rather than part of the value. So one pair
+// around the whole value is removed, with YAML's escapes inside it: \" and
+// \\ in double quotes, '' in single quotes. Quotes that do not wrap the
+// whole value are text.
+func TestSplitFrontMatterUnquotesValues(t *testing.T) {
+	meta, _, _ := splitFrontMatter([]byte("---\n" +
+		"lang: \"de\"\n" +
+		"toc-title: 'Inhalt'\n" +
+		"title: \"Say \\\"hi\\\" \\\\ bye\"\n" +
+		"subtitle: 'it''s here'\n" +
+		"date: \"2026\" and more\n" +
+		"a: \"\n" +
+		"b: \"mismatched'\n" +
+		"---\n# H\n"))
+	for k, want := range map[string]string{
+		"lang":      "de",
+		"toc-title": "Inhalt",
+		"title":     `Say "hi" \ bye`,
+		"subtitle":  "it's here",
+		"date":      `"2026" and more`,
+		"a":         `"`,
+		"b":         `"mismatched'`,
+	} {
+		if meta[k] != want {
+			t.Errorf("%s = %q, want %q", k, meta[k], want)
+		}
+	}
+}
+
+// The case that surfaced it: a quoted lang used to fail the language-tag
+// check and fall back to en.
+func TestConvertQuotedLangIsUsed(t *testing.T) {
+	if got, warns := langOf(t, "---\nlang: \"de\"\n---\n# T\n", Options{}); got != "de" || len(warns) != 0 {
+		t.Errorf("lang = %q, warnings %v", got, warns)
+	}
+}

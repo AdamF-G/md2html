@@ -524,7 +524,8 @@ lang: en-GB
 # Reference
 ```
 
-Only those five keys do anything; any other key is silently stripped from
+A value may be quoted, as YAML allows: `title: "Rollback: why"` is the
+title `Rollback: why`, without the quotes. Only those five keys do anything; any other key is silently stripped from
 the body and dropped. A repeated key keeps the last value. `subtitle` and
 `date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
 under the document's leading `<h1>` — body nodes, not a page-shell slot.
