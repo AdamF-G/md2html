@@ -38,7 +38,8 @@ half and the next block inheriting the wrong language.
 
 The shipped kinds are `callout`, `warning`, `card`, `stats`, `defs`,
 `group`, `details`, `aside`, `example` and `nav`. `stats`, `defs` and
-`group` are the `fig` kinds as block containers; `stats` and `defs` hold a
+`group` are the `fig` kinds as block containers, and the form to use
+unless the tiles, terms or panel are part of a diagram; `stats` and `defs` hold a
 definition list (in `stats`, term = value, first `: ` = label, second
 `: ` = detail) and warn without one. `details`, `aside` and `example` are collapsible
 `<details>` — `details` uses its title as the `<summary>` verbatim, the other

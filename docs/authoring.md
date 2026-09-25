@@ -168,7 +168,8 @@ assistive tech otherwise has no way to tell two landmarks apart:
 renders `<nav aria-label="Section contents">`.
 
 **`stats`, `defs` and `group` are the figure kinds of the same names as
-containers**, for when one does not sit inside a diagram. They look the
+containers.** Use them whenever one does not sit inside a diagram, and keep
+the figure form for when it does. They look the
 same as their [structured figure](#structured-figures) forms, but each
 entry is ordinary Markdown: a list, a code span, a second paragraph. `stats`
 and `defs` hold a definition list. In `stats`, each term is a tile's value,
@@ -671,10 +672,12 @@ Every item is exactly one *kind*:
 | `cols` | list of items | items side by side, anywhere an item goes |
 | `split` | list of exactly 2 items | two panels either side of a `boundary` |
 
-Every label in a figure is one line of inline Markdown. A row of stat
-tiles, a term grid or a titled panel that is not part of a diagram has a
-[container](#containers) form, `::: stats`, `::: defs` or `::: group`,
-where each entry can be block Markdown instead.
+**Use `stats`, `defs` and `group` in a figure only when they are part of
+the diagram**, sitting beside boxes, in a column or under an arrow.
+Otherwise use the [container](#containers) form, `::: stats`, `::: defs` or
+`::: group`. It looks the same, each entry can be block Markdown rather
+than one line of inline text, and on GitHub or in Pandoc it still reads as
+a definition list instead of a block of YAML.
 
 `layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
 top-level item may carry `weight` (1–12; out-of-range values are clamped,
