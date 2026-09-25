@@ -9,6 +9,21 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- **Pages carry their Markdown.** Every full page now embeds its original
+  source, byte for byte and front matter included, in a hidden
+  `<textarea id="md2html-source">` after the content, labelled
+  `data-format="text/markdown"` and
+  `data-dialect="github.com/AdamF-G/md2html@<version>"`. A comment after the
+  provenance marker says where it is. Whoever receives a page can pass the
+  Markdown to their own agent, or convert it again. Read it through
+  `textContent`, not `value`, which normalizes line endings.
+  `--no-source` (`Options.NoSource`) leaves it out, and `--fragment` output
+  never carries it. `SourceID` exports the element's id.
+
 ## v0.7.0 — 2026-09-25
 
 ### Added

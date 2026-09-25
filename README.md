@@ -91,6 +91,9 @@ with no page shell, ready to drop into a Claude Artifact.
   contents list, inline or floating beside the text, `title`/`subtitle`/`date` front matter, `caption="…"` on
   code fences, `[proven]`-style status chips, and `§4.2` cross-references
   that link to numbered headings.
+- **The source travels with the page.** Each page carries its original
+  Markdown, hidden, so whoever you send it to can hand the source to their
+  own agent.
 - **Safety for your files.** Every generated file is marked, and a file
   without the marker is never overwritten.
 
@@ -289,6 +292,31 @@ is never touched — md2html warns, skips it, and exits non-zero. There is no
 override flag. The marker carries the full repository URL, so output from
 unrelated tools that share the name is never claimed.
 
+### The Markdown travels with the page
+
+Send someone a page and they may want to feed it to their own agent, which
+works better from the Markdown than from the HTML. So every page carries
+its source, byte for byte and front matter included, in a hidden element
+after the content:
+
+```html
+<textarea hidden id="md2html-source" data-format="text/markdown"
+          data-dialect="github.com/AdamF-G/md2html@v0.7.0">…</textarea>
+```
+
+A comment beside the provenance marker points to it, so an agent reading
+the file from the top knows it is there. In a browser,
+`document.getElementById("md2html-source").textContent` returns the
+Markdown exactly; the element's `value` does not, because a textarea
+normalizes line endings to LF. `data-dialect` says which extensions the
+source may use — callouts, `fig` fences, chips — and in which version.
+
+The source can hold things the page does not show, such as a front matter
+key md2html does not use. Pass `--no-source` (`Options.NoSource`) to leave
+it out. `--fragment` output never carries it: an Artifact is published
+rather than handed over as a file, so the copy would not reach the
+recipient's agent anyway.
+
 ## Flags
 
 | Flag | Effect |
@@ -297,6 +325,7 @@ unrelated tools that share the name is never claimed.
 | `--depth N` | directory levels to seed from a directory entry; `-1` (default) unlimited |
 | `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
 | `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
+| `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
 | `--css FILE` | replace the embedded stylesheet |
 | `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
 | `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`. Ignored with `--fragment` |

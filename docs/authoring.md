@@ -41,6 +41,9 @@ You get, without asking:
   any `rel` you wrote, and a `target` you wrote is kept
 - `.md` links become `.html` links that resolve inside the output tree
 - a `<title>` from the first `<h1>`, or the filename if there is none
+- the Markdown itself, verbatim and front matter included, hidden at the end
+  of the page so a reader can hand it to their own agent (`--no-source`
+  leaves it out; `--fragment` output never has it)
 
 ## Links
 
@@ -562,7 +565,9 @@ lang: en-GB
 
 A value may be quoted, as YAML allows: `title: "Rollback: why"` is the
 title `Rollback: why`, without the quotes. Only those six keys do anything; any other key is silently stripped from
-the body and dropped. A repeated key keeps the last value. `subtitle` and
+the body and dropped — from the rendered page, that is. The page still
+carries the source, so an unused key such as `author:` travels with it
+unless the page is built with `--no-source`. A repeated key keeps the last value. `subtitle` and
 `date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
 under the document's leading `<h1>` — body nodes, not a page-shell slot.
 `toc` sets the contents list's layout and `toc-title` names it; see
