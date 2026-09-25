@@ -1043,3 +1043,14 @@ func TestContainerStatsAndDefsWithoutAListWarn(t *testing.T) {
 		t.Error("group warned about a definition list it does not need")
 	}
 }
+
+// A definition list group may have several terms sharing its definitions.
+// They are one tile, not a labelless tile followed by a labelled one: a
+// <div> inside a <dl> must hold a whole group, terms and definitions both.
+func TestContainerStatsKeepsTermsSharingADefinitionTogether(t *testing.T) {
+	got := flat(convert(t, "::: stats\n4\n5\n: shared\n\n9\n: other\n:::\n", nil))
+	want := `<div class="stat"><dt>4</dt><dt>5</dt><dd>shared</dd></div><div class="stat"><dt>9</dt><dd>other</dd></div>`
+	if !strings.Contains(got, want) {
+		t.Errorf("shared-definition terms split\nwant: %s\ngot:  %s", want, got)
+	}
+}

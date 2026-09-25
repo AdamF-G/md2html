@@ -386,27 +386,39 @@ func listKind(div *html.Node, name string, k containerKind, warn func(string)) {
 	}
 }
 
-// statTiles wraps each term of a stats list, with the definitions that
-// follow it, in a <div class="stat">: the term is the tile's value, the
-// first definition its label, and any second one its detail.
+// statTiles wraps each group of a stats list in a <div class="stat">: the
+// term is the tile's value, the first definition its label, and any second
+// one its detail. A group is every term up to the definitions that follow
+// it, so several terms sharing one definition make one tile, not a
+// labelless tile followed by a labelled one.
 //
-// HTML permits a <div> around each term group inside a <dl> for exactly
+// HTML permits a <div> around each whole group inside a <dl> for exactly
 // this — so a list can be laid out as tiles without stopping being a list
-// to a screen reader. Whitespace between a group's elements moves with
-// them; whitespace before a term stays between the tiles.
+// to a screen reader. Whitespace inside a group moves with it; whitespace
+// before a group's first term stays between the tiles.
 func statTiles(dl *html.Node) {
+	isEl := func(n *html.Node, a atom.Atom) bool {
+		return n != nil && n.Type == html.ElementNode && n.DataAtom == a
+	}
 	var tile *html.Node
+	sawDD := false
+	// startsGroup reports whether n is a term opening a new group: one with
+	// no group open yet, or one following a definition.
+	startsGroup := func(n *html.Node) bool { return isEl(n, atom.Dt) && (tile == nil || sawDD) }
 	for c := dl.FirstChild; c != nil; {
 		next := c.NextSibling
 		switch {
-		case c.Type == html.ElementNode && c.DataAtom == atom.Dt:
+		case startsGroup(c):
 			tile = &html.Node{Type: html.ElementNode, DataAtom: atom.Div, Data: "div",
 				Attr: []html.Attribute{{Key: "class", Val: "stat"}}}
+			sawDD = false
 			dl.InsertBefore(tile, c)
 			dl.RemoveChild(c)
 			tile.AppendChild(c)
-		case tile != nil && !(c.Type == html.TextNode && next != nil &&
-			next.Type == html.ElementNode && next.DataAtom == atom.Dt):
+		case tile != nil && !(c.Type == html.TextNode && startsGroup(next)):
+			if isEl(c, atom.Dd) {
+				sawDD = true
+			}
 			dl.RemoveChild(c)
 			tile.AppendChild(c)
 		}
