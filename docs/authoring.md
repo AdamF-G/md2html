@@ -6,6 +6,42 @@ called out rather than left to be discovered.
 
 [[toc]]
 
+## Quick reference
+
+What to write for each need. The sections below give the detail, and
+[Choosing between forms](#choosing-between-forms) says which spelling to pick where there are several.
+
+| Need | Write |
+|---|---|
+| Callout | `::: callout` … `:::` |
+| Warning | `> [!WARNING]` in a repo file; `::: warning` otherwise |
+| Collapsible block | `::: details Title` … `:::` |
+| Collapsible aside | `::: aside Title` … `:::` |
+| Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
+| Worked example | `::: example Title` … `:::` |
+| Named nav landmark | `::: nav {aria-label="Section"}` … `:::` |
+| Stat tiles outside a figure | `::: stats` with `99.9%` / `: uptime` / `: detail` … `:::` |
+| Term grid, titled panel | `::: defs` (a definition list) / `::: group[Title]` … `:::` |
+| Status marker | `[proven]` for the six status words; `[any label]{.chip}` otherwise |
+| Any classed span | `[text]{.cls}` |
+| Attributes on a link or image | `[text](./a.md){aria-current=page}`, `![alt](a.png){width=50%}`; no space before `{`; not `href`/`src`/`srcset`; at the end of a heading line it applies to the heading |
+| Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |
+| Contents list | `[[toc]]` alone on a line (`[TOC]` also accepted) |
+| Title/subtitle/date | `---` front matter; an italic line under the H1 shows elsewhere but carries no date |
+| Page language | `lang: de` in front matter, or `--lang` for the whole run; default `en` |
+| Contents list pinned beside the text | `toc: float` in front matter, or `--toc float` for the whole run; `toc: inline` opts a page out |
+| No contents list on a page, even under `--autotoc` | `toc: none` in front matter |
+| Contents list's name, non-English page | `toc-title: Inhalt` in front matter; default `Table of Contents` |
+| Code caption | ` ```go caption="server.go" ` — keeps GitHub highlighting |
+| Code caption, Pandoc form | ` ```{.go caption="server.go"} ` — needed to escape a `"` |
+| Stable anchor | `## Title {#my-id}` |
+| Diagram | `` ```mermaid `` fence |
+| Hand-laid-out figure | ` ```fig ` fence, YAML body |
+| File or config hierarchy | `tree:` item in a ` ```fig ` fence, one node per line |
+| Context above or below a split | `split:` item between other items in a ` ```fig ` fence |
+| Cross-document link | `[x](./other.md)` — never `.html` |
+| Bare fragment, no page shell (e.g. a Claude Artifact) | `--fragment` |
+
 ## Why write Markdown instead of HTML
 
 Converting this repo's own docs, Markdown source against generated HTML:
