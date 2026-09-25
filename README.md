@@ -24,13 +24,15 @@ md2html ./docs -o ./site
 That needs Go 1.26 or later, and converts everything under `./docs`, plus
 anything it links to, into `./site`.
 
-### The authoring skill for Claude Code
+### The authoring skill for agents
 
 md2html understands more than plain Markdown — callouts, diagrams, status
 chips, cross-references — and a couple of those features fail silently when
-the syntax is slightly off. The authoring skill teaches Claude Code the
-syntax that works and the traps to avoid, so what it writes renders the way
-it meant. The binary carries the skill and installs it for you:
+the syntax is slightly off. The authoring skill teaches an agent the syntax
+that works and the traps to avoid, so what it writes renders the way it
+meant. It is a plain Agent Skills skill — a `SKILL.md` with a name and
+description, and a reference beside it — so nothing in it is specific to
+one agent. The binary carries the skill, and installs it for Claude Code:
 
 ```bash
 md2html --install-skill-user      # for you, under ~/.claude/skills
@@ -68,8 +70,8 @@ worthwhile.
   already has, where they already are.
 - **Built for agents.** `--fragment` emits the bare HTML a Claude Artifact
   expects, with mermaid diagrams already in the `<pre class="mermaid">` form
-  Artifacts render. The [authoring skill](#the-authoring-skill-for-claude-code)
-  ships inside the binary, so Claude Code learns the dialect's syntax and its
+  Artifacts render. The [authoring skill](#the-authoring-skill-for-agents)
+  ships inside the binary, so an agent learns the dialect's syntax and its
   silent traps from the same version that will render the page. Every page
   also carries its Markdown source, so a reader can hand it to their own
   agent.
@@ -371,7 +373,7 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
-| `--install-skill-user` | install the Claude Code authoring skill under `~/.claude/skills` and exit |
+| `--install-skill-user` | install the authoring skill for Claude Code, under `~/.claude/skills`, and exit |
 | `--install-skill-project` | install it under `./.claude/skills` instead |
 
 ## Writing docs for it
@@ -379,7 +381,7 @@ recipient's agent anyway.
 Callouts, diagrams, heading attributes, footnotes and definition lists all
 work, and one of them fails silently if you get the syntax wrong. See
 [docs/authoring.md](./docs/authoring.md), or install [the authoring
-skill](#the-authoring-skill-for-claude-code) so Claude Code has it to hand.
+skill](#the-authoring-skill-for-agents) so your agent has it to hand.
 
 ## Library use
 
