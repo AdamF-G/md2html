@@ -1,29 +1,100 @@
 # md2html
 
-Convert existing Markdown documentation to HTML. One static binary, no
-configuration, no runtime.
+Turn a folder of Markdown documentation into clean, readable HTML pages.
+
+Point md2html at your docs and it follows the links between them, writes a
+styled page for each one, and keeps every link working in the result. It is
+a single static binary: no configuration, no theme to set up, nothing to
+run beside it.
+
+It is built for documentation written by coding agents as much as by
+people. Ask an agent for a polished page and it will hand-write HTML —
+about 1.6× the tokens of the same content in Markdown, re-read on every
+turn, and easy to break with one careless edit. With md2html the agent
+writes Markdown, and the page still gets callouts, diagrams, a contents
+list and properly styled tables.
+
+## Install
 
 ```bash
 go install github.com/AdamF-G/md2html/cmd/md2html@latest
 md2html ./docs -o ./site
 ```
 
-## What it does
+That needs Go 1.26 or later, and converts everything under `./docs`, plus
+anything it links to, into `./site`.
 
-Walks your docs, follows links between documents across directories, and
-writes a browsable HTML tree. Tables get scroll containers, headings get
-anchors, `.md` links become `.html` links, and mermaid fences render as
-diagrams. Markdown also gets a few extras beyond CommonMark/GFM: fenced
-containers (`::: callout` … `:::`, or `:::callout[With a title]`) for
-callouts, warnings, cards, collapsible asides/examples and named `<nav>`
-landmarks; GitHub alerts
-(`> [!WARNING]`) as an alias for the same; `[proven]`-style status chips
-and the general `[label]{.chip}` form; `§4.2` cross-references that
-autolink to numbered headings; a `[[toc]]` or `[TOC]` marker for a
-per-page contents list; `title`/`subtitle`/`date` front matter; a
-`caption="…"` attribute on code fences, braced or bare; and a `fig` fence
-for hand-laid-out diagrams — boxes, arrows and panels described in YAML,
-for layouts a mermaid graph cannot express.
+### The authoring skill for Claude Code
+
+md2html understands more than plain Markdown — callouts, diagrams, status
+chips, cross-references — and a couple of those features fail silently when
+the syntax is slightly off. The authoring skill teaches Claude Code the
+syntax that works and the traps to avoid, so what it writes renders the way
+it meant. The binary carries the skill and installs it for you:
+
+```bash
+md2html --install-skill-user      # for you, under ~/.claude/skills
+md2html --install-skill-project   # for this repo, under ./.claude/skills
+```
+
+Each writes `SKILL.md` and a copy of the [authoring
+reference](./docs/authoring.md) into a `md2html-authoring` directory, so the
+guidance always describes the version you installed — which a link to this
+repo's `main` would not. Neither creates the `.claude` directory itself: a
+missing one means this is not a Claude Code workspace, or you are not
+standing where you meant to be. Both files carry the same provenance marker
+as generated HTML, so a later install replaces this tool's own copy
+silently and refuses a copy you have edited, naming it.
+
+## Why use it with agents
+
+An agent edits by string replacement, re-reads the file on every pass, and
+never sees the rendered page. All three favour Markdown over hand-written
+HTML:
+
+- **It costs less to write.** This repository's own docs take 1.57× the
+  tokens as HTML once code blocks are set aside; a heading alone is nearly
+  9×. The [measurements](#why-markdown-not-html) are below.
+- **Read cost recurs.** Write cost is paid once. Read cost is paid on every
+  turn that pulls the file back into context.
+- **Edits stay local.** A Markdown unit — a sentence, a row, a heading — is
+  addressable on its own. Its HTML counterpart is wrapped in tags whose
+  boundaries rarely match the change, so the smallest safe replacement is
+  larger than the edit.
+- **Invariants cannot rot.** Heading ids, anchor links,
+  `rel="noopener noreferrer"`, table scroll wrappers and `.md` → `.html`
+  rewriting are computed on every build. There is no copy of them an edit
+  can leave stale.
+- **Malformed structure is unrepresentable.** Markdown has no unclosed
+  `<div>`. A nesting mistake in hand-written HTML renders as something
+  plausible and wrong, which neither a human reviewer nor an agent
+  reliably catches.
+
+The output also suits agent hosts directly: `--fragment` emits bare HTML
+with no page shell, ready to drop into a Claude Artifact.
+
+## What you get
+
+- **A browsable tree.** Links between documents are followed across
+  directories, `.md` links become `.html` links, and nothing outside the
+  output directory is ever written.
+- **Pages that read well.** An embedded stylesheet, anchors on every
+  heading, and tables that scroll instead of overflowing.
+- **Diagrams.** `mermaid` fences render as diagrams, and a `fig` fence
+  describes hand-laid-out boxes, arrows and panels in YAML, for layouts a
+  mermaid graph cannot express.
+- **Callouts and containers.** Fenced containers (`::: callout` … `:::`, or
+  `:::callout[With a title]`) for callouts, warnings, cards, collapsible
+  asides and examples, and named `<nav>` landmarks. GitHub alerts
+  (`> [!WARNING]`) work as an alias.
+- **Document furniture.** A `[[toc]]` or `[TOC]` marker for a per-page
+  contents list, `title`/`subtitle`/`date` front matter, `caption="…"` on
+  code fences, `[proven]`-style status chips, and `§4.2` cross-references
+  that link to numbered headings.
+- **Safety for your files.** Every generated file is marked, and a file
+  without the marker is never overwritten.
+
+The full syntax, with the traps, is in [docs/authoring.md](./docs/authoring.md).
 
 ## The dialect
 
@@ -129,27 +200,6 @@ the row. In HTML it is this:
 Four lines, and the first of them closes the *previous* row — because a
 line-based diff aligns on `</tr>`, not on the boundary a human sees. The
 reviewer has to reassemble the change before judging it.
-
-### Why it compounds for an agent
-
-An agent edits by string replacement, re-reads the file on every pass, and
-never sees the rendered page. All three favour the Markdown:
-
-- **Edits stay local.** A Markdown unit — a sentence, a row, a heading — is
-  addressable on its own. Its HTML counterpart is wrapped in tags whose
-  boundaries rarely coincide with the boundaries of the change, so the
-  smallest safe replacement is larger than the edit.
-- **Read cost recurs.** Write cost is paid once. Read cost is paid on every
-  turn that pulls the file back into context, and a 40,000-token page
-  against a 28,000-token source is not a one-time difference.
-- **Invariants cannot rot.** Heading ids, anchor hrefs,
-  `rel="noopener noreferrer"`, table scroll wrappers and `.md` → `.html`
-  rewriting are computed on every build. There is no copy of them an edit
-  can leave stale.
-- **Malformed structure is unrepresentable.** Markdown has no unclosed
-  `<div>`. A nesting mistake in hand-written HTML renders as something
-  plausible and wrong, which is the failure mode neither a human reviewer
-  nor an agent reliably catches.
 
 ### What the numbers assume
 
@@ -263,29 +313,8 @@ unrelated tools that share the name is never claimed.
 
 Callouts, diagrams, heading attributes, footnotes and definition lists all
 work, and one of them fails silently if you get the syntax wrong. See
-[docs/authoring.md](./docs/authoring.md).
-
-### Installing the skill
-
-If you write those docs with Claude Code, the binary carries the authoring
-skill and will install it for you:
-
-```bash
-md2html --install-skill-user      # for you, under ~/.claude/skills
-md2html --install-skill-project   # for this repo, under ./.claude/skills
-```
-
-Each writes `SKILL.md` and a copy of the authoring reference into a
-`md2html-authoring` directory, so the guidance travels with the binary and
-always describes the version you installed — which a link to this repo's
-`main` would not. Neither will create the `.claude` directory itself: a
-missing one means this is not a Claude Code workspace, or you are not
-standing where you meant to be, and inventing it would leave the skill
-somewhere nothing reads.
-
-Both files carry the same provenance marker as generated HTML, so a later
-`--install-skill-user` replaces this tool's own copy silently and refuses a copy
-you have edited, naming it.
+[docs/authoring.md](./docs/authoring.md), or install [the authoring
+skill](#the-authoring-skill-for-claude-code) so Claude Code has it to hand.
 
 ## Library use
 
