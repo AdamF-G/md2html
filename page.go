@@ -13,7 +13,7 @@ import (
 )
 
 // Version is stamped into the provenance marker.
-const Version = "v0.5.0"
+const Version = "v0.6.0"
 
 // MarkerPrefix is the stable portion of the provenance marker. Detection
 // matches this prefix only, so files written by older versions are still
