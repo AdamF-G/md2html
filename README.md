@@ -46,6 +46,34 @@ standing where you meant to be. Both files carry the same provenance marker
 as generated HTML, so a later install replaces this tool's own copy
 silently and refuses a copy you have edited, naming it.
 
+## Doesn't this exist already?
+
+Converting Markdown to HTML is a solved problem. Before building md2html we
+tested the well-known options: marked, markdown-it, remark/rehype and
+goldmark and Pandoc. Here are the gaps we found that made a new project
+worthwhile.
+
+- **Speed, from Go.** On a 151,000-line documentation corpus, goldmark
+  converted everything in 78 ms, markdown-it in 529 ms and remark in 2.4 s.
+  md2html is built on goldmark, then re-parses its output as HTML5 so its
+  transforms reach hand-written HTML as well as generated markup. Even with
+  that second pass a full build takes about 160 ms, roughly 15× faster than
+  remark. It ships as one static binary, with no runtime or `node_modules`.
+- **A whole project, not one file.** Pandoc and the markdown-it and marked
+  CLIs convert the file you give them. Point md2html at a directory and it
+  follows the links between documents across folders, writes a mirrored tree
+  and rewrites every `.md` link to its `.html` page. Static site generators
+  such as MkDocs and Hugo cover the whole tree too, but they ask for a config
+  file, a theme and a site layout first. md2html converts the docs a repo
+  already has, where they already are.
+- **Built for agents.** `--fragment` emits the bare HTML a Claude Artifact
+  expects, with mermaid diagrams already in the `<pre class="mermaid">` form
+  Artifacts render. The [authoring skill](#the-authoring-skill-for-claude-code)
+  ships inside the binary, so Claude Code learns the dialect's syntax and its
+  silent traps from the same version that will render the page. Every page
+  also carries its Markdown source, so a reader can hand it to their own
+  agent.
+
 ## Why use it with agents
 
 An agent edits by string replacement, re-reads the file on every pass, and
