@@ -63,14 +63,23 @@ func TestLinkAttrsLeavesNonBlocksAlone(t *testing.T) {
 }
 
 // An attribute name reaches the output unescaped, so it gets the same
-// whitelist a container's does.
-func TestLinkAttrsDropsUnsafeNames(t *testing.T) {
-	got := convert(t, "[x](a.md){x<y=1 .ok}\n", nil)
-	if strings.Contains(got, "x<y") || strings.Contains(got, `y="1"`) {
-		t.Errorf("unsafe attribute name written out\ngot: %s", got)
-	}
-	if !strings.Contains(got, `class="ok"`) {
-		t.Errorf("safe part of the block dropped\ngot: %s", got)
+// whitelist a container's does. A block with any name that fails it is not
+// an attribute block at all, as in Pandoc: it stays on the page as the
+// text the author wrote, and nothing from it is applied. Dropping only the
+// bad names would silently delete prose that happens to touch a link.
+func TestLinkAttrsLeavesBlocksWithUnsafeNamesLiteral(t *testing.T) {
+	for _, c := range []struct{ src, text string }{
+		{"[x](a.md){x<y=1 .ok}\n", "{x&lt;y=1 .ok}"},
+		{"[w](d.md){{version}}\n", "{{version}}"},
+		{"[S](s.md){a, b, c}\n", "{a, b, c}"},
+	} {
+		got := convert(t, c.src, nil)
+		if !strings.Contains(got, "</a>"+c.text) {
+			t.Errorf("%q: block not left as literal text\ngot: %s", c.src, got)
+		}
+		if strings.Contains(got, `class="ok"`) || strings.Contains(got, `c=""`) {
+			t.Errorf("%q: part of a refused block applied\ngot: %s", c.src, got)
+		}
 	}
 }
 

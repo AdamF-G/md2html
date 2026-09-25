@@ -18,8 +18,9 @@ import (
 // allowlist drops them, and this sets attributes directly.
 //
 // The block must touch the element, as in Pandoc; with a space between
-// them it is prose. One holding no attributes stays as literal text, as
-// "[x]{}" does for a bracketed span.
+// them it is prose. One holding no attributes, or a name that is not a
+// safe attribute name, stays as literal text, as "[x]{}" does for a
+// bracketed span.
 //
 // href and src are refused, with a warning. LinkRewrite looks links up by
 // their target exactly as the source wrote it, so a block replacing one
@@ -67,8 +68,17 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 	// the ones it parses, so a name is lowercased before it is checked or
 	// set: HREF is refused like href, and Title replaces the link's title
 	// rather than adding a second attribute the browser ignores.
+	//
+	// A block with any name that is not a safe attribute name is not an
+	// attribute block, as in Pandoc, and stays as the text the author
+	// wrote. Dropping only the bad names and removing the block would
+	// silently delete prose that happens to touch a link, like
+	// "[docs](d.md){{version}}".
 	kv := make(map[string]string, len(a.kv))
 	for k, v := range a.kv {
+		if !safeAttrName(k) {
+			return
+		}
 		kv[strings.ToLower(k)] = v
 	}
 	if v, ok := kv["id"]; ok {
@@ -92,7 +102,7 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		case k == "href" || k == "src":
 			warn(fmt.Sprintf("%s cannot be set from an attribute block on a %s; "+
 				"write the target in the link itself", k, linkKind(el)))
-		case safeAttrName(k):
+		default:
 			setAttr(el, k, kv[k])
 		}
 	}
