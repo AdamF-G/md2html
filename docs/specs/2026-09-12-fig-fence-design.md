@@ -3,7 +3,7 @@
 **Date:** 2026-09-12
 **Author:** AdamF-G
 **Module:** `github.com/AdamF-G/md2html`
-**Status:** Proposed
+**Status:** Shipped in v0.2.0.
 
 ## Purpose
 

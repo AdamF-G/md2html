@@ -3,7 +3,8 @@
 **Date:** 2026-09-11
 **Author:** AdamF-G
 **Module:** `github.com/AdamF-G/md2html` (test-only addition)
-**Status:** Proposed
+**Status:** Shipped in v0.2.0. The suite now lives in `e2e/`, its own
+Go module, run with `just e2e`.
 
 ## Purpose
 

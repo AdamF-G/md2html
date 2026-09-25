@@ -9,7 +9,7 @@ date: 2026-09-14
 **Date:** 2026-09-14
 **Author:** AdamF-G
 **Module:** `github.com/AdamF-G/md2html`
-**Status:** Proposed
+**Status:** Shipped in v0.4.0.
 
 [[toc]]
 
