@@ -263,3 +263,26 @@ func TestTOCTitleLeavesOtherNavsAlone(t *testing.T) {
 		t.Errorf("hand-written nav's label changed\ngot: %s", got)
 	}
 }
+
+// toc-title reaches the list TOC builds, not every nav that happens to
+// carry the default label: a hand-written ::: nav {.toc} its author named
+// "Table of Contents" keeps that name.
+func TestTOCTitleDoesNotRenameAHandWrittenTocNav(t *testing.T) {
+	got := convert(t, "---\ntoc-title: Inhalt\n---\n# Doc\n\n::: nav {.toc aria-label=\"Table of Contents\"}\n- [Home](./home.md)\n:::\n\n[[toc]]\n\n## Eins\n", nil)
+	if strings.Count(got, `aria-label="Inhalt"`) != 1 || !strings.Contains(got, `aria-label="Table of Contents"`) {
+		t.Errorf("hand-written .toc nav renamed\ngot: %s", got)
+	}
+}
+
+// A caller who assembled their own transform list from Builtins() gets the
+// page's toc-title too, as they get Options.Warn.
+func TestTOCTitleReachesCallerSuppliedTransforms(t *testing.T) {
+	out, err := Convert([]byte("---\ntoc-title: Inhalt\n---\n# Doc\n\n[[toc]]\n\n## Eins\n"),
+		Options{Fragment: true, CSS: "/**/", Transforms: Builtins()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `aria-label="Inhalt"`) {
+		t.Errorf("toc-title lost with a caller-supplied list\ngot: %s", out)
+	}
+}

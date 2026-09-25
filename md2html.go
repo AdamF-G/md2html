@@ -179,6 +179,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	} else if opt.Warn != nil {
 		transforms = withWarn(transforms, opt.Warn)
 	}
+	transforms = withTOCLabel(transforms, meta["toc-title"])
 	if opt.LinkMap != nil {
 		// Full-slice expression: never append into the caller's array.
 		transforms = append(transforms[:len(transforms):len(transforms)],
@@ -189,8 +190,6 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
 		}
 	}
-
-	relabelTOC(root, meta["toc-title"])
 
 	body, err := renderTree(root)
 	if err != nil {

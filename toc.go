@@ -31,7 +31,7 @@ var tocMarkers = map[string]bool{
 // than a visible heading: a heading would change the look of every page
 // that has a contents list, and would itself take a slug, an anchor and an
 // entry in the list it introduces. A page in another language renames it
-// with the toc-title front matter key (relabelTOC).
+// with the toc-title front matter key, which Convert passes to tocLabeled.
 const tocLabel = "Table of Contents"
 
 // isTOCMarker reports whether s, already trimmed, is one of them.
@@ -50,7 +50,13 @@ func isTOCMarker(s string) bool {
 // This is a table of contents for one page and nothing more. Cross-document
 // navigation, a sidebar and a site index stay out of scope — see
 // docs/specs/2026-09-11-extended-content-model.md, item 6.
-func TOC() Transform {
+func TOC() Transform { return tocLabeled(tocLabel) }
+
+// tocLabeled is TOC with its list named label. Convert rebuilds the TOC in
+// a transform list with a page's toc-title (withTOCLabel), the way it
+// rebuilds a warning builtin with Options.Warn, so the label goes on the
+// list TOC builds and nowhere else.
+func tocLabeled(label string) Transform {
 	return Transform{Name: "toc", Fn: func(root *html.Node) error {
 		var markers []*html.Node
 		walk(root, func(n *html.Node) {
@@ -80,7 +86,7 @@ func TOC() Transform {
 		}
 		heads := headingNodes(root)
 		for _, m := range markers {
-			nav := buildTOC(heads)
+			nav := buildTOC(heads, label)
 			if nav == nil {
 				// Nothing to list. Leave the marker as literal text rather
 				// than remove it: the spec's own degradation for this
@@ -99,7 +105,7 @@ func TOC() Transform {
 // buildTOC renders the nav, or nil when there is nothing to list — a
 // document whose marker has no headings with an id (none present, or
 // --no-anchors suppressed every one) to point at.
-func buildTOC(heads []*html.Node) *html.Node {
+func buildTOC(heads []*html.Node, label string) *html.Node {
 	list := &html.Node{Type: html.ElementNode, DataAtom: atom.Ol, Data: "ol"}
 	n := 0
 	for _, h := range heads {
@@ -128,30 +134,27 @@ func buildTOC(heads []*html.Node) *html.Node {
 		return nil
 	}
 	nav := &html.Node{Type: html.ElementNode, DataAtom: atom.Nav, Data: "nav",
-		Attr: []html.Attribute{{Key: "class", Val: "toc"}, {Key: "aria-label", Val: tocLabel}}}
+		Attr: []html.Attribute{{Key: "class", Val: "toc"}, {Key: "aria-label", Val: label}}}
 	nav.AppendChild(list)
 	return nav
 }
 
-// relabelTOC gives every generated contents list the label a document's
-// toc-title front matter asked for, Pandoc's key for the same thing.
-//
-// It runs after the transforms rather than inside TOC because TOC is a
-// builtin with no per-document input, and front matter is per document.
-// A generated list is recognized by carrying the default label, which a
-// hand-written nav only has if its author wrote that exact label on a
-// .toc nav, in which case renaming it with the page's toc-title is what
-// they would want anyway.
-func relabelTOC(root *html.Node, label string) {
+// withTOCLabel returns ts with its TOC rebuilt to name its list label, or
+// ts itself when label is empty. Like withWarn, it never writes to ts.
+func withTOCLabel(ts []Transform, label string) []Transform {
 	if label == "" {
-		return
+		return ts
 	}
-	walk(root, func(n *html.Node) {
-		if n.Type != html.ElementNode || n.DataAtom != atom.Nav || !hasClass(n, "toc") {
-			return
+	out, copied := ts, false
+	for i, t := range ts {
+		if t.Name != "toc" {
+			continue
 		}
-		if v, _ := attr(n, "aria-label"); v == tocLabel {
-			setAttr(n, "aria-label", label)
+		if !copied {
+			out = append([]Transform(nil), ts...)
+			copied = true
 		}
-	})
+		out[i] = tocLabeled(label)
+	}
+	return out
 }
