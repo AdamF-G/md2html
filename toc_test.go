@@ -480,3 +480,151 @@ func TestTOCFloatReachesCallerSuppliedTransforms(t *testing.T) {
 		t.Errorf("float mode lost with a caller-supplied list\ngot: %s", out)
 	}
 }
+
+// longDoc has n sections, each padded to lines source lines.
+func longDoc(sections, lines int) string {
+	var b strings.Builder
+	b.WriteString("# Doc\n\n")
+	for i := 0; i < sections; i++ {
+		b.WriteString("## Section\n\n")
+		b.WriteString(strings.Repeat("text\n", lines))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// "all" gives every page a list, placed after the title block, and makes
+// float the layout unless something else says otherwise.
+func TestAutoTOCAllAddsAFloatingListAfterTheTitle(t *testing.T) {
+	src := "---\nsubtitle: Sub\ndate: 2026-09-25\n---\n# Doc\n\nIntro.\n\n## Eins\n"
+	out, err := Convert([]byte(src), Options{AutoTOC: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	nav, date, intro := strings.Index(s, floatingNav), strings.Index(s, `class="docdate"`), strings.Index(s, "Intro.")
+	if nav < 0 || !(date < nav && nav < intro) {
+		t.Errorf("want a floating nav between the date and the intro\ngot: %s", s)
+	}
+}
+
+func TestAutoTOCWithoutATitleGoesFirst(t *testing.T) {
+	out, err := Convert([]byte("Intro.\n\n## Eins\n\n## Zwei\n"), Options{AutoTOC: "all", Fragment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if nav := strings.Index(s, `<nav class="toc"`); nav < 0 || nav > strings.Index(s, "Intro.") {
+		t.Errorf("want the nav ahead of the intro\ngot: %s", s)
+	}
+}
+
+// A page that placed its own marker keeps it, and gets no second list.
+func TestAutoTOCLeavesAPageWithAMarkerAlone(t *testing.T) {
+	out, err := Convert([]byte("# Doc\n\nIntro.\n\n[TOC]\n\n## Eins\n"), Options{AutoTOC: "all"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(out)
+	if strings.Count(s, `<nav class="toc`) != 1 || strings.Index(s, "<nav") < strings.Index(s, "Intro.") {
+		t.Errorf("want only the author's list, after the intro\ngot: %s", s)
+	}
+}
+
+func TestAutoTOCLongThresholds(t *testing.T) {
+	cases := []struct {
+		name, src string
+		want      bool
+	}{
+		{"short, few headings", longDoc(2, 10), false},
+		{"five headings is not beyond five", longDoc(4, 10) /* h1 + 4 h2 */, false},
+		{"six headings", longDoc(5, 10), true},
+		{"over 1000 lines", longDoc(2, 600), true},
+		{"exactly 1000 lines", "# Doc\n" + strings.Repeat("text\n", 999), false},
+	}
+	for _, c := range cases {
+		out, err := Convert([]byte(c.src), Options{AutoTOC: "long"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(out), `<nav class="toc`); got != c.want {
+			t.Errorf("%s: list = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Front matter still decides the layout of the list autotoc adds, and
+// counts as having one, so it is not warned about.
+func TestAutoTOCFrontMatterSetsLayoutQuietly(t *testing.T) {
+	var warns []string
+	out, err := Convert([]byte("---\ntoc: inline\n---\n# Doc\n\n## Eins\n"), Options{
+		AutoTOC: "all", Warn: func(s string) { warns = append(warns, s) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), floatingNav) || !strings.Contains(string(out), `<nav class="toc"`) {
+		t.Errorf("want an inline nav\ngot: %s", out)
+	}
+	if len(warns) != 0 {
+		t.Errorf("warnings = %v, want none", warns)
+	}
+}
+
+// A marker the author never wrote must not show up as literal text when
+// there is nothing to list.
+func TestAutoTOCWithNothingToListLeavesNoTrace(t *testing.T) {
+	for _, src := range []string{"Just prose.\n", "# Doc\n\n## Eins\n"} {
+		opt := Options{AutoTOC: "all"}
+		if strings.Contains(src, "#") {
+			opt.Transforms = []Transform{TOC()} // no anchors, so no ids
+		}
+		out, err := Convert([]byte(src), opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(out), "[[toc]]") || strings.Contains(string(out), "<nav") {
+			t.Errorf("%q: left a trace\ngot: %s", src, out)
+		}
+	}
+}
+
+// "toc: none" opts one page out of a run's automatic list, quietly, and
+// leaves a marker the author wrote to the run's layout.
+func TestAutoTOCFrontMatterNoneOptsOut(t *testing.T) {
+	cases := []struct {
+		name, src, want string
+	}{
+		{"no marker", "---\ntoc: none\n---\n# Doc\n\n## Eins\n", ""},
+		{"own marker", "---\ntoc: none\n---\n# Doc\n\n[TOC]\n\n## Eins\n", floatingNav},
+	}
+	for _, c := range cases {
+		var warns []string
+		out, err := Convert([]byte(c.src), Options{AutoTOC: "all", Warn: func(s string) { warns = append(warns, s) }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(out)
+		if c.want == "" && strings.Contains(s, "<nav") || c.want != "" && strings.Count(s, "<nav") != 1 ||
+			c.want != "" && !strings.Contains(s, c.want) {
+			t.Errorf("%s: want nav %q\ngot: %s", c.name, c.want, s)
+		}
+		if len(warns) != 0 {
+			t.Errorf("%s: warnings = %v, want none", c.name, warns)
+		}
+	}
+}
+
+func TestAutoTOCInvalidModeWarnsAndAddsNothing(t *testing.T) {
+	var warns []string
+	out, err := Convert([]byte("# Doc\n\n## Eins\n"), Options{AutoTOC: "some", Warn: func(s string) { warns = append(warns, s) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "<nav") {
+		t.Errorf("invalid mode added a list\ngot: %s", out)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "all or long") {
+		t.Errorf("warnings = %v, want one naming all or long", warns)
+	}
+}

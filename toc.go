@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -240,8 +241,66 @@ func tocFloats(front, opt string, warn func(string)) bool {
 			return c.val == "float"
 		}
 		if warn != nil {
-			warn(fmt.Sprintf("%s %q is not a contents list layout (inline or float); ignoring it", c.from, c.val))
+			warn(fmt.Sprintf("%s %q is not a contents list layout (inline or float, or none to skip --autotoc); ignoring it", c.from, c.val))
 		}
 	}
 	return false
+}
+
+// The thresholds past which --autotoc long gives a page a contents list: a
+// page longer than autoTOCLines source lines, or with more than
+// autoTOCHeadings headings, is one a reader navigates rather than reads
+// straight through.
+const (
+	autoTOCLines    = 1000
+	autoTOCHeadings = 5
+)
+
+// IsAutoTOCMode reports whether s names which pages get a contents list
+// without a marker: "all", or "long" for only the pages past the autoTOC
+// thresholds.
+func IsAutoTOCMode(s string) bool { return s == "all" || s == "long" }
+
+// wantsAutoTOC reports whether mode asks for a contents list on a page with
+// this body source and parsed tree. A page that already has a marker gets
+// no second list; its author has already placed it.
+func wantsAutoTOC(mode string, src []byte, root *html.Node) bool {
+	if !IsAutoTOCMode(mode) || len(findTOCMarkers(root)) > 0 {
+		return false
+	}
+	if mode == "all" {
+		return true
+	}
+	lines := bytes.Count(src, []byte("\n"))
+	if len(src) > 0 && src[len(src)-1] != '\n' {
+		lines++
+	}
+	return lines > autoTOCLines || len(headingNodes(root)) > autoTOCHeadings
+}
+
+// insertTOCMarker adds a marker paragraph where an author would put one by
+// hand: after the page's title block (a leading h1 and the subtitle and
+// date under it), or at the top of a page with no title. It returns the
+// marker, so Convert can take it out again if the TOC transform left it —
+// a literal "[[toc]]" is the right fallback for a marker the author
+// wrote, but not for one they never did.
+func insertTOCMarker(root *html.Node) *html.Node {
+	p := &html.Node{Type: html.ElementNode, DataAtom: atom.P, Data: "p"}
+	p.AppendChild(&html.Node{Type: html.TextNode, Data: "[[toc]]"})
+
+	anchor := skipInert(root.FirstChild)
+	if anchor == nil || anchor.Type != html.ElementNode || anchor.DataAtom != atom.H1 {
+		root.InsertBefore(p, root.FirstChild)
+		return p
+	}
+	for {
+		n := skipInert(anchor.NextSibling)
+		if n == nil || n.Type != html.ElementNode || n.DataAtom != atom.P ||
+			!(hasClass(n, "subtitle") || hasClass(n, "docdate")) {
+			break
+		}
+		anchor = n
+	}
+	root.InsertBefore(p, anchor.NextSibling)
+	return p
 }

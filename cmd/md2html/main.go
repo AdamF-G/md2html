@@ -70,7 +70,8 @@ Flags:
 		noSource  = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
 		cssPath   = fs.String("css", "", "replace the embedded stylesheet with this file")
 		lang      = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
-		toc       = fs.String("toc", "", "contents list layout, inline or float (beside the text on a wide screen), unless front matter sets toc (default inline)")
+		toc       = fs.String("toc", "", "contents list layout, inline or float (beside the text on a wide screen), unless front matter sets toc (default inline, or float with --autotoc)")
+		autoTOC   = fs.String("autotoc", "", "give pages without a [[toc]] marker a contents list: all, or long for pages over 1000 lines or 5 headings")
 		noTable   = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
 		noAnchor  = fs.Bool("no-anchors", false, "do not add heading anchors")
 		noExt     = fs.Bool("no-external-links", false, "do not mark external links")
@@ -142,6 +143,10 @@ Flags:
 		fmt.Fprintf(stderr, "md2html: --toc %q is not a contents list layout (inline or float)\n", *toc)
 		return 2
 	}
+	if *autoTOC != "" && !md2html.IsAutoTOCMode(*autoTOC) {
+		fmt.Fprintf(stderr, "md2html: --autotoc %q is not all or long\n", *autoTOC)
+		return 2
+	}
 
 	var css string
 	if *cssPath != "" {
@@ -194,7 +199,7 @@ Flags:
 			// the sink needs no locking and lines from two documents can
 			// never interleave.
 			var warnings []string
-			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *noTable, *noAnchor, *noExt,
+			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt,
 				func(m string) { warnings = append(warnings, m) })
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
@@ -262,7 +267,7 @@ Flags:
 // single place this run names its sink, and Convert rebuilds the builtins
 // that report against it. TestRunReportsContainerWarningToStderr covers the
 // one diagnostic that travels that way.
-func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc string,
+func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc, autoTOC string,
 	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
 
 	skip := map[string]bool{
@@ -285,6 +290,7 @@ func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc string,
 		CSS:        css,
 		Lang:       lang,
 		TOC:        toc,
+		AutoTOC:    autoTOC,
 		Transforms: ts,
 		LinkMap:    d.LinkMap,
 		Warn:       warn,

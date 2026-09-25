@@ -243,7 +243,7 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 // the CLI side too — without it, a reordering here would ship green while
 // the library stayed correct.
 func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", false, false, false, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", false, false, false, nil)
 	want := md2html.Builtins()
 	if len(opts.Transforms) != len(want) {
 		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
@@ -258,7 +258,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // Each --no-* flag must drop exactly its own transform and nothing else,
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", true, true, true, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", true, true, true, nil)
 	want := []string{"containers", "alerts", "linkAttrs", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
@@ -619,6 +619,42 @@ func TestRunTOCFlagRejectsUnknownLayout(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "site", "a.html")); err == nil {
 		t.Error("a page was written despite the bad flag")
+	}
+}
+
+func TestRunAutoTOCFlag(t *testing.T) {
+	long := "# L\n\n## 1\n\n## 2\n\n## 3\n\n## 4\n\n## 5"
+	root := tree(t, map[string]string{
+		"docs/short.md": "# S\n\n## One",
+		"docs/long.md":  long,
+	})
+	for mode, want := range map[string]map[string]bool{
+		"all":  {"short.html": true, "long.html": true},
+		"long": {"short.html": false, "long.html": true},
+	} {
+		site := filepath.Join(root, "site-"+mode)
+		var out, errb bytes.Buffer
+		if code := run([]string{filepath.Join(root, "docs"), "-o", site, "--autotoc", mode}, &out, &errb); code != 0 {
+			t.Fatalf("%s: exit %d, stderr: %s", mode, code, errb.String())
+		}
+		for file, float := range want {
+			b, err := os.ReadFile(filepath.Join(site, file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(string(b), `class="toc toc-float"`); got != float {
+				t.Errorf("--autotoc %s: %s: floating list = %v, want %v", mode, file, got, float)
+			}
+		}
+	}
+}
+
+func TestRunAutoTOCFlagRejectsUnknownMode(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": "# A"})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site"), "--autotoc", "some"}, &out, &errb)
+	if code != 2 || !strings.Contains(errb.String(), "--autotoc") {
+		t.Errorf("exit %d, stderr %q; want 2 naming the flag", code, errb.String())
 	}
 }
 

@@ -62,6 +62,14 @@ type Options struct {
 	// floats, and Fragment output is always inline: an Artifact carries no
 	// script, so it could not offer the side control.
 	TOC string
+	// AutoTOC gives pages a contents list without a [[toc]] marker: "all"
+	// for every page, "long" for a page of more than 1000 source lines or
+	// more than 5 headings. The list goes after the page's title block, and
+	// a page that already has a marker keeps its own, and a page whose front
+	// matter says "toc: none" gets none. Setting it makes
+	// "float" the TOC default. Empty adds none; any other value is warned
+	// about and ignored.
+	AutoTOC string
 	// NoSource leaves the original Markdown out of the page. By default a
 	// full page carries it, byte for byte and front matter included, in a
 	// hidden element with the id SourceID, so whoever receives the HTML can
@@ -204,7 +212,27 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	}
 	// Resolved even for a fragment, so a bad value is still reported; a
 	// fragment then stays inline, since it can carry no side control.
-	float := tocFloats(meta["toc"], opt.TOC, opt.Warn) && !opt.Fragment
+	tocMode := opt.TOC
+	if opt.AutoTOC != "" && !IsAutoTOCMode(opt.AutoTOC) {
+		if opt.Warn != nil {
+			opt.Warn(fmt.Sprintf("AutoTOC option %q is not all or long; ignoring it", opt.AutoTOC))
+		}
+	} else if opt.AutoTOC != "" && tocMode == "" {
+		tocMode = "float"
+	}
+	// "toc: none" opts one page out of AutoTOC. It names no layout, so it
+	// goes no further: a marker the author wrote still gets the run's.
+	frontTOC := meta["toc"]
+	optOut := frontTOC == "none"
+	if optOut {
+		frontTOC = ""
+	}
+	// Placed before the front matter check below, which it satisfies.
+	var autoMarker *html.Node
+	if !optOut && wantsAutoTOC(opt.AutoTOC, src, root) {
+		autoMarker = insertTOCMarker(root)
+	}
+	float := tocFloats(frontTOC, tocMode, opt.Warn) && !opt.Fragment
 	// A front matter toc value only sets layout for a marker that already
 	// exists; on its own it renders nothing, and silently — the mismatch
 	// (front matter says the page has a contents list, the page doesn't)
@@ -223,6 +251,12 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		if err := t.Fn(root); err != nil {
 			return nil, fmt.Errorf("transform %s: %w", t.Name, err)
 		}
+	}
+
+	// Still in the tree only when there was nothing to list, or a caller's
+	// own transforms had no TOC to replace it.
+	if autoMarker != nil && autoMarker.Parent != nil {
+		autoMarker.Parent.RemoveChild(autoMarker)
 	}
 
 	body, err := renderTree(root)
