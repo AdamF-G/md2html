@@ -6,6 +6,10 @@ date: 2026-09-13
 
 # Fence line capture
 
+**Status:** Shipped in v0.3.0, with the `nav` kind and `aria-` names from
+§5.5. The nested-fence trap stays documented under Traps in the authoring
+guide.
+
 [[toc]]
 
 ## 1. Summary
