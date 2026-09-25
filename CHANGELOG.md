@@ -30,6 +30,15 @@ major version instead.
   print. Over plain `http` Copy falls back to a method that turns CRLF
   line endings into LF; Download is exact everywhere.
 
+### Changed
+
+- **A floating contents list starts on the left.** A page has no site
+  navigation to hold that side, so the outline takes it, as Wikipedia and
+  a word processor's outline pane do. The arrow moves it to the right, and
+  that choice is remembered as before. The class the toggle sets is now
+  `toc-right` rather than `toc-left`, so a replacement stylesheet that
+  positioned `toc-left` needs the same change.
+
 ## v0.7.0 — 2026-09-25
 
 ### Added

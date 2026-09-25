@@ -251,6 +251,17 @@ larger feature. (A later addition, `toc: float`, changes only where that
 same list sits on the screen, pinned beside the text; it still lists the
 current page's headings and nothing else, so it does not reopen this.)
 
+**When right-to-left language support is added:** the floating list starts
+on the left because that is where reading starts in a left-to-right
+language, and the stylesheet places it with physical `left`/`right`. For a
+right-to-left page (`lang: ar`, `he`, …, which would also need
+`dir="rtl"` on `<html>`) it should start on the right instead. Switching
+the float rules to logical properties (`inset-inline-start`/`-end`) would
+do that from `dir` alone, and the side toggle's arrows and stored
+`"left"`/`"right"` values would need the same treatment. Today `lang`
+only sets `<html lang>`; nothing in the page shell or the stylesheet
+changes direction.
+
 **Degrades to:** a literal marker line sitting in the rendered body,
 visible as plain text — ugly, but not misleading, and an easy thing to
 notice and fix per-document.

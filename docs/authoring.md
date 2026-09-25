@@ -530,8 +530,8 @@ toc: float
 ---
 ```
 
-An arrow in the list's corner moves it to the other side of the column, and
-the reader's choice is remembered across pages. The list sits clear of wide
+It starts on the left of the column. An arrow in the list's corner moves it
+to the right, and the reader's choice is remembered across pages. The list sits clear of wide
 figures as well as the text, and is as wide as the space beside them allows.
 On a narrower screen, and in print, it is the inline list again, where the
 marker stands. `toc: inline` opts one page out of a floating run. Only a
