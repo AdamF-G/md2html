@@ -6,3 +6,6 @@
 # A root `go build` drops the binary here, next to the package it built.
 # Anchored: cmd/md2html is a directory that must stay tracked.
 /md2html
+
+# Rendered docs
+docs/**/*.html
