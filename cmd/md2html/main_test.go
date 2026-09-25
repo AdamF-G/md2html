@@ -466,6 +466,75 @@ func TestRunInstallSkillRefusesAHandEditedCopy(t *testing.T) {
 	}
 }
 
+// --install-skill takes any agent's skills directory, since nothing in the
+// skill itself is specific to Claude Code.
+func TestRunInstallSkillIntoANamedSkillsDirectory(t *testing.T) {
+	root := tree(t, map[string]string{".agents/skills/other/SKILL.md": "x"})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	if code := run([]string{"--install-skill", filepath.Join(".agents", "skills")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	skill, ref := installed(filepath.Join(root, ".agents", "skills"))
+	for _, p := range []string{skill, ref} {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("missing %s: %v", p, err)
+		}
+	}
+	// Reported in full, as the .claude flags report their paths.
+	if !strings.Contains(out.String(), skill) {
+		t.Errorf("install did not report %s: %q", skill, out.String())
+	}
+}
+
+// The named directory is the one an agent reads, so it must already exist:
+// a mistyped path would otherwise take the skill somewhere nothing looks,
+// and still report success.
+func TestRunInstallSkillRefusesToInventTheNamedDirectory(t *testing.T) {
+	root := tree(t, map[string]string{".agents/README": "x"})
+	t.Chdir(root)
+
+	var out, errb bytes.Buffer
+	code := run([]string{"--install-skill", filepath.Join(".agents", "skils")}, &out, &errb)
+	if code == 0 {
+		t.Fatal("installing into a missing directory reported success")
+	}
+	if !strings.Contains(errb.String(), filepath.Join(root, ".agents", "skils")) {
+		t.Errorf("error does not name the directory it wanted, in full: %s", errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, ".agents", "skils")); err == nil {
+		t.Error("the missing directory was created anyway")
+	}
+}
+
+// One install per invocation: two destinations at once is more likely a
+// slip than a wish, and an empty one names nowhere at all.
+func TestRunInstallSkillRejectsAmbiguousDestinations(t *testing.T) {
+	root := tree(t, map[string]string{
+		".claude/settings.json": "{}",
+		"skills/README":         "x",
+	})
+	t.Chdir(root)
+
+	for _, args := range [][]string{
+		{"--install-skill", "skills", "--install-skill-project"},
+		{"--install-skill", "skills", "--install-skill-user"},
+		{"--install-skill-user", "--install-skill-project"},
+		{"--install-skill", ""},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 2 {
+			t.Errorf("%q: exit %d, want 2; stderr: %s", args, code, errb.String())
+		}
+	}
+	for _, dir := range []string{"skills", filepath.Join(".claude", "skills")} {
+		if _, err := os.Stat(filepath.Join(root, dir, "md2html-authoring")); err == nil {
+			t.Errorf("a rejected invocation still installed under %s", dir)
+		}
+	}
+}
+
 // Installing is a whole invocation, like --version: it needs no entry point
 // and must convert nothing.
 func TestRunInstallSkillNeedsNoEntryAndConvertsNothing(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 )
 
 // skillName is the directory the authoring skill installs into, and the
-// name Claude Code lists it under.
+// name an agent lists it under.
 const skillName = "md2html-authoring"
 
 // The skill travels inside the binary, so `go install` delivers it along
@@ -25,14 +25,16 @@ var (
 	authoringDoc []byte
 )
 
-// InstallSkill writes the Claude Code authoring skill into a
-// "md2html-authoring" directory below parent, creating it as needed, and
-// returns the paths written in a stable order.
+// InstallSkill writes the authoring skill into a "md2html-authoring"
+// directory below parent, creating it as needed, and returns the paths
+// written in a stable order.
 //
-// parent is a skills directory — "<something>/.claude/skills". Whether that
-// something ought to exist is the caller's question to answer, not this
-// one's: the CLI refuses to invent a missing .claude, because a skill
-// installed under a directory nobody reads is worse than no skill at all.
+// parent is a skills directory, such as Claude Code's "~/.claude/skills" or
+// the one any other agent that reads SKILL.md looks in. Whether it ought to
+// exist is the caller's question to answer, not this one's: the CLI refuses
+// to invent a missing .claude, or a missing directory it was named, because
+// a skill installed under a directory nobody reads is worse than no skill
+// at all.
 //
 // Every file carries this tool's provenance marker, so re-installing over
 // an earlier version is silent while a copy someone has edited is refused
@@ -81,8 +83,8 @@ func InstallSkill(parent string) ([]string, error) {
 // skillFiles returns the skill's files, keyed by the name each takes inside
 // the installed directory, with the provenance marker already in place.
 //
-// The marker cannot lead SKILL.md the way it leads generated HTML: Claude
-// Code parses that file's YAML front matter, which has to come first, so
+// The marker cannot lead SKILL.md the way it leads generated HTML: an agent
+// parses that file's YAML front matter, which has to come first, so
 // the marker follows the closing fence. IsOurs searches only the first
 // markerWindow bytes, and TestInstalledSkillFilesAreRecognisedAsOurs is
 // what will notice if the front matter ever grows past it.

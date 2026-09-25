@@ -78,8 +78,9 @@ Flags:
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
 		version   = fs.Bool("version", false, "print the version and exit")
 
-		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill under ~/.claude/skills and exit")
-		installProject = fs.Bool("install-skill-project", false, "install the authoring skill under ./.claude/skills and exit")
+		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
+		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
+		installProject = fs.Bool("install-skill-project", false, "install the authoring skill for Claude Code under ./.claude/skills and exit")
 	)
 	var exclude stringList
 	fs.Var(&exclude, "exclude", "directory prefix, or file/directory name glob such as 'AUDIT_*', never to enter or write to (repeatable, comma-separated)")
@@ -109,12 +110,24 @@ Flags:
 	// Also ahead of the entry check, and for the same reasons: installing
 	// the skill is the whole invocation, not something done alongside a
 	// conversion.
-	if *installUser || *installProject {
-		if *installUser && *installProject {
-			fmt.Fprint(stderr, "md2html: give either --install-skill-user or --install-skill-project, not both\n")
+	dirSet := false
+	fs.Visit(func(f *flag.Flag) { dirSet = dirSet || f.Name == "install-skill" })
+	if dirSet || *installUser || *installProject {
+		n := 0
+		for _, set := range []bool{dirSet, *installUser, *installProject} {
+			if set {
+				n++
+			}
+		}
+		if n > 1 {
+			fmt.Fprint(stderr, "md2html: give only one of --install-skill, --install-skill-user and --install-skill-project\n")
 			return 2
 		}
-		return installAuthoringSkill(*installProject, stdout, stderr)
+		if dirSet && *installDir == "" {
+			fmt.Fprint(stderr, "md2html: --install-skill needs a skills directory\n")
+			return 2
+		}
+		return installAuthoringSkill(*installDir, *installProject, stdout, stderr)
 	}
 	if len(entries) == 0 {
 		fs.Usage()
@@ -278,30 +291,35 @@ func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc string,
 	}
 }
 
-// installAuthoringSkill installs the embedded authoring skill into a Claude
-// Code skills directory: the user's own under ~/.claude, or the caller's
-// under ./.claude when project is set.
+// installAuthoringSkill installs the embedded authoring skill. Given a dir,
+// it installs into that skills directory, for whichever agent reads it.
+// Otherwise it installs for Claude Code: into the user's own skills under
+// ~/.claude, or the caller's under ./.claude when project is set.
 //
-// It will not create the .claude directory itself. A missing one means this
-// is not a Claude Code workspace, or the caller is standing somewhere they
-// did not mean to be, and inventing it would leave the skill somewhere
-// nothing ever reads while still reporting success — the same failure the
-// install recipe in the justfile refuses for the binary. Everything below
-// it, skills/ included, is md2html.InstallSkill's to create.
-func installAuthoringSkill(project bool, stdout, stderr io.Writer) int {
-	base := ".claude"
-	if !project {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintf(stderr, "md2html: --install-skill-user: %v\n", err)
-			return 1
+// It will not create the directory the skill is anchored to: dir itself, or
+// .claude. A missing one means a mistyped path, a tree that is not the
+// agent's workspace, or a caller standing somewhere they did not mean to
+// be, and inventing it would leave the skill somewhere nothing ever reads
+// while still reporting success — the same failure the install recipe in
+// the justfile refuses for the binary. Under .claude, skills/ is
+// md2html.InstallSkill's to create, as is everything below a named dir.
+func installAuthoringSkill(dir string, project bool, stdout, stderr io.Writer) int {
+	base, sub := dir, ""
+	if dir == "" {
+		base, sub = ".claude", "skills"
+		if !project {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Fprintf(stderr, "md2html: --install-skill-user: %v\n", err)
+				return 1
+			}
+			base = filepath.Join(home, ".claude")
 		}
-		base = filepath.Join(home, ".claude")
 	}
 	// Resolved before it is reported or written to. The refusal below exists
 	// to catch a caller who is not standing where they think they are, and a
-	// bare ".claude" is the least useful thing to tell exactly that caller;
-	// it also makes both flags report the same shape of path, since the
+	// relative path is the least useful thing to tell exactly that caller;
+	// it also makes every flag report the same shape of path, since the
 	// user's is absolute already.
 	base, err := filepath.Abs(base)
 	if err != nil {
@@ -314,7 +332,7 @@ func installAuthoringSkill(project bool, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	written, err := md2html.InstallSkill(filepath.Join(base, "skills"))
+	written, err := md2html.InstallSkill(filepath.Join(base, sub))
 	if err != nil {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 1

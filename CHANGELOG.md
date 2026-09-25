@@ -9,6 +9,17 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- **`--install-skill DIR`** installs the authoring skill into any agent's
+  skills directory, not only Claude Code's. Nothing in the skill was ever
+  specific to Claude Code; only the two install flags were, and they stay
+  as shortcuts. Like them, it refuses a `DIR` that does not exist, naming
+  it in full, rather than put the skill where no agent looks. It cannot be
+  combined with either of them.
+
 ## v0.8.0 — 2026-09-25
 
 ### Added

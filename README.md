@@ -32,21 +32,24 @@ the syntax is slightly off. The authoring skill teaches an agent the syntax
 that works and the traps to avoid, so what it writes renders the way it
 meant. It is a plain Agent Skills skill — a `SKILL.md` with a name and
 description, and a reference beside it — so nothing in it is specific to
-one agent. The binary carries the skill, and installs it for Claude Code:
+one agent. The binary carries the skill and installs it for you:
 
 ```bash
-md2html --install-skill-user      # for you, under ~/.claude/skills
-md2html --install-skill-project   # for this repo, under ./.claude/skills
+md2html --install-skill-user      # Claude Code, for you, under ~/.claude/skills
+md2html --install-skill-project   # Claude Code, for this repo, under ./.claude/skills
+md2html --install-skill DIR       # any agent, into the skills directory it reads
 ```
 
 Each writes `SKILL.md` and a copy of the [authoring
 reference](./docs/authoring.md) into a `md2html-authoring` directory, so the
 guidance always describes the version you installed — which a link to this
-repo's `main` would not. Neither creates the `.claude` directory itself: a
-missing one means this is not a Claude Code workspace, or you are not
-standing where you meant to be. Both files carry the same provenance marker
-as generated HTML, so a later install replaces this tool's own copy
-silently and refuses a copy you have edited, naming it.
+repo's `main` would not. None of them creates the directory it is anchored
+to — `.claude` for the first two, `DIR` itself for the third. A missing one
+means a mistyped path, a tree that is not the agent's workspace, or a shell
+not standing where you meant it to be, and installing anyway would put the
+skill where no agent looks. Both files carry the same provenance marker as
+generated HTML, so a later install replaces this tool's own copy silently
+and refuses a copy you have edited, naming it.
 
 ## Doesn't this exist already?
 
@@ -373,7 +376,8 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
-| `--install-skill-user` | install the authoring skill for Claude Code, under `~/.claude/skills`, and exit |
+| `--install-skill DIR` | install the authoring skill into `DIR`, an existing skills directory any agent reads, and exit |
+| `--install-skill-user` | install it for Claude Code, under `~/.claude/skills`, instead |
 | `--install-skill-project` | install it under `./.claude/skills` instead |
 
 ## Writing docs for it
