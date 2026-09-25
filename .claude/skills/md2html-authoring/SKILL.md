@@ -36,8 +36,11 @@ half and the next block inheriting the wrong language.
 ::: house-style    -> <div>, and the run warns
 ```
 
-The shipped kinds are `callout`, `warning`, `card`, `details`, `aside`,
-`example` and `nav`. `details`, `aside` and `example` are collapsible
+The shipped kinds are `callout`, `warning`, `card`, `stats`, `defs`,
+`group`, `details`, `aside`, `example` and `nav`. `stats`, `defs` and
+`group` are the `fig` kinds as block containers; `stats` and `defs` hold a
+definition list (in `stats`, term = value, first `: ` = label, second
+`: ` = detail) and warn without one. `details`, `aside` and `example` are collapsible
 `<details>` — `details` uses its title as the `<summary>` verbatim, the other
 two add wording of their own; `nav` is a `<nav>`
 landmark and the one kind that adds no class of its own — name it with
@@ -136,6 +139,8 @@ and the second `## Setup` is `#setup-1`.
 | Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
 | Worked example | `::: example Title` … `:::` |
 | Named nav landmark | `::: nav {aria-label="Section"}` … `:::` |
+| Stat tiles outside a figure | `::: stats` with `99.9%` / `: uptime` / `: detail` … `:::` |
+| Term grid, titled panel | `::: defs` (a definition list) / `::: group[Title]` … `:::` |
 | Status marker | `[proven]` for the six status words; `[any label]{.chip}` otherwise |
 | Any classed span | `[text]{.cls}` |
 | Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |

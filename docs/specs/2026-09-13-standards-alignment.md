@@ -212,7 +212,7 @@ One line. `[[toc]]` is markdown-it/VitePress convention; `[TOC]` is
 Python-Markdown, MkDocs, Typora and StackEdit. Accept both, document
 `[[toc]]`.
 
-## 4. Splitting the `fig` vocabulary [planned]
+## 4. Splitting the `fig` vocabulary [proven]
 
 The `fig` fence mixes two kinds of thing, and they want opposite treatment.
 
@@ -220,7 +220,10 @@ This section was blocked on the definition-list and setext traps described
 in [docs/specs/2026-09-13-fence-line-capture.md](./2026-09-13-fence-line-capture.md):
 `stats` and `defs` are defined to hold a definition list, which is one of
 the two constructs that used to steal a brace-free container's kind word.
-That fix has landed, so the promotion below is unblocked.
+That fix has landed, and the promotion below has shipped: `::: stats`,
+`::: defs` and `::: group` are container kinds. A `stats` container's
+definition list takes each term as a tile's value, its first definition as
+the label and a second as the detail, matching the `fig` field order.
 
 ::: card
 **Content** wants composability. `stats` and `defs` hold prose with a

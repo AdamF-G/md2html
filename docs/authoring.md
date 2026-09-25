@@ -139,9 +139,9 @@ Same thing.
 :::
 ```
 
-The shipped vocabulary is seven kinds: `callout`, `warning` and `card`
-(`<div>`), `details`, `aside` and `example` (`<details>`), and `nav`
-(`<nav>`):
+The shipped vocabulary is ten kinds: `callout`, `warning`, `card`,
+`stats`, `defs` and `group` (`<div>`), `details`, `aside` and `example`
+(`<details>`), and `nav` (`<nav>`):
 
 ```markdown
 ::: warning
@@ -166,6 +166,39 @@ assistive tech otherwise has no way to tell two landmarks apart:
 ```
 
 renders `<nav aria-label="Section contents">`.
+
+**`stats`, `defs` and `group` are the figure kinds of the same names as
+containers**, for when one does not sit inside a diagram. They look the
+same as their [structured figure](#structured-figures) forms, but each
+entry is ordinary Markdown: a list, a code span, a second paragraph. `stats`
+and `defs` hold a definition list. In `stats`, each term is a tile's value,
+its first definition the label, and an optional second definition a detail
+line:
+
+```markdown
+::: stats
+99.9%
+: uptime
+: over the last 90 days
+
+4
+: regions
+:::
+
+::: defs
+fence
+: a line of colons
+:::
+
+::: group[Ingest]
+Parse each file, then validate it.
+:::
+```
+
+A `stats` or `defs` container without a definition list still renders, and
+warns. A `group`'s title is its container title; the figure form's `note`,
+`foot` and `accent` have no container equivalent, because a paragraph or a
+class already says each of them.
 
 **Every form carries a title now.** Write it on the fence's opening line,
 delimit it in brackets, or put it after a braced attribute block — these
@@ -629,6 +662,11 @@ Every item is exactly one *kind*:
 | `cols` | list of items | items side by side, anywhere an item goes |
 | `split` | list of exactly 2 items | two panels either side of a `boundary` |
 
+Every label in a figure is one line of inline Markdown. A row of stat
+tiles, a term grid or a titled panel that is not part of a diagram has a
+[container](#containers) form, `::: stats`, `::: defs` or `::: group`,
+where each entry can be block Markdown instead.
+
 `layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
 top-level item may carry `weight` (1–12; out-of-range values are clamped,
 not rejected). Under `split`, exactly two items sit either side of a
@@ -768,7 +806,7 @@ With `--fragment` nothing is injected, matching the mermaid runtime.
 Styled: headings and anchors, paragraphs, lists, tables, code and `<pre>`,
 blockquotes, `<hr>`, images, video, inline SVG, definition lists, the shipped
 containers (`.callout`, `.callout-warning`, `.card`, `details.container`,
-`.example`), status chips, cross-references (`.xref`), the contents list
+`.example`, `.stats`, `.defs`, `.group`), status chips, cross-references (`.xref`), the contents list
 (`nav.toc`), document metadata (`.subtitle`, `.docdate`), and code captions
 (`.code-figure`).
 

@@ -9,6 +9,27 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- **`stats`, `defs` and `group` container kinds.** They are the `fig` kinds
+  of the same names as `:::` containers, so each entry can be block
+  Markdown instead of one line of inline text, and they look the same. `stats`
+  and `defs` hold a definition list. In `stats`, each term is a tile's value,
+  its first definition the label and an optional second the detail line. Each
+  term group is wrapped in `<div class="stat">` inside the `<dl>`. A `stats`
+  or `defs` container with no definition list warns. The `fig` forms are
+  unchanged. See
+  [docs/specs/2026-09-13-standards-alignment.md](./docs/specs/2026-09-13-standards-alignment.md) §4.
+
+### Changed
+
+- A braced `::: {.stats}`, `::: {.defs}` or `::: {.group}` used to be an
+  ordinary classed div. It is now the shipped kind: a `stats` one has its
+  definition list regrouped into tiles, and all three pick up the default
+  stylesheet's rules.
+
 ## v0.5.0 — 2026-09-24
 
 ### Added
