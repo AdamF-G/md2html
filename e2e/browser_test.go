@@ -18,6 +18,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 	"io/fs"
 	"log"
 	"math"
@@ -28,6 +29,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -74,19 +76,79 @@ func TestMain(m *testing.M) {
 }
 
 // warmChrome starts a browser, waits for it to be ready, and throws it
-// away. Every error is deliberately discarded: this is cache warming, not
-// an assertion, and a genuinely unusable Chrome is reported by the first
-// real test with a test name attached — which is a far more legible
-// failure than one from a function that runs before the suite exists.
+// away. It never fails the run: this is cache warming, not an assertion,
+// and a genuinely unusable Chrome is reported by the first real test with
+// a test name attached — which is a far more legible failure than one from
+// a function that runs before the suite exists.
+//
+// It does log how long the launch took and, if it failed, the error and
+// Chrome's output. go test only shows that when the package fails, which
+// is exactly when the warm-up's part in a failure needs to be known.
 func warmChrome() {
-	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("no-sandbox", true))
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer allocCancel()
+	out := newChromeOutput()
+	start := time.Now()
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocatorOptions(out)...)
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(func(string, ...any) {}))
-	defer cancel()
 	startCtx, startCancel := context.WithTimeout(ctx, startTimeout)
-	defer startCancel()
-	_ = chromedp.Run(startCtx)
+	err := chromedp.Run(startCtx)
+	elapsed := time.Since(start)
+	startCancel()
+	cancel()
+	allocCancel()
+	if err != nil {
+		log.Printf("warmChrome: launch failed after %v: %v\nChrome output:\n%s", elapsed.Round(time.Millisecond), err, out)
+		return
+	}
+	log.Printf("warmChrome: launched in %v", elapsed.Round(time.Millisecond))
+}
+
+// allocatorOptions is the Chrome launch configuration shared by warmChrome
+// and newBrowserCtx: headless and sandboxless, with everything Chrome
+// prints on stdout and stderr copied to out.
+//
+// chromedp otherwise discards that output, so a launch that fails with
+// "websocket url timeout reached" — Chrome still running but never
+// announcing its DevTools address — leaves nothing to say what Chrome was
+// doing instead. CI failed that way once, in the first test, with no way
+// to tell why; the output is here so the next occurrence can.
+func allocatorOptions(out io.Writer) []chromedp.ExecAllocatorOption {
+	return append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("no-sandbox", true),
+		chromedp.CombinedOutput(out),
+	)
+}
+
+// chromeOutput collects one Chrome process's output, each write stamped
+// with the time since the collector was made, so a stall shows up as a gap
+// between stamps. chromedp writes to it from its own goroutines, hence the
+// lock.
+type chromeOutput struct {
+	mu    sync.Mutex
+	start time.Time
+	buf   bytes.Buffer
+}
+
+func newChromeOutput() *chromeOutput {
+	return &chromeOutput{start: time.Now()}
+}
+
+func (o *chromeOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	fmt.Fprintf(&o.buf, "[%6.2fs] %s", time.Since(o.start).Seconds(), p)
+	if len(p) > 0 && p[len(p)-1] != '\n' {
+		o.buf.WriteByte('\n')
+	}
+	return len(p), nil
+}
+
+func (o *chromeOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.buf.Len() == 0 {
+		return "(none)"
+	}
+	return o.buf.String()
 }
 
 // newBrowserCtx returns a context driving a headless, sandboxless Chrome
@@ -101,16 +163,22 @@ func warmChrome() {
 // one specific chromedp-internal log line that would otherwise print on
 // every dialog.showModal() call in these tests — see that function's doc
 // comment for why, and why it's narrowly scoped rather than a blanket mute.
+//
+// If the test fails, Chrome's output is logged after the browser is torn
+// down; see allocatorOptions for why.
 func newBrowserCtx(t *testing.T) context.Context {
 	t.Helper()
-	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.Flag("no-sandbox", true))
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	out := newChromeOutput()
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), allocatorOptions(out)...)
 	ctx, cancel := chromedp.NewContext(allocCtx, chromedp.WithErrorf(filterChromedpNoise))
 	ctx, timeoutCancel := context.WithTimeout(ctx, stepTimeout)
 	t.Cleanup(func() {
 		timeoutCancel()
 		cancel()
 		allocCancel()
+		if t.Failed() {
+			t.Logf("Chrome output:\n%s", out)
+		}
 	})
 	return ctx
 }
