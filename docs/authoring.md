@@ -547,6 +547,20 @@ none present, or built with `--no-anchors` — leaves the marker as literal
 text rather than deleting it, so the reader isn't left wondering where the
 list went.
 
+A run can also add the list itself: `--autotoc all` gives every page
+without a marker one, and `--autotoc long` only the pages of more than 1000
+lines or more than five headings. The list goes after the title, subtitle
+and date, where you would put the marker by hand, and floats unless `--toc`
+or the page's `toc:` says otherwise. A page with its own marker keeps it,
+and a page with nothing to list gets no list and no stray `[[toc]]`.
+`toc: none` in front matter opts one page out:
+
+```markdown
+---
+toc: none
+---
+```
+
 This is a per-page contents list only — see Traps for what is still out of
 scope.
 
@@ -573,7 +587,7 @@ carries the source, so an unused key such as `author:` travels with it
 unless the page is built with `--no-source`. A repeated key keeps the last value. `subtitle` and
 `date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
 under the document's leading `<h1>` — body nodes, not a page-shell slot.
-`toc` sets the contents list's layout and `toc-title` names it; see
+`toc` sets the contents list's layout (or, as `none`, keeps `--autotoc` off the page) and `toc-title` names it; see
 Contents list.
 
 `lang` is the page's `<html lang>`, which screen readers use to pick a

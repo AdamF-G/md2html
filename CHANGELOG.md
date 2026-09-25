@@ -19,6 +19,12 @@ major version instead.
   as shortcuts. Like them, it refuses a `DIR` that does not exist, naming
   it in full, rather than put the skill where no agent looks. It cannot be
   combined with either of them.
+- **`--autotoc all|long`** (`Options.AutoTOC`) gives pages a contents list
+  without a `[[toc]]` marker: every page, or only those of more than 1000
+  source lines or more than five headings. It goes after the title block,
+  floats unless `--toc` or front matter says otherwise, and never doubles a
+  page's own marker. `toc: none` in front matter opts one page out.
+  `IsAutoTOCMode` exposes the check.
 
 ## v0.8.0 — 2026-09-25
 

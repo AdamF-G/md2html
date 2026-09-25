@@ -368,7 +368,8 @@ recipient's agent anyway.
 | `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
 | `--css FILE` | replace the embedded stylesheet |
 | `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
-| `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`. Ignored with `--fragment` |
+| `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`, or `float` with `--autotoc`. Ignored with `--fragment` |
+| `--autotoc MODE` | give pages without a `[[toc]]` marker a contents list, after the title: `all` for every page, `long` for pages over 1000 lines or 5 headings. A page's own marker wins, and `toc: none` in its front matter opts it out |
 | `--no-table-scroll` | do not wrap tables |
 | `--no-anchors` | do not add heading anchors |
 | `--no-external-links` | do not mark external links |
