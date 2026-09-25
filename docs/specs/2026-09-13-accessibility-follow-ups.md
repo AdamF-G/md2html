@@ -64,11 +64,12 @@ would reuse the shared attribute parser and fit the dialect, but inventing
 syntax before anyone needs it is the wrong order. Recommend a fixed string
 until asked.
 
-*Language.* The string would be English in a document of any language. This
-is less of an objection than it first appears: `page.go:208` already writes
-`<html lang="en">` unconditionally, so the page claims English regardless.
-The hardcoded `lang` is the real gap, and one locale decision would fix both.
-Recommend not blocking on it.
+*Language.* The string would be English in a document of any language. When
+this was written, `page.go` wrote `<html lang="en">` unconditionally, so the
+page claimed English regardless. That gap is closed: a page's language now
+comes from its `lang:` front matter or `--lang`. The label should follow the
+same setting, which leaves one question: what it says in a language md2html
+has no string for. Falling back to English there is no worse than today.
 
 **Degrades to:** exactly today's output — a correct landmark with no name.
 Nothing renders wrongly; it is simply less navigable.

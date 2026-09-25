@@ -479,22 +479,31 @@ scope.
 ### Front matter
 
 A leading `---`-delimited block of flat `key: value` lines sets `title`,
-`subtitle` and `date`:
+`subtitle`, `date` and `lang`:
 
 ```markdown
 ---
 title: Reference
 subtitle: every new convention
 date: 2026-09-11
+lang: en-GB
 ---
 
 # Reference
 ```
 
-Only those three keys do anything; any other key is silently stripped from
+Only those four keys do anything; any other key is silently stripped from
 the body and dropped. A repeated key keeps the last value. `subtitle` and
 `date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
 under the document's leading `<h1>` — body nodes, not a page-shell slot.
+
+`lang` is the page's `<html lang>`, which screen readers use to pick a
+voice and browsers use for hyphenation and spell-checking. It is the key
+Pandoc reads for the same attribute. It overrides `--lang`, which sets a
+default for the whole run; with neither, a page is `en`. A value that is not
+a language tag, such as `en_US` or `English`, warns and is ignored.
+`--fragment` output has no `<html>` element, so it has nowhere to go and is
+left to the host page.
 
 **The block must be flat.** An indented (nested) value makes the whole
 thing fail to parse as front matter, and it falls through to being rendered

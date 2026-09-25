@@ -248,6 +248,7 @@ unrelated tools that share the name is never claimed.
 | `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
 | `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
 | `--css FILE` | replace the embedded stylesheet |
+| `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
 | `--no-table-scroll` | do not wrap tables |
 | `--no-anchors` | do not add heading anchors |
 | `--no-external-links` | do not mark external links |

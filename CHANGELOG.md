@@ -23,6 +23,14 @@ major version instead.
   unchanged. See
   [docs/specs/2026-09-13-standards-alignment.md](./docs/specs/2026-09-13-standards-alignment.md) §4.
 
+- **The page language can be set.** A `lang:` front matter key sets a
+  page's `<html lang>`. It's the key Pandoc reads for the same attribute.
+  `--lang` (`Options.Lang`) sets a default for the whole run, which front
+  matter overrides. Without either, pages are `en`, as before. A value not
+  shaped like a language tag warns and is ignored, and a bad `--lang` exits
+  with status 2 before anything is written. `IsLangTag` exposes the check.
+  `--fragment` output has no `<html>` element and is unchanged.
+
 ### Changed
 
 - A braced `::: {.stats}`, `::: {.defs}` or `::: {.group}` used to be an
