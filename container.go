@@ -203,15 +203,7 @@ func Containers(warn func(string)) Transform {
 // wearing too.
 func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 	existing, _ := attr(div, "class")
-	seen := map[string]bool{}
-	var tokens []string
-	for _, tok := range strings.Fields(k.class + " " + existing) {
-		if !seen[tok] {
-			seen[tok] = true
-			tokens = append(tokens, tok)
-		}
-	}
-	if len(tokens) > 0 {
+	if tokens := mergeTokens(k.class, existing); len(tokens) > 0 {
 		setAttr(div, "class", strings.Join(tokens, " "))
 	} else {
 		// No tokens at all: a kind that contributes no class of its own

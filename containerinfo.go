@@ -1,7 +1,6 @@
 package md2html
 
 import (
-	"sort"
 	"strings"
 
 	fences "github.com/AdamF-G/md2html/internal/fences"
@@ -115,15 +114,10 @@ func fenceAttrs(content string) []fences.Attr {
 	if len(a.classes) > 0 {
 		out = append(out, fences.Attr{Name: "class", Value: strings.Join(a.classes, " ")})
 	}
-	keys := make([]string, 0, len(a.kv))
-	for k := range a.kv {
+	for _, k := range sortedKeys(a.kv) {
 		if safeAttrName(k) {
-			keys = append(keys, k)
+			out = append(out, fences.Attr{Name: k, Value: a.kv[k]})
 		}
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		out = append(out, fences.Attr{Name: k, Value: a.kv[k]})
 	}
 	return out
 }

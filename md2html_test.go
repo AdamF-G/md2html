@@ -101,7 +101,7 @@ func TestBuiltinsSignatureUnchanged(t *testing.T) {
 	var _ func() []Transform = Builtins
 
 	got := Builtins()
-	want := []string{"containers", "alerts", "tableScroll", "chips", "headingAnchors", "sectionLinks", "toc", "externalLinks"}
+	want := []string{"containers", "alerts", "linkAttrs", "tableScroll", "chips", "headingAnchors", "sectionLinks", "toc", "externalLinks"}
 	if len(got) != len(want) {
 		t.Fatalf("Builtins() returned %d transforms, want %d: %v", len(got), len(want), got)
 	}

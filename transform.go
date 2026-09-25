@@ -28,6 +28,11 @@ func Builtins() []Transform {
 // longer needs that protection: the fence parser consumes it, so
 // ":::aside[Why]{.compact}" never reaches the tree as text a bracketed span
 // could claim.
+// LinkAttrs runs before ExternalLinks, which adds to the rel an attribute
+// block may have set rather than replacing it, and before LinkRewrite,
+// which Convert appends last and which must see each href as the source
+// wrote it; a block cannot change an href, so the order only matters for
+// rel.
 // Chips must run before HeadingAnchors so a status marker is already a
 // <span class="chip"> — and therefore excluded by headingText — by the time
 // slugs are computed; SectionLinks and TOC must both run after
@@ -40,11 +45,12 @@ func Builtins() []Transform {
 // specific positions in it (id-resolving transforms after anchors are
 // assigned), so new entries belong at their documented position, not
 // appended to the end. warn is threaded through so a transform can report
-// a non-fatal problem; only Containers uses it so far.
+// a non-fatal problem; Containers and LinkAttrs use it so far.
 func builtins(warn func(string)) []Transform {
 	return []Transform{
 		Containers(warn),
 		Alerts(),
+		LinkAttrs(warn),
 		TableScroll(),
 		Chips(),
 		HeadingAnchors(),
@@ -244,7 +250,9 @@ func isExternal(href string) bool {
 }
 
 // ExternalLinks marks off-site links so they open in a new tab without
-// leaking the referring window.
+// leaking the referring window. rel="noopener noreferrer" is added to any
+// rel tokens the link already has, and a target the author chose is left
+// alone.
 func ExternalLinks() Transform {
 	return Transform{Name: "externalLinks", Fn: func(root *html.Node) error {
 		walk(root, func(n *html.Node) {
@@ -255,8 +263,14 @@ func ExternalLinks() Transform {
 			if !ok || !isExternal(href) {
 				return
 			}
-			setAttr(n, "target", "_blank")
-			setAttr(n, "rel", "noopener noreferrer")
+			// An author's own target and rel tokens are kept: a link
+			// attribute block or raw HTML may carry rel="me", and
+			// overwriting it would drop a relation the author declared.
+			if _, ok := attr(n, "target"); !ok {
+				setAttr(n, "target", "_blank")
+			}
+			rel, _ := attr(n, "rel")
+			setAttr(n, "rel", strings.Join(mergeTokens(rel, "noopener noreferrer"), " "))
 		})
 		return nil
 	}}
@@ -273,6 +287,7 @@ func ExternalLinks() Transform {
 // or its warnings reach only callers who passed no list of their own.
 var warnAware = map[string]func(func(string)) Transform{
 	"containers": Containers,
+	"linkAttrs":  LinkAttrs,
 }
 
 // withWarn returns ts with every warn-aware builtin rebuilt against warn.

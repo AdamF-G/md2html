@@ -1,6 +1,9 @@
 package md2html
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // attrs is a parsed {#id .class key=value} attribute block — the syntax
 // PHP Markdown Extra introduced and kramdown, Pandoc and goldmark's own
@@ -232,4 +235,15 @@ func skipQuoted(s string, i int) int {
 		i++
 	}
 	return i
+}
+
+// sortedKeys returns kv's keys in sorted order, so attributes from one
+// block are always written in the same order.
+func sortedKeys(kv map[string]string) []string {
+	keys := make([]string, 0, len(kv))
+	for k := range kv {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

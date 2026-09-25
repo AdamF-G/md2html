@@ -259,7 +259,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
 	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, "", "", true, true, true, nil)
-	want := []string{"containers", "alerts", "chips", "sectionLinks", "toc"}
+	want := []string{"containers", "alerts", "linkAttrs", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
 		got = append(got, tr.Name)

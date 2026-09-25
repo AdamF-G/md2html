@@ -126,6 +126,8 @@ func TestAgreeOnConstructs(t *testing.T) {
 		{"pipe table", "| A | B |\n|---|---|\n| 1 | 2 |\n", "table", ""},
 		{"bracketed span", "x [proven]{.chip} y\n", "span", "chip"},
 		{"github alert", "> [!WARNING]\n> Overwrites state.\n", "div", ""},
+		{"link attributes", "[Home](./home.md){.nav}\n", "a", "nav"},
+		{"image attributes", "![c](c.png){.wide}\n", "img", "wide"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
