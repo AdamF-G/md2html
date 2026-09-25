@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/AdamF-G/md2html"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/chromedp"
 )
 
@@ -2386,5 +2387,154 @@ func TestBrowserEmbeddedSourceRoundTrips(t *testing.T) {
 	}
 	if boxes != 0 {
 		t.Errorf("source element renders %d box(es), want none", boxes)
+	}
+}
+
+// sourceToolsState reports whether the controls are shown, their position
+// mode, whether a contents list holds any, and whether they overlap it
+// while it floats. An inline list is page content, which the fixed
+// controls pass over like any other as the page scrolls.
+const sourceToolsState = `(() => {
+	const shown = (el) => el !== null && el.getClientRects().length > 0;
+	const tools = document.querySelector(".source-tools");
+	const nav = document.querySelector("nav.toc");
+	let overlap = false;
+	if (shown(tools) && shown(nav) && getComputedStyle(nav).position === "fixed") {
+		const a = tools.getBoundingClientRect(), b = nav.getBoundingClientRect();
+		overlap = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+	}
+	return JSON.stringify({
+		corner: shown(tools),
+		cornerPosition: tools ? getComputedStyle(tools).position : "",
+		toc: nav !== null && nav.querySelector(".source-tools") !== null,
+		overlap,
+	});
+})()`
+
+type sourceTools struct {
+	Corner         bool
+	CornerPosition string
+	TOC            bool
+	Overlap        bool
+}
+
+func readSourceTools(t *testing.T, ctx context.Context, label string) sourceTools {
+	t.Helper()
+	var raw string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(sourceToolsState, &raw)); err != nil {
+		t.Fatalf("%s: %v", label, err)
+	}
+	var s sourceTools
+	if err := json.Unmarshal([]byte(raw), &s); err != nil {
+		t.Fatalf("%s: parsing %q: %v", label, raw, err)
+	}
+	return s
+}
+
+// Copy puts the Markdown on the clipboard and Download saves it under the
+// page's own name with a .md extension, both exactly as embedded. The
+// clipboard and the anchor click are stubbed to record what they were
+// given: a headless browser has no clipboard to read back, and a real
+// download would leave the test nothing to inspect.
+func TestBrowserSourceToolsCopyAndDownload(t *testing.T) {
+	src := "# Doc\r\n\r\nSome <b>text</b> & more.\n"
+	page, err := md2html.Convert([]byte(src), md2html.Options{})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"guide.html": page})
+
+	ctx := newBrowserCtx(t)
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1200, 800),
+		chromedp.Navigate(baseURL+"/guide.html"),
+		chromedp.WaitVisible(".source-tools", chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	if s := readSourceTools(t, ctx, "no contents list"); !s.Corner || s.CornerPosition != "fixed" {
+		t.Errorf("want the controls fixed in the corner, got %+v", s)
+	}
+
+	const stub = `(() => {
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText: async (t) => { window.__copied = t; } },
+		});
+		HTMLAnchorElement.prototype.click = function () {
+			window.__download = this.download;
+			fetch(this.href).then((r) => r.text()).then((t) => { window.__downloaded = t; });
+		};
+	})()`
+	var ignored any
+	var copied, name, downloaded, copyLabel string
+	if err := chromedp.Run(ctx,
+		chromedp.Evaluate(stub, &ignored),
+		chromedp.Click(".source-tools .source-copy", chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Poll(`window.__copied`, &copied),
+		chromedp.Text(".source-tools .source-copy", &copyLabel, chromedp.ByQuery),
+		chromedp.Click(".source-tools .source-download", chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Poll(`window.__downloaded`, &downloaded),
+		chromedp.Evaluate(`window.__download`, &name),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	if copied != src {
+		t.Errorf("copied %q, want %q", copied, src)
+	}
+	if copyLabel != "Copied" {
+		t.Errorf("copy button reads %q after a copy, want Copied", copyLabel)
+	}
+	if name != "guide.md" {
+		t.Errorf("download named %q, want guide.md", name)
+	}
+	if downloaded != src {
+		t.Errorf("downloaded %q, want %q", downloaded, src)
+	}
+}
+
+// The controls stay in the corner beside a floating contents list too,
+// and the list stops short of them: the viewport here is short enough that
+// the list is as tall as it may grow, which without that limit would run
+// under the controls when the list is on the right.
+func TestBrowserSourceToolsStayInTheCornerBesideTheTOC(t *testing.T) {
+	baseURL := tocFloatPage(t)
+	ctx := newBrowserCtx(t)
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1440, 400),
+		chromedp.Navigate(baseURL+"/toc.html"),
+		chromedp.WaitVisible(".source-tools", chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	for _, w := range []int64{1440, 1920, 390} {
+		if err := chromedp.Run(ctx, chromedp.EmulateViewport(w, 400)); err != nil {
+			t.Fatal(err)
+		}
+		s := readSourceTools(t, ctx, fmt.Sprintf("%dpx", w))
+		if !s.Corner || s.CornerPosition != "fixed" || s.TOC {
+			t.Errorf("%dpx: want the controls fixed in the corner and none in the list, got %+v", w, s)
+		}
+		if s.Overlap {
+			t.Errorf("%dpx: the floating list overlaps the controls", w)
+		}
+	}
+}
+
+// A button does nothing on paper.
+func TestBrowserSourceToolsHiddenInPrint(t *testing.T) {
+	baseURL := tocFloatPage(t)
+	ctx := newBrowserCtx(t)
+	for _, w := range []int64{390, 1440} {
+		if err := chromedp.Run(ctx,
+			chromedp.EmulateViewport(w, 900),
+			chromedp.Navigate(baseURL+"/toc.html"),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			emulation.SetEmulatedMedia().WithMedia("print"),
+		); err != nil {
+			t.Fatalf("browser run: %v", err)
+		}
+		if s := readSourceTools(t, ctx, "print"); s.Corner || s.TOC {
+			t.Errorf("%dpx, print: controls shown: %+v", w, s)
+		}
 	}
 }

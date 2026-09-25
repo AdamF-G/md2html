@@ -270,6 +270,7 @@ func renderPage(body []byte, title, lang, css, mermaidURL string, source []byte)
 	b.WriteString("\n</main>\n")
 	if source != nil {
 		b.WriteString(sourceElement(source))
+		b.WriteString(sourceToolsRuntime)
 	}
 	if hasMermaid(body) {
 		b.WriteString(mermaidRuntime(mermaidURL))
@@ -359,3 +360,87 @@ func sourceElement(src []byte) string {
 	return fmt.Sprintf("<textarea hidden id=\"%s\" data-format=\"text/markdown\" data-dialect=\"%s@%s\">\n%s</textarea>\n",
 		SourceID, modulePath, Version, sourceEscaper.Replace(string(src)))
 }
+
+// sourceToolsRuntime gives a page with an embedded source its controls:
+// Copy puts the Markdown on the clipboard and Download saves it under the
+// page's own name, with .md for .html. Both read textContent, so each gets
+// the source exactly as embedded.
+//
+// The controls sit in the bottom corner of the screen on every page. The
+// body is marked source-tools-on so the stylesheet can keep a floating
+// contents list short of them.
+//
+// The clipboard API exists only in a secure context. A page served over
+// plain http falls back to copying from a scratch textarea, whose value
+// normalizes line endings, so a CRLF source reaches the clipboard with LF
+// there; Download is exact everywhere.
+const sourceToolsRuntime = `<script>
+(() => {
+  const source = document.getElementById("md2html-source");
+  if (!source) return;
+  const text = () => source.textContent;
+  const fileName = () => {
+    let base = location.pathname.split("/").pop() || "";
+    try { base = decodeURIComponent(base); } catch (e) {}
+    return (base.replace(/\.html?$/i, "") || "document") + ".md";
+  };
+  const flash = (btn, label) => {
+    btn.textContent = label;
+    clearTimeout(btn.flashTimer);
+    btn.flashTimer = setTimeout(() => { btn.textContent = "Copy"; }, 2000);
+  };
+  const copy = async (btn) => {
+    try {
+      await navigator.clipboard.writeText(text());
+      flash(btn, "Copied");
+      return;
+    } catch (e) {}
+    const scratch = document.createElement("textarea");
+    scratch.value = text();
+    scratch.style.position = "fixed";
+    scratch.style.opacity = "0";
+    document.body.append(scratch);
+    scratch.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    scratch.remove();
+    flash(btn, ok ? "Copied" : "Copy failed");
+  };
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([text()], { type: "text/markdown;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName();
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+  const button = (cls, label, name, fn) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = cls;
+    btn.textContent = label;
+    btn.title = name;
+    btn.setAttribute("aria-label", name);
+    btn.addEventListener("click", () => fn(btn));
+    return btn;
+  };
+  const tools = () => {
+    const box = document.createElement("div");
+    box.className = "source-tools";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", "Markdown source");
+    box.setAttribute("aria-live", "polite");
+    const label = document.createElement("span");
+    label.textContent = "Markdown";
+    box.append(label,
+      button("source-copy", "Copy", "Copy the Markdown source", copy),
+      button("source-download", "Download", "Download the Markdown source as " + fileName(), download));
+    return box;
+  };
+  document.body.append(tools());
+  document.body.classList.add("source-tools-on");
+})();
+</script>
+`

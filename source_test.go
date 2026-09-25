@@ -128,3 +128,27 @@ func TestEmptyDocumentEmbedsEmptySource(t *testing.T) {
 		t.Errorf("embedded source = %q, want empty", got)
 	}
 }
+
+// The controls ride with the embedded source and only with it: a page
+// without one has nothing for them to copy.
+func TestSourceToolsRuntimeFollowsTheSource(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		opt  Options
+		want bool
+	}{
+		{"default", Options{}, true},
+		{"opted out", Options{NoSource: true}, false},
+		{"fragment", Options{Fragment: true}, false},
+	} {
+		page, err := Convert([]byte("# Doc\n"), c.opt)
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", c.name, err)
+		}
+		// The stylesheet names the controls' classes on every page, so
+		// look for the script itself.
+		if has := strings.Contains(string(page), sourceToolsRuntime); has != c.want {
+			t.Errorf("%s: source tools runtime present = %v, want %v", c.name, has, c.want)
+		}
+	}
+}

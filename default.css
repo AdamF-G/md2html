@@ -307,6 +307,44 @@ nav.toc .toc-side-toggle { display: none; }
   nav.toc-float .toc-side-toggle:focus-visible { color: var(--accent); background: var(--code-bg); }
 }
 
+/* Copy and Download for the page's embedded Markdown, added by script: a
+   small panel pinned to the bottom corner on every page. A floating
+   contents list stops short of it, so a long list never runs underneath.
+   A button does nothing on paper, so it does not print. */
+.source-tools {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.source-tools span { margin-right: 0.25rem; }
+.source-tools button {
+  padding: 0.15rem 0.4rem;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.source-tools button:hover,
+.source-tools button:focus-visible { background: var(--code-bg); }
+@media screen and (min-width: 80rem) {
+  body.source-tools-on nav.toc-float { max-height: calc(100vh - 6rem); }
+}
+@media print {
+  .source-tools { display: none; }
+}
+
 /* Document metadata sits under the title, where a reader expects a
    standfirst — not above it, which is why these are body nodes rather than
    a slot in the page shell. */
