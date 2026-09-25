@@ -205,8 +205,9 @@ func hasExpandableMedia(body []byte) bool {
 }
 
 // tocSideRuntime gives a floating contents list its side control: a small
-// arrow button in the list's corner that moves it between the right of the
-// text column and the left. The choice is kept in localStorage, so it
+// arrow button in the list's corner that moves it between the left of the
+// text column, where it starts, and the right. The choice is kept in
+// localStorage, so it
 // holds across every page of a site; storage that throws (a private
 // window, a file:// page in some browsers) only costs that memory.
 //
@@ -222,20 +223,20 @@ const tocSideRuntime = `<script>
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "toc-side-toggle";
-  const apply = (left) => {
-    toc.classList.toggle("toc-left", left);
-    btn.textContent = left ? "\u2192" : "\u2190";
-    const label = left ? "Move contents to the right" : "Move contents to the left";
+  const apply = (right) => {
+    toc.classList.toggle("toc-right", right);
+    btn.textContent = right ? "\u2190" : "\u2192";
+    const label = right ? "Move contents to the left" : "Move contents to the right";
     btn.setAttribute("aria-label", label);
     btn.title = label;
   };
   let stored = null;
   try { stored = localStorage.getItem(key); } catch (e) {}
-  apply(stored === "left");
+  apply(stored === "right");
   btn.addEventListener("click", () => {
-    const left = !toc.classList.contains("toc-left");
-    try { localStorage.setItem(key, left ? "left" : "right"); } catch (e) {}
-    apply(left);
+    const right = !toc.classList.contains("toc-right");
+    try { localStorage.setItem(key, right ? "right" : "left"); } catch (e) {}
+    apply(right);
   });
   toc.prepend(btn);
 })();

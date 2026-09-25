@@ -2193,8 +2193,8 @@ func TestBrowserTOCFloatNeverCoversTheText(t *testing.T) {
 			if !g.Toggle {
 				t.Errorf("%s: floating list has no side toggle", label)
 			}
-			if side := sideOf(t, label, g); side != "" && side != "right" {
-				t.Errorf("%s: floating list starts on the %s, want right", label, side)
+			if side := sideOf(t, label, g); side != "" && side != "left" {
+				t.Errorf("%s: floating list starts on the %s, want left", label, side)
 			}
 		case "static":
 			if g.Toggle {
@@ -2237,8 +2237,8 @@ func TestBrowserTOCFloatSideToggle(t *testing.T) {
 		t.Fatalf("browser run: %v", err)
 	}
 	start := geometry("start")
-	if start.Position != "fixed" || sideOf(t, "start", start) != "right" {
-		t.Fatalf("want a fixed list on the right at 1440px, got %+v", start)
+	if start.Position != "fixed" || sideOf(t, "start", start) != "left" {
+		t.Fatalf("want a fixed list on the left at 1440px, got %+v", start)
 	}
 
 	var ignored any
@@ -2252,8 +2252,8 @@ func TestBrowserTOCFloatSideToggle(t *testing.T) {
 	if err := chromedp.Run(ctx, chromedp.Click(".toc-side-toggle", chromedp.ByQuery, chromedp.NodeVisible)); err != nil {
 		t.Fatal(err)
 	}
-	if side := sideOf(t, "after toggle", geometry("after toggle")); side != "left" {
-		t.Errorf("toggle left the list on the %s, want left", side)
+	if side := sideOf(t, "after toggle", geometry("after toggle")); side != "right" {
+		t.Errorf("toggle left the list on the %s, want right", side)
 	}
 
 	if err := chromedp.Run(ctx,
@@ -2262,15 +2262,15 @@ func TestBrowserTOCFloatSideToggle(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if side := sideOf(t, "after reload", geometry("after reload")); side != "left" {
-		t.Errorf("reload forgot the chosen side: list on the %s, want left", side)
+	if side := sideOf(t, "after reload", geometry("after reload")); side != "right" {
+		t.Errorf("reload forgot the chosen side: list on the %s, want right", side)
 	}
 
 	if err := chromedp.Run(ctx, chromedp.Click(".toc-side-toggle", chromedp.ByQuery, chromedp.NodeVisible)); err != nil {
 		t.Fatal(err)
 	}
-	if side := sideOf(t, "toggled back", geometry("toggled back")); side != "right" {
-		t.Errorf("second toggle left the list on the %s, want right", side)
+	if side := sideOf(t, "toggled back", geometry("toggled back")); side != "left" {
+		t.Errorf("second toggle left the list on the %s, want left", side)
 	}
 }
 
@@ -2495,7 +2495,8 @@ func TestBrowserSourceToolsCopyAndDownload(t *testing.T) {
 // The controls stay in the corner beside a floating contents list too,
 // and the list stops short of them: the viewport here is short enough that
 // the list is as tall as it may grow, which without that limit would run
-// under the controls when the list is on the right.
+// under the controls. The list is moved to the right first, the side the
+// controls are on; it starts on the left, where it could never meet them.
 func TestBrowserSourceToolsStayInTheCornerBesideTheTOC(t *testing.T) {
 	baseURL := tocFloatPage(t)
 	ctx := newBrowserCtx(t)
@@ -2503,6 +2504,8 @@ func TestBrowserSourceToolsStayInTheCornerBesideTheTOC(t *testing.T) {
 		chromedp.EmulateViewport(1440, 400),
 		chromedp.Navigate(baseURL+"/toc.html"),
 		chromedp.WaitVisible(".source-tools", chromedp.ByQuery),
+		chromedp.Click(".toc-side-toggle", chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.WaitReady("nav.toc-right", chromedp.ByQuery),
 	); err != nil {
 		t.Fatalf("browser run: %v", err)
 	}

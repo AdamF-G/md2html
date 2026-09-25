@@ -680,7 +680,7 @@ func TestTOCSideRuntimeIsAnAccessibleButtonThatPersists(t *testing.T) {
 		t.Fatalf("Convert: %v", err)
 	}
 	s := string(page)
-	for _, want := range []string{`"button"`, "aria-label", "toc-left", "localStorage"} {
+	for _, want := range []string{`"button"`, "aria-label", "toc-right", "localStorage"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("page missing %q for the side toggle", want)
 		}
