@@ -144,7 +144,7 @@ and the second `## Setup` is `#setup-1`.
 | Term grid, titled panel | `::: defs` (a definition list) / `::: group[Title]` … `:::` |
 | Status marker | `[proven]` for the six status words; `[any label]{.chip}` otherwise |
 | Any classed span | `[text]{.cls}` |
-| Attributes on a link or image | `[text](./a.md){aria-current=page}`, `![alt](a.png){width=50%}`; no space before `{`; not `href`/`src`/`srcset` |
+| Attributes on a link or image | `[text](./a.md){aria-current=page}`, `![alt](a.png){width=50%}`; no space before `{`; not `href`/`src`/`srcset`; at the end of a heading line it applies to the heading |
 | Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |
 | Contents list | `[[toc]]` alone on a line (`[TOC]` also accepted) |
 | Title/subtitle/date | `---` front matter; an italic line under the H1 shows elsewhere but carries no date |

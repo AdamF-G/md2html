@@ -883,6 +883,10 @@ Supply `--css mine.css` to replace the stylesheet entirely.
 - **A cross-reference scoped to another document may still autolink.** Only
   the possessive phrasing ("the design doc's §7") is recognized as
   cross-document. Write `` `§7` `` to keep any other phrasing literal.
+- **An attribute block at the end of a heading belongs to the heading.**
+  `## See [docs](./docs.md){.ext}` puts `class="ext"` on the `<h2>`, not the
+  link, as Pandoc does. Put some text after the block, or give the link its
+  class in prose instead of a heading.
 - **Front matter must be flat `key: value`.** A nested value makes the whole
   block render as visible text above the title rather than being parsed.
 - **Only `caption=` is read from a *brace-free* code fence info string.**

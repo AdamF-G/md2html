@@ -59,7 +59,10 @@ major version instead.
 - A braced `::: {.stats}`, `::: {.defs}` or `::: {.group}` used to be an
   ordinary classed div. It is now the shipped kind: a `stats` one has its
   definition list regrouped into tiles, and all three pick up the default
-  stylesheet's rules.
+  stylesheet's rules. The stylesheet now also styles the class names
+  `stats`, `stat`, `defs` and `group` wherever they appear, so raw HTML such
+  as `<div class="group">` that used them for your own purposes changes
+  look too.
 
 ## v0.5.0 — 2026-09-24
 
