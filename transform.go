@@ -168,16 +168,21 @@ func HeadingAnchors() Transform {
 	return Transform{Name: "headingAnchors", Fn: func(root *html.Node) error {
 		seen := map[string]bool{}
 		heads := headingNodes(root)
-		// Reserve every author-supplied id before assigning any generated
-		// one, or a slug could claim a string an explicit id further down
-		// the document is going to use, and the two would collide. An
-		// explicit id always wins and is never rewritten; two explicit ids
-		// that collide with each other are left exactly as written.
-		for _, h := range heads {
-			if id, ok := attr(h, "id"); ok && id != "" {
+		// Reserve every id already in the document before assigning any
+		// generated one, or a slug could claim a string an explicit id is
+		// using, and the two would collide. That means every element's, not
+		// only a heading's: a link, a span or a container can carry an id
+		// too. An explicit id always wins and is never rewritten; two
+		// explicit ids that collide with each other are left exactly as
+		// written.
+		walk(root, func(n *html.Node) {
+			if n.Type != html.ElementNode {
+				return
+			}
+			if id, ok := attr(n, "id"); ok && id != "" {
 				seen[id] = true
 			}
-		}
+		})
 		for i, h := range heads {
 			id, ok := attr(h, "id")
 			if !ok || id == "" {

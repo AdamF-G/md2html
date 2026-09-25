@@ -49,6 +49,10 @@ major version instead.
   `noopener noreferrer` added to what was written instead of replacing it,
   so `rel="me"` survives, and a `target` already set is left alone. This
   applies to raw HTML links too.
+- A generated heading id now steers clear of an id set on any element, not
+  only on other headings. A `{#notes}` container or link and a `## Notes`
+  heading both used to get `id="notes"`; the heading is now `#notes-1`, so
+  check in-page links meant for such a heading.
 - A braced `::: {.stats}`, `::: {.defs}` or `::: {.group}` used to be an
   ordinary classed div. It is now the shipped kind: a `stats` one has its
   definition list regrouped into tiles, and all three pick up the default

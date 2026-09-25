@@ -622,7 +622,9 @@ survives rewording:
 ```
 
 An explicit id always wins and is never rewritten. Generated slugs are made to
-avoid colliding with it, in both directions.
+avoid colliding with it, in both directions, and with an id anywhere else on
+the page: after `[Setup](./setup.md){#setup}`, a `## Setup` heading gets
+`#setup-1`.
 
 Slugs keep letters and digits from any script, so `## 日本語の見出し` gets
 `id="日本語の見出し"` and a working anchor. A heading with no letters or digits

@@ -218,3 +218,17 @@ func TestHeadingAnchorsSlugUnchangedWithoutChips(t *testing.T) {
 		t.Errorf("slug changed\ngot: %s", got)
 	}
 }
+
+// An id anywhere on the page is taken, not only a heading's: a link or
+// container with {#setup} and a heading slugged "setup" would otherwise
+// give the page two elements with one id, and #setup would land on
+// whichever came first.
+func TestHeadingAnchorsAvoidIdsOnOtherElements(t *testing.T) {
+	got := apply(t, `<p><a href="e.html" id="setup">q</a></p><div id="notes"></div><h2>Setup</h2><h2>Notes</h2>`, HeadingAnchors())
+	if !strings.Contains(got, `<h2 id="setup-1">`) || !strings.Contains(got, `<h2 id="notes-1">`) {
+		t.Errorf("heading slug collided with another element's id\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<a href="e.html" id="setup">`) {
+		t.Errorf("author's id changed\ngot: %s", got)
+	}
+}
