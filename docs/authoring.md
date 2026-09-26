@@ -15,7 +15,7 @@ What to write for each need. The sections below give the detail, and
 |---|---|
 | Callout | `::: callout` … `:::` |
 | Warning | `> [!WARNING]` in a repo file; `::: warning` otherwise |
-| Collapsible block | `::: details Title` … `:::` |
+| Collapsible block | `::: details Title` … `:::`; in a file read on GitHub, `<details class="container">` with `<summary>` (see Choosing between forms) |
 | Collapsible aside | `::: aside Title` … `:::` |
 | Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
 | Worked example | `::: example Title` … `:::` |
@@ -146,7 +146,7 @@ link, where `.md` rewriting can see it.
 
 ### Choosing between forms
 
-Six constructs accept more than one spelling. None of the alternatives is
+Seven constructs accept more than one spelling. None of the alternatives is
 deprecated and none is a dialect of ours that others must learn: each exists
 because a different ecosystem already writes it that way, and a document
 written for that ecosystem should not have to be rewritten to pass through
@@ -162,7 +162,8 @@ only here.
 | Container title | `::: aside Why` — `:::aside[Why]` | **Whether the title needs to be unambiguous next to attributes.** Every container form now carries a title — see Containers. The label form is still the only one that *delimits* it, so it is what to reach for when a title might itself end in something that looks like a brace group, or when a directive-reading tool (remark-directive, Docusaurus) needs to parse the title out on its own. It is the CommonMark generic directives syntax. |
 | Chip, span | `[proven]` — `[proven]{.chip}` — `[c:proven]` | **Vocabulary.** The bare form only works for the six status words. The attribute form is Pandoc's `bracketed_spans`, works for any label or class, and is the form to prefer in new writing. `[c:…]` predates it and still parses. |
 | Code caption | `` ```go caption="x" `` — `` ```{.go caption="x"} `` | **Syntax highlighting elsewhere, and quoting.** GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there; the braced form does not highlight on GitHub but is what Pandoc and MyST read, and is the only one that can escape a `"` inside the caption. |
-| Contents list | `[[toc]]` — `[TOC]` | **Whether the source is read on GitLab.** GitLab renders its own list from `[TOC]`, and GitHub from neither. Otherwise pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
+| Contents list | `[[toc]]` — `[TOC]` | **Whether the source is read on GitLab.** GitLab renders its own list from `[TOC]`, and GitHub from neither: there, either marker shows as literal text, and the reader uses GitHub's own outline button instead. Otherwise pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
+| Collapsible block | `::: details Title` — `<details class="container">` | **Whether it is read on GitHub.** `::: details` shows there as literal text with its body always open. Raw `<details class="container"><summary>Title</summary>`, with a blank line after the `<summary>` line and before `</details>` so the body is still Markdown, renders here exactly as `::: details` does and collapses on GitHub too. Without the `container` class it is unstyled here. |
 | Title, subtitle | front matter — an italic line under the `<h1>` | **Whether the metadata is data.** Front matter is machine-readable and hidden by GitHub; the italic line is visible prose everywhere and cannot carry a date. |
 
 Two rules cut across all of them. A form that another renderer does not
@@ -397,7 +398,9 @@ does not matter either, because an HTML attribute name has none:
 so `ARIA-label` is honored exactly like `aria-label`.
 
 Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
-to write and it drops you out of Markdown for the enclosed content.
+to write and it drops you out of Markdown for the enclosed content. The one
+exception is a collapsible block in a file also read on GitHub — see
+Choosing between forms.
 
 ### Alerts
 
@@ -1017,6 +1020,11 @@ Supply `--css mine.css` to replace the stylesheet entirely.
 `<!doctype>`, `<html>`, `<head>` or `<body>` — for a host that supplies the
 document wrapper itself, such as a Claude Artifact, which publishes it
 unchanged.
+
+A fragment carries no script. A mermaid fence arrives as `<pre
+class="mermaid">` holding the diagram's source, which an Artifact draws; a
+host that does not run mermaid shows that source as text. Build a full
+page instead for such a host.
 
 This is a way to skip hand-writing HTML for **document-shaped** content: a
 report, a spec, a guide. If the page wants a bespoke look, an app-like layout,
