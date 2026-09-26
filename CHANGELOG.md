@@ -14,7 +14,9 @@ major version instead.
 ### Added
 
 - **`--guide`** (`AuthoringGuide`) prints the Markdown authoring guide, the
-  same reference the skill installs, and `--help` points at it. An agent
+  same reference the skill installs, and `--help` points at it. On a
+  terminal it opens in `$PAGER`, or `less`, since it runs to a thousand
+  lines; piped or redirected it is written unchanged. An agent
   without the skill could otherwise learn the syntax only by probing the
   output: in a skill evaluation, runs without it reverse-engineered the
   stylesheet's class names or ran `strings` on the binary to find the

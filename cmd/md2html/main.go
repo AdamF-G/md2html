@@ -82,7 +82,7 @@ Flags:
 		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
 		version   = fs.Bool("version", false, "print the version and exit")
-		guide     = fs.Bool("guide", false, "print the Markdown authoring guide and exit")
+		guide     = fs.Bool("guide", false, "print the Markdown authoring guide, through $PAGER on a terminal, and exit")
 
 		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
 		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
@@ -114,9 +114,9 @@ Flags:
 		return 0
 	}
 	// The guide is the same text the skill installs, for a reader that has
-	// the binary and not the skill.
+	// the binary and not the skill. Paged on a terminal; raw anywhere else.
 	if *guide {
-		stdout.Write(md2html.AuthoringGuide())
+		page(stdout, md2html.AuthoringGuide())
 		return 0
 	}
 	// Also ahead of the entry check, and for the same reasons: installing

@@ -380,7 +380,7 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
-| `--guide` | print the Markdown authoring guide — the syntax and the silent traps — and exit; the same text the skill installs |
+| `--guide` | print the Markdown authoring guide — the syntax and the silent traps — and exit; the same text the skill installs. On a terminal it opens in `$PAGER` (`less` if unset; `PAGER=cat` for none); piped or redirected, it is written unchanged |
 | `--install-skill DIR` | install the authoring skill into `DIR`, an existing skills directory any agent reads, and exit |
 | `--install-skill-user` | install it for Claude Code, under `~/.claude/skills`, instead |
 | `--install-skill-project` | install it under `./.claude/skills` instead |
