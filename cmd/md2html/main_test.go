@@ -332,6 +332,44 @@ func TestRunVersionAfterEntryConvertsNothing(t *testing.T) {
 	}
 }
 
+// --guide prints the authoring guide to stdout and nothing else, so it can
+// be piped or read straight into an agent's context.
+func TestRunGuidePrintsTheAuthoringGuide(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--guide"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if out.String() != string(md2html.AuthoringGuide()) {
+		t.Error("stdout is not the authoring guide")
+	}
+	if errb.Len() != 0 {
+		t.Errorf("nothing should go to stderr, got: %s", errb.String())
+	}
+}
+
+// Like --version, asking for the guide is the whole invocation.
+func TestRunGuideAfterEntryConvertsNothing(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": "# A"})
+	var out, errb bytes.Buffer
+	if code := run([]string{filepath.Join(root, "docs"), "--guide"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "docs", "a.html")); err == nil {
+		t.Error("--guide converted a document")
+	}
+}
+
+// --help is what an agent without the skill runs first. If it does not
+// name the guide, the syntax is only discoverable by probing the output.
+func TestRunUsageNamesTheGuide(t *testing.T) {
+	var out, errb bytes.Buffer
+	run(nil, &out, &errb)
+	head, _, _ := strings.Cut(errb.String(), "Flags:")
+	if !strings.Contains(head, "md2html --guide") {
+		t.Errorf("usage text before the flag list does not point at --guide:\n%s", head)
+	}
+}
+
 // The container warning is the one diagnostic that reaches the sink through
 // a transform rather than from Convert itself, so it is the one that goes
 // quiet if the CLI's transform list is ever assembled without the sink

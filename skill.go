@@ -80,6 +80,14 @@ func InstallSkill(parent string) ([]string, error) {
 	return written, nil
 }
 
+// AuthoringGuide returns the Markdown authoring guide: the syntax md2html
+// understands and the traps that render wrong without a warning. It is the
+// reference the skill installs, without the provenance marker, for a reader
+// that has the binary but not the skill.
+func AuthoringGuide() []byte {
+	return bytes.Clone(authoringDoc)
+}
+
 // skillFiles returns the skill's files, keyed by the name each takes inside
 // the installed directory, with the provenance marker already in place.
 //

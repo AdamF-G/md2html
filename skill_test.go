@@ -166,3 +166,15 @@ func read(t *testing.T, p string) string {
 	}
 	return string(b)
 }
+
+// --guide prints the same guide the skill installs, so an agent that finds
+// md2html without the skill reads exactly what one with it would.
+func TestAuthoringGuideIsTheRepositoryGuide(t *testing.T) {
+	want, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(AuthoringGuide()) != string(want) {
+		t.Error("AuthoringGuide is not docs/authoring.md verbatim")
+	}
+}

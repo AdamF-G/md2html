@@ -13,6 +13,12 @@ major version instead.
 
 ### Added
 
+- **`--guide`** (`AuthoringGuide`) prints the Markdown authoring guide, the
+  same reference the skill installs, and `--help` points at it. An agent
+  without the skill could otherwise learn the syntax only by probing the
+  output: in a skill evaluation, runs without it reverse-engineered the
+  stylesheet's class names or ran `strings` on the binary to find the
+  embedded guide.
 - **`--install-skill DIR`** installs the authoring skill into any agent's
   skills directory, not only Claude Code's. Nothing in the skill was ever
   specific to Claude Code; only the two install flags were, and they stay

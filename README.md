@@ -51,6 +51,9 @@ skill where no agent looks. Both files carry the same provenance marker as
 generated HTML, so a later install replaces this tool's own copy silently
 and refuses a copy you have edited, naming it.
 
+An agent without the skill is not left to guess: `md2html --help` points it
+at `md2html --guide`, which prints the same reference.
+
 ## Doesn't this exist already?
 
 Converting Markdown to HTML is a solved problem. Before building md2html we
@@ -377,6 +380,7 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
+| `--guide` | print the Markdown authoring guide — the syntax and the silent traps — and exit; the same text the skill installs |
 | `--install-skill DIR` | install the authoring skill into `DIR`, an existing skills directory any agent reads, and exit |
 | `--install-skill-user` | install it for Claude Code, under `~/.claude/skills`, instead |
 | `--install-skill-project` | install it under `./.claude/skills` instead |
@@ -385,7 +389,8 @@ recipient's agent anyway.
 
 Callouts, diagrams, heading attributes, footnotes and definition lists all
 work, and one of them fails silently if you get the syntax wrong. See
-[docs/authoring.md](./docs/authoring.md), or install [the authoring
+[docs/authoring.md](./docs/authoring.md), or `md2html --guide` for the copy
+that matches your binary, or install [the authoring
 skill](#the-authoring-skill-for-agents) so your agent has it to hand.
 
 ## Library use

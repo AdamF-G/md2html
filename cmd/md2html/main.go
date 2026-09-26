@@ -38,7 +38,7 @@ func (l *stringList) Set(v string) error {
 // run is the testable entry point. It returns the process exit code.
 //
 // stdout carries only what an invocation was itself asked to report — the
-// version, or where the skill went. Document content never goes there:
+// version, the guide, or where the skill went. Document content never goes there:
 // md2html always writes files, never streams HTML, and every diagnostic
 // goes to stderr, so a future --stdout mode needs no signature change.
 func run(args []string, stdout, stderr io.Writer) int {
@@ -56,6 +56,10 @@ single invocation without being added to a standing entry list. Links
 between documents are followed across directories, without limit unless
 --link-depth says otherwise, and never into anything --exclude names.
 Output never leaves -o.
+
+Writing the Markdown: md2html --guide prints the syntax it understands
+(callouts, figures, chips, cross-references) and the traps that render
+wrong without a warning.
 
 Flags:
 `)
@@ -78,6 +82,7 @@ Flags:
 		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
 		version   = fs.Bool("version", false, "print the version and exit")
+		guide     = fs.Bool("guide", false, "print the Markdown authoring guide and exit")
 
 		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
 		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
@@ -106,6 +111,12 @@ Flags:
 	// what a user reads here always matches what is in their output.
 	if *version {
 		fmt.Fprintf(stdout, "md2html %s\n", md2html.Version)
+		return 0
+	}
+	// The guide is the same text the skill installs, for a reader that has
+	// the binary and not the skill.
+	if *guide {
+		stdout.Write(md2html.AuthoringGuide())
 		return 0
 	}
 	// Also ahead of the entry check, and for the same reasons: installing

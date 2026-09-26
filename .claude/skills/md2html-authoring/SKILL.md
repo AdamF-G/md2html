@@ -6,9 +6,9 @@ description: Use when writing or editing Markdown that will be converted to HTML
 # Authoring Markdown for md2html
 
 **Read `authoring.md` before writing the page.** It sits beside this file in
-an installed skill, and is `docs/authoring.md` in the md2html repo. It opens
-with a quick reference from need to syntax, and every claim in it is checked
-against the binary.
+an installed skill, is `docs/authoring.md` in the md2html repo, and
+`md2html --guide` prints it anywhere. It opens with a quick reference from
+need to syntax, and every claim in it is checked against the binary.
 
 Three mistakes still give valid output, a zero exit and no warning, so check
 for them even after a skim:
