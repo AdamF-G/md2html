@@ -154,3 +154,23 @@ func TestLinkAttrsNamesAreCaseInsensitive(t *testing.T) {
 		t.Errorf("Title did not replace title\ngot: %s", got)
 	}
 }
+
+// A link or image block passes the same kind of fixed set a container does:
+// the global attributes, the element's own (goldmark's link and image
+// lists), and any data- or aria- name. An event handler is dropped, as it
+// is on a container, while the rest of the block still applies.
+func TestLinkAttrsDropsNamesOutsideTheAllowlist(t *testing.T) {
+	got := convert(t, "[x](./b.md){onclick=\"alert(1)\" data-t=1 target=_blank}\n"+
+		"![y](c.png){onerror=\"alert(1)\" loading=lazy}\n", nil)
+	if strings.Contains(got, "onclick") || strings.Contains(got, "onerror") {
+		t.Errorf("an event handler reached the element\ngot: %s", got)
+	}
+	for _, want := range []string{`data-t="1"`, `target="_blank"`, `loading="lazy"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("allowed attribute %s was dropped\ngot: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "{") {
+		t.Errorf("attribute block left in the text\ngot: %s", got)
+	}
+}

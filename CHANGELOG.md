@@ -47,6 +47,11 @@ major version instead.
   other asset link as written, so it broke in the output, with no warning.
   `CrawlOptions.OutDir` is now made absolute before any path is related to
   it, as `Doc.Out` always promised.
+- A link or image attribute block set any well-formed name, so
+  `[x](a.md){onclick="…"}` put an event handler on the `<a>`, where a
+  container drops it. Links and images now take the global attributes,
+  their own element's (`target`, `rel`, `width`, `loading` and the like),
+  and any `data-` or `aria-` name; anything else is dropped.
 
 ## v0.8.0 — 2026-09-25
 

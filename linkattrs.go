@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -21,6 +22,11 @@ import (
 // them it is prose. One holding no attributes, or a name that is not a
 // safe attribute name, stays as literal text, as "[x]{}" does for a
 // bracketed span.
+//
+// Like a container's, the names that reach the element are a fixed set:
+// goldmark's attribute list for a link or an image, and any data- or aria-
+// name. Anything else, an event handler most obviously, is dropped while
+// the rest of the block applies.
 //
 // href, src and srcset are refused, with a warning. LinkRewrite looks links up by
 // their target exactly as the source wrote it, so a block replacing one
@@ -102,6 +108,8 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		case targetAttrs[k]:
 			warn(fmt.Sprintf("%s cannot be set from an attribute block on a %s; "+
 				"write the target in the link itself", k, linkKind(el)))
+		case !linkAttrAllowed(el, k):
+			// Dropped, as on a container.
 		default:
 			setAttr(el, k, kv[k])
 		}
@@ -117,6 +125,18 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 // at. LinkRewrite and the crawler's missing-file check see only the target
 // the Markdown wrote, so none of them may come from an attribute block.
 var targetAttrs = map[string]bool{"href": true, "src": true, "srcset": true}
+
+// linkAttrAllowed reports whether name, already lowercased, may be set on
+// el from an attribute block.
+func linkAttrAllowed(el *html.Node, name string) bool {
+	if strings.HasPrefix(name, "data-") || strings.HasPrefix(name, "aria-") {
+		return true
+	}
+	if el.DataAtom == atom.Img {
+		return gmhtml.ImageAttributeFilter.Contains([]byte(name))
+	}
+	return gmhtml.LinkAttributeFilter.Contains([]byte(name))
+}
 
 // linkKind names el the way an author wrote it, for a warning.
 func linkKind(el *html.Node) string {
