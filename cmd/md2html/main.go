@@ -113,8 +113,8 @@ Flags:
 		fmt.Fprintf(stdout, "md2html %s\n", md2html.Version)
 		return 0
 	}
-	// The guide is the same text the skill installs, for a reader that has
-	// the binary and not the skill. Paged on a terminal; raw anywhere else.
+	// The guide the skill sends its reader to, and the one --help names for
+	// a reader without the skill. Paged on a terminal; raw anywhere else.
 	if *guide {
 		page(stdout, md2html.AuthoringGuide())
 		return 0

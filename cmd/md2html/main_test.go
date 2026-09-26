@@ -389,10 +389,9 @@ func TestRunReportsContainerWarningToStderr(t *testing.T) {
 	}
 }
 
-// installed returns the two paths the skill occupies under a skills parent.
-func installed(parent string) (skill, ref string) {
-	dir := filepath.Join(parent, "md2html-authoring")
-	return filepath.Join(dir, "SKILL.md"), filepath.Join(dir, "authoring.md")
+// installed returns the path the skill occupies under a skills parent.
+func installed(parent string) string {
+	return filepath.Join(parent, "md2html-authoring", "SKILL.md")
 }
 
 // --install-skill-project writes into the .claude the caller is standing
@@ -405,11 +404,9 @@ func TestRunInstallSkillProjectWritesBesideTheCaller(t *testing.T) {
 	if code := run([]string{"--install-skill-project"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
-	skill, ref := installed(filepath.Join(root, ".claude", "skills"))
-	for _, p := range []string{skill, ref} {
-		if _, err := os.Stat(p); err != nil {
-			t.Errorf("missing %s: %v", p, err)
-		}
+	skill := installed(filepath.Join(root, ".claude", "skills"))
+	if _, err := os.Stat(skill); err != nil {
+		t.Errorf("missing %s: %v", skill, err)
 	}
 	if !strings.HasPrefix(readFile(t, skill), "---\n") {
 		t.Error("installed SKILL.md does not open with its front matter")
@@ -428,7 +425,7 @@ func TestRunInstallSkillWritesUnderHome(t *testing.T) {
 	if code := run([]string{"--install-skill-user"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
-	skill, _ := installed(filepath.Join(home, ".claude", "skills"))
+	skill := installed(filepath.Join(home, ".claude", "skills"))
 	if _, err := os.Stat(skill); err != nil {
 		t.Errorf("missing %s: %v", skill, err)
 	}
@@ -489,18 +486,12 @@ func TestRunInstallSkillRefusesAHandEditedCopy(t *testing.T) {
 	if code == 0 {
 		t.Fatal("overwrote a hand-edited skill and reported success")
 	}
-	skill, ref := installed(filepath.Join(root, ".claude", "skills"))
+	skill := installed(filepath.Join(root, ".claude", "skills"))
 	if got := readFile(t, skill); !strings.Contains(got, "hand written") {
 		t.Errorf("hand-edited SKILL.md was destroyed, now:\n%s", got)
 	}
 	if !strings.Contains(errb.String(), "refusing") {
 		t.Errorf("refusal not reported: %s", errb.String())
-	}
-	// Nothing half-installed: the reference is not written either, so the
-	// directory is not left holding one file from this version beside one
-	// the user wrote.
-	if _, err := os.Stat(ref); err == nil {
-		t.Error("authoring.md was installed beside the refused SKILL.md")
 	}
 }
 
@@ -514,11 +505,9 @@ func TestRunInstallSkillIntoANamedSkillsDirectory(t *testing.T) {
 	if code := run([]string{"--install-skill", filepath.Join(".agents", "skills")}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
-	skill, ref := installed(filepath.Join(root, ".agents", "skills"))
-	for _, p := range []string{skill, ref} {
-		if _, err := os.Stat(p); err != nil {
-			t.Errorf("missing %s: %v", p, err)
-		}
+	skill := installed(filepath.Join(root, ".agents", "skills"))
+	if _, err := os.Stat(skill); err != nil {
+		t.Errorf("missing %s: %v", skill, err)
 	}
 	// Reported in full, as the .claude flags report their paths.
 	if !strings.Contains(out.String(), skill) {

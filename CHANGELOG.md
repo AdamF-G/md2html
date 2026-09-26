@@ -11,10 +11,17 @@ major version instead.
 
 ## Unreleased
 
+### Changed
+
+- The installed authoring skill is `SKILL.md` alone. It sends the agent to
+  `md2html --guide` instead of an `authoring.md` copied beside it, which
+  described whichever binary installed it rather than the one converting
+  the page. Re-installing removes that copy if an earlier version wrote it.
+
 ### Added
 
-- **`--guide`** (`AuthoringGuide`) prints the Markdown authoring guide, the
-  same reference the skill installs, and `--help` points at it. On a
+- **`--guide`** (`AuthoringGuide`) prints the Markdown authoring guide,
+  and both `--help` and the skill point at it. On a
   terminal it opens in `$PAGER`, or `less`, since it runs to a thousand
   lines; piped or redirected it is written unchanged. An agent
   without the skill could otherwise learn the syntax only by probing the

@@ -31,8 +31,8 @@ chips, cross-references — and a couple of those features fail silently when
 the syntax is slightly off. The authoring skill teaches an agent the syntax
 that works and the traps to avoid, so what it writes renders the way it
 meant. It is a plain Agent Skills skill — a `SKILL.md` with a name and
-description, and a reference beside it — so nothing in it is specific to
-one agent. The binary carries the skill and installs it for you:
+description — so nothing in it is specific to one agent. The binary carries
+the skill and installs it for you:
 
 ```bash
 md2html --install-skill-user      # Claude Code, for you, under ~/.claude/skills
@@ -40,19 +40,23 @@ md2html --install-skill-project   # Claude Code, for this repo, under ./.claude/
 md2html --install-skill DIR       # any agent, into the skills directory it reads
 ```
 
-Each writes `SKILL.md` and a copy of the [authoring
-reference](./docs/authoring.md) into a `md2html-authoring` directory, so the
-guidance always describes the version you installed — which a link to this
-repo's `main` would not. None of them creates the directory it is anchored
-to — `.claude` for the first two, `DIR` itself for the third. A missing one
+Each writes `SKILL.md` into a `md2html-authoring` directory. The skill
+tells the agent when to look and what the silent traps are, and sends it to
+`md2html --guide` for the full [authoring reference](./docs/authoring.md),
+so the guidance always describes the binary that will convert the page —
+which neither a copy installed beside the skill nor a link to this repo's
+`main` would. None of the flags creates the directory it is anchored to —
+`.claude` for the first two, `DIR` itself for the third. A missing one
 means a mistyped path, a tree that is not the agent's workspace, or a shell
 not standing where you meant it to be, and installing anyway would put the
-skill where no agent looks. Both files carry the same provenance marker as
-generated HTML, so a later install replaces this tool's own copy silently
-and refuses a copy you have edited, naming it.
+skill where no agent looks. `SKILL.md` carries the same provenance marker
+as generated HTML, so a later install replaces this tool's own copy
+silently and refuses a copy you have edited, naming it. An `authoring.md`
+left beside it by an earlier version is removed.
 
 An agent without the skill is not left to guess: `md2html --help` points it
-at `md2html --guide`, which prints the same reference.
+at `md2html --guide` too. What the skill adds is timing — it reaches an
+agent that is writing Markdown and would never run the binary itself.
 
 ## Doesn't this exist already?
 
@@ -380,7 +384,7 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
-| `--guide` | print the Markdown authoring guide — the syntax and the silent traps — and exit; the same text the skill installs. On a terminal it opens in `$PAGER` (`less` if unset; `PAGER=cat` for none); piped or redirected, it is written unchanged |
+| `--guide` | print the Markdown authoring guide — the syntax and the silent traps — and exit; the reference the skill points to. On a terminal it opens in `$PAGER` (`less` if unset; `PAGER=cat` for none); piped or redirected, it is written unchanged |
 | `--install-skill DIR` | install the authoring skill into `DIR`, an existing skills directory any agent reads, and exit |
 | `--install-skill-user` | install it for Claude Code, under `~/.claude/skills`, instead |
 | `--install-skill-project` | install it under `./.claude/skills` instead |

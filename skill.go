@@ -14,16 +14,25 @@ import (
 const skillName = "md2html-authoring"
 
 // The skill travels inside the binary, so `go install` delivers it along
-// with the tool and the guidance can never describe a version the reader
-// does not have. Both files are embedded from where they already live —
-// the skill this repo uses on itself, and the authoring guide it defers to
-// — rather than from copies kept in step by hand.
+// with the tool. It is only SKILL.md: the guide it defers to is printed by
+// `md2html --guide`, which always matches the binary doing the conversion,
+// where a copy installed beside the skill would describe whichever version
+// installed it. Both are embedded from where they already live — the skill
+// this repo uses on itself, and the authoring guide — rather than from
+// copies kept in step by hand.
 var (
 	//go:embed .claude/skills/md2html-authoring/SKILL.md
 	skillDoc []byte
 	//go:embed docs/authoring.md
 	authoringDoc []byte
 )
+
+// retiredSkillFiles are files earlier versions installed into the skill
+// directory and this one no longer does. A stale authoring.md beside the
+// skill would be read in preference to `md2html --guide`, so an install
+// removes each one that carries this tool's marker, and leaves alone one
+// that does not.
+var retiredSkillFiles = []string{"authoring.md"}
 
 // InstallSkill writes the authoring skill into a "md2html-authoring"
 // directory below parent, creating it as needed, and returns the paths
@@ -36,7 +45,7 @@ var (
 // a skill installed under a directory nobody reads is worse than no skill
 // at all.
 //
-// Every file carries this tool's provenance marker, so re-installing over
+// The skill carries this tool's provenance marker, so re-installing over
 // an earlier version is silent while a copy someone has edited is refused
 // by name. The refusal is whole: every destination is checked before
 // anything is written, so a run that refuses leaves the directory exactly
@@ -45,6 +54,9 @@ var (
 // the command — a caller assembling the same install from a bag of file
 // contents would have to know to do it, and a caller who forgot would get
 // half-written skill directories with no sign anything was wrong.
+//
+// Files an earlier version installed and this one does not, listed in
+// retiredSkillFiles, are removed once the skill is written, if ours.
 func InstallSkill(parent string) ([]string, error) {
 	dir := filepath.Join(parent, skillName)
 	files := skillFiles()
@@ -77,19 +89,33 @@ func InstallSkill(parent string) ([]string, error) {
 		}
 		written = append(written, p)
 	}
+
+	for _, name := range retiredSkillFiles {
+		p := filepath.Join(dir, name)
+		ours, err := IsOurs(p)
+		if err != nil {
+			return written, err
+		}
+		if ours {
+			if err := os.Remove(p); err != nil {
+				return written, err
+			}
+		}
+	}
 	return written, nil
 }
 
 // AuthoringGuide returns the Markdown authoring guide: the syntax md2html
-// understands and the traps that render wrong without a warning. It is the
-// reference the skill installs, without the provenance marker, for a reader
-// that has the binary but not the skill.
+// understands and the traps that render wrong without a warning. It is what
+// `md2html --guide` prints, and what the skill sends its reader to.
 func AuthoringGuide() []byte {
 	return bytes.Clone(authoringDoc)
 }
 
 // skillFiles returns the skill's files, keyed by the name each takes inside
 // the installed directory, with the provenance marker already in place.
+// There is one today; the map keeps InstallSkill's check-everything-first
+// refusal in place should that change.
 //
 // The marker cannot lead SKILL.md the way it leads generated HTML: an agent
 // parses that file's YAML front matter, which has to come first, so
@@ -98,8 +124,7 @@ func AuthoringGuide() []byte {
 // what will notice if the front matter ever grows past it.
 func skillFiles() map[string][]byte {
 	return map[string][]byte{
-		"SKILL.md":     markAfterFrontMatter(skillDoc),
-		"authoring.md": []byte(Marker() + "\n\n" + string(authoringDoc)),
+		"SKILL.md": markAfterFrontMatter(skillDoc),
 	}
 }
 

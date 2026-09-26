@@ -5,10 +5,11 @@ description: Use when writing or editing Markdown that will be converted to HTML
 
 # Authoring Markdown for md2html
 
-**Read `authoring.md` before writing the page.** It sits beside this file in
-an installed skill, is `docs/authoring.md` in the md2html repo, and
-`md2html --guide` prints it anywhere. It opens with a quick reference from
-need to syntax, and every claim in it is checked against the binary.
+**Run `md2html --guide` and read its output before writing the page.** It
+prints the authoring guide for the binary that will convert the page, so it
+cannot describe a different version. In the md2html repo the same guide is
+`docs/authoring.md`. It opens with a quick reference from need to syntax,
+and every claim in it is checked against the binary.
 
 Three mistakes still give valid output, a zero exit and no warning, so check
 for them even after a skim:
@@ -21,4 +22,4 @@ for them even after a skim:
   `::: {.house-style}` is a plain classed div; only the kind *word* form
   warns.
 
-These and the rest are under Traps in `authoring.md`.
+These and the rest are under Traps in the guide.

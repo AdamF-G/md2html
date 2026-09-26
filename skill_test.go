@@ -7,8 +7,9 @@ import (
 	"testing"
 )
 
-// installed returns the paths InstallSkill occupies under a skills parent.
-func installedPaths(parent string) (skill, ref string) {
+// installedPaths returns the path InstallSkill writes under a skills
+// parent, and the guide copy earlier versions wrote beside it.
+func installedPaths(parent string) (skill, retiredRef string) {
 	dir := filepath.Join(parent, "md2html-authoring")
 	return filepath.Join(dir, "SKILL.md"), filepath.Join(dir, "authoring.md")
 }
@@ -22,24 +23,21 @@ func install(t *testing.T, parent string) []string {
 	return got
 }
 
-// The skill is a directory: the skill file, and the reference it defers to.
-func TestInstallSkillWritesTheSkillAndItsReference(t *testing.T) {
+// The skill is SKILL.md alone. The guide it defers to comes from
+// `md2html --guide`, so no copy of it is installed to go stale.
+func TestInstallSkillWritesOnlyTheSkill(t *testing.T) {
 	parent := t.TempDir()
 	got := install(t, parent)
 
 	skill, ref := installedPaths(parent)
-	for _, p := range []string{skill, ref} {
-		if _, err := os.Stat(p); err != nil {
-			t.Errorf("missing %s: %v", p, err)
-		}
+	if len(got) != 1 || got[0] != skill {
+		t.Errorf("InstallSkill reported %v, want only %s", got, skill)
 	}
-	if len(got) != 2 {
-		t.Errorf("InstallSkill reported %d paths, want 2: %v", len(got), got)
+	if _, err := os.Stat(skill); err != nil {
+		t.Errorf("missing %s: %v", skill, err)
 	}
-	for _, p := range got {
-		if _, err := os.Stat(p); err != nil {
-			t.Errorf("reported a path it did not write: %s", p)
-		}
+	if _, err := os.Stat(ref); err == nil {
+		t.Error("a copy of the guide was installed beside the skill")
 	}
 }
 
@@ -89,32 +87,49 @@ func TestInstalledSkillMarkerCarriesRepositoryAndVersion(t *testing.T) {
 	}
 }
 
-// The bundled reference is the repo's own authoring guide, not a summary
-// that drifts: the skill defers to it for every detail, and an installed
-// copy has no repo to read it from.
-func TestInstalledReferenceIsTheRepositoryAuthoringGuide(t *testing.T) {
-	want, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parent := t.TempDir()
-	install(t, parent)
-	_, ref := installedPaths(parent)
-	if !strings.Contains(read(t, ref), string(want)) {
-		t.Error("bundled authoring.md is not docs/authoring.md verbatim")
-	}
-}
-
-// The skill's own text must send a reader to the bundled copy. Naming only
-// "docs/authoring.md" is the failure this guards: that path is real in this
-// repo and absent everywhere the skill is installed, so the one reader who
-// needs the pointer is the one it fails.
-func TestInstalledSkillPointsAtTheBundledReference(t *testing.T) {
+// The skill's own text must send a reader to `md2html --guide`. Naming
+// only "docs/authoring.md" is the failure this guards: that path is real in
+// this repo and absent everywhere the skill is installed, so the one reader
+// who needs the pointer is the one it fails.
+func TestInstalledSkillPointsAtTheGuideFlag(t *testing.T) {
 	parent := t.TempDir()
 	install(t, parent)
 	skill, _ := installedPaths(parent)
-	if !strings.Contains(read(t, skill), "`authoring.md`") {
-		t.Error("SKILL.md names no reference an installed copy can actually open")
+	if !strings.Contains(read(t, skill), "`md2html --guide`") {
+		t.Error("SKILL.md does not point at md2html --guide")
+	}
+}
+
+// An upgrade over an install that still carries the guide copy removes it:
+// left behind, it would be read in place of the guide for this binary.
+func TestInstallSkillRemovesItsRetiredGuideCopy(t *testing.T) {
+	parent := t.TempDir()
+	_, ref := installedPaths(parent)
+	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ref, []byte(Marker()+"\n\n# old guide\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	install(t, parent)
+	if _, err := os.Stat(ref); err == nil {
+		t.Error("the retired authoring.md from an earlier install is still there")
+	}
+}
+
+// A file of that name the user wrote is theirs, and survives.
+func TestInstallSkillKeepsAHandWrittenAuthoringFile(t *testing.T) {
+	parent := t.TempDir()
+	_, ref := installedPaths(parent)
+	if err := os.MkdirAll(filepath.Dir(ref), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ref, []byte("my notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	install(t, parent)
+	if body := read(t, ref); body != "my notes\n" {
+		t.Errorf("hand-written authoring.md was changed, now:\n%s", body)
 	}
 }
 
@@ -126,10 +141,9 @@ func TestInstallSkillReplacesItsOwnEarlierCopy(t *testing.T) {
 	install(t, parent)
 }
 
-// A copy the user has edited carries no marker and is never destroyed — and
-// because every destination is checked before anything is written, the
-// refusal leaves no directory holding one file from this version beside one
-// the user wrote.
+// A copy the user has edited carries no marker and is never destroyed, and
+// the refusal comes before anything else is touched — including removing a
+// retired file.
 func TestInstallSkillRefusesAHandEditedCopyAndWritesNothing(t *testing.T) {
 	parent := t.TempDir()
 	skill, ref := installedPaths(parent)
@@ -137,6 +151,9 @@ func TestInstallSkillRefusesAHandEditedCopyAndWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(skill, []byte("---\nname: mine\n---\n\nhand written\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(ref, []byte(Marker()+"\n\n# old guide\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,8 +170,8 @@ func TestInstallSkillRefusesAHandEditedCopyAndWritesNothing(t *testing.T) {
 	if body := read(t, skill); !strings.Contains(body, "hand written") {
 		t.Errorf("hand-edited SKILL.md was destroyed, now:\n%s", body)
 	}
-	if _, err := os.Stat(ref); err == nil {
-		t.Error("the reference was installed beside the refused SKILL.md")
+	if _, err := os.Stat(ref); err != nil {
+		t.Error("the retired authoring.md was removed although the install was refused")
 	}
 }
 
@@ -167,8 +184,8 @@ func read(t *testing.T, p string) string {
 	return string(b)
 }
 
-// --guide prints the same guide the skill installs, so an agent that finds
-// md2html without the skill reads exactly what one with it would.
+// --guide prints the repo's own guide, not a summary that drifts: it is
+// what the skill sends every reader to.
 func TestAuthoringGuideIsTheRepositoryGuide(t *testing.T) {
 	want, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
 	if err != nil {
