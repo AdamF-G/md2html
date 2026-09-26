@@ -286,6 +286,16 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		}
 		entryAbs = append(entryAbs, p)
 	}
+	// Doc.Out is promised absolute, and every relation computed from it —
+	// most of all the asset rewrite — needs it so: filepath.Rel refuses to
+	// relate a relative path to an absolute one.
+	if opt.OutDir != "" {
+		out, err := filepath.Abs(opt.OutDir)
+		if err != nil {
+			return nil, err
+		}
+		opt.OutDir = out
+	}
 	base := commonAncestor(entryAbs)
 	excluded, excludeWarnings := resolveExcludes(opt.Exclude, base)
 

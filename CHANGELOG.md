@@ -41,6 +41,13 @@ major version instead.
   page's own marker. `toc: none` in front matter opts one page out.
   `IsAutoTOCMode` exposes the check.
 
+### Fixed
+
+- A relative `-o`, as in `md2html ./docs -o ./site`, left every image and
+  other asset link as written, so it broke in the output, with no warning.
+  `CrawlOptions.OutDir` is now made absolute before any path is related to
+  it, as `Doc.Out` always promised.
+
 ## v0.8.0 — 2026-09-25
 
 ### Added

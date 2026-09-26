@@ -947,3 +947,23 @@ func TestCrawlIgnoresImageInsideFrontMatter(t *testing.T) {
 		}
 	}
 }
+
+// A relative OutDir is how the CLI passes `-o ./site`. Doc.Out promises an
+// absolute path, and the asset rewrite relies on it: filepath.Rel between a
+// relative output directory and an absolute asset fails, and the asset was
+// left as written — a broken image with no warning.
+func TestCrawlRewritesAssetsForARelativeOutDir(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/a.md":      "![f](./img/f.png)",
+		"docs/img/f.png": "png",
+	})
+	t.Chdir(root)
+	res := mustCrawl(t, CrawlOptions{Entries: []string{"docs"}, OutDir: "site", Depth: -1})
+	d := res.Docs[0]
+	if !filepath.IsAbs(d.Out) {
+		t.Errorf("Doc.Out = %q, want an absolute path", d.Out)
+	}
+	if got, want := d.LinkMap["./img/f.png"], "../docs/img/f.png"; got != want {
+		t.Errorf("asset link = %q, want %q", got, want)
+	}
+}
