@@ -1,241 +1,335 @@
 # Writing Markdown for md2html
 
-How to write `.md` that converts well with `md2html`. Every claim here was
-checked against the binary; where something silently does nothing, it is
-called out rather than left to be discovered.
+How to write `.md` that converts well with `md2html`. `md2html --guide`
+prints this text for the binary you have, and `md2html --version` names
+that binary. Read the quick reference and the silent traps; the rest is
+detail to look up.
 
 [[toc]]
 
 ## Quick reference
 
-What to write for each need. The sections below give the detail, and
-[Choosing between forms](#choosing-between-forms) says which spelling to pick where there are several.
+The most common needs first. Each row is the form to write; where a
+construct has other spellings, they are under
+[Choosing between forms](#choosing-between-forms).
 
 | Need | Write |
 |---|---|
-| Callout | `::: callout` … `:::` |
-| Warning | `> [!WARNING]` in a repo file; `::: warning` otherwise |
-| Collapsible block | `::: details Title` … `:::`; in a file read on GitHub, `<details class="container">` with `<summary>` (see Choosing between forms) |
-| Collapsible aside | `::: aside Title` … `:::` |
-| Titled container with classes | `:::aside[Title]{#id .cls}` … `:::` |
-| Worked example | `::: example Title` … `:::` |
-| Named nav landmark | `::: nav {aria-label="Section"}` … `:::` |
-| Stat tiles outside a figure | `::: stats` with `99.9%` / `: uptime` / `: detail` … `:::` |
-| Term grid, titled panel | `::: defs` (a definition list) / `::: group[Title]` … `:::` |
-| Status marker | `[proven]` for the six status words; `[any label]{.chip}` otherwise |
-| Any classed span | `[text]{.cls}` |
-| Attributes on a link or image | `[text](./a.md){aria-current=page}`, `![alt](a.png){width=50%}`; no space before `{`; not `href`/`src`/`srcset`; at the end of a heading line it applies to the heading |
-| Cross-reference | `§4.2` (resolves to the heading numbered 4.2) |
-| Contents list | `[[toc]]` alone on a line (`[TOC]` also accepted) |
-| Title/subtitle/date | `---` front matter; an italic line under the H1 shows elsewhere but carries no date |
-| Page language | `lang: de` in front matter, or `--lang` for the whole run; default `en` |
-| Contents list pinned beside the text | `toc: float` in front matter, or `--toc float` for the whole run; `toc: inline` opts a page out |
-| No contents list on a page, even under `--autotoc` | `toc: none` in front matter |
-| Contents list's name, non-English page | `toc-title: Inhalt` in front matter; default `Table of Contents` |
-| Code caption | ` ```go caption="server.go" ` — keeps GitHub highlighting |
-| Code caption, Pandoc form | ` ```{.go caption="server.go"} ` — needed to escape a `"` |
-| Stable anchor | `## Title {#my-id}` |
-| Diagram | `` ```mermaid `` fence |
-| Hand-laid-out figure | ` ```fig ` fence, YAML body |
-| File or config hierarchy | `tree:` item in a ` ```fig ` fence, one node per line |
-| Context above or below a split | `split:` item between other items in a ` ```fig ` fence |
-| Cross-document link | `[x](./other.md)` — never `.html` |
-| Bare fragment, no page shell (e.g. a Claude Artifact) | `--fragment` |
+| Link to another page | `[Setup](./setup.md)`, never `./setup.html` |
+| Title, subtitle, date | `# Title` as the first heading; `subtitle:` and `date:` in front matter |
+| Contents list | `[[toc]]` alone on a line |
+| Note or tip | `> [!NOTE]` on its own line, then `> text` |
+| Warning | `> [!WARNING]` on its own line, then `> text` |
+| Callout with a title | `::: callout Title` … `:::` (`::: warning Title` for a warning) |
+| Collapsible block | `::: details Title` … `:::` |
+| Code block with a caption | ```` ```go {caption="server.go"} ```` |
+| Diagram | a ```` ```mermaid ```` fence |
+| Stable heading anchor | `## Title {#my-id}` |
+| Cross-reference to a numbered heading | `§4.2` |
+| Status badge | `[draft]`, `[proven]`, `[verified]`, `[designed]`, `[planned]`, `[deprecated]` |
+| Any other badge | `[needs review]{.chip}` |
+| Aside or worked example | `::: aside Title` or `::: example Title` … `:::` |
+| Stat tiles, term grid, titled panel | `::: stats`, `::: defs`, `::: group Title` … `:::` |
+| Navigation block | `::: nav {aria-label="Section"}` … `:::` |
+| Hand-laid-out figure | a ```` ```fig ```` fence with a YAML body |
+| Page language | `lang: de` in front matter |
+| Output for a host that supplies the page (a Claude Artifact) | `--fragment` |
 
-## Why write Markdown instead of HTML
+## Silent traps
 
-Converting this repo's own docs, Markdown source against generated HTML:
+Each of these gives valid output, a zero exit and no warning. Check for them
+before you finish.
 
-| Document | Markdown | HTML | Ratio |
-|---|---|---|---|
-| README.md | 15.5 KB | 39.1 KB | 2.5x |
-| design spec | 14.7 KB | 37.5 KB | 2.5x |
-| implementation plan | 104 KB | 143 KB | 1.4x |
+1. **A fence inside a fence needs a longer outer fence.** Showing a
+   three-backtick block takes four backticks around it, and showing a `:::`
+   container inside a container takes `::::` on the outer one. See
+   [Nesting fences](#nesting-fences).
+2. **An unclosed `:::` container runs to the end of the document**, headings
+   and all.
+3. **Link to the `.md` source, never the `.html` output.** See
+   [Links and images](#links-and-images).
+4. **Only the first class names a container's kind.** `::: {.compact
+   .warning}` is a plain, unstyled div; write `::: warning {.compact}`.
+5. **A container class outside the shipped kinds is unstyled.**
+   `::: {.house-style}` is a plain classed div. Only the bare-word form,
+   `::: house-style`, warns.
+6. **`title:` in front matter sets only the browser tab.** Still write the
+   `# Title` heading.
+7. **Front matter must be the first bytes of the file and closed by `---`.**
+   After a byte order mark, or without the closing line, it renders as body
+   text.
+8. **`[word]` next to `{…}` becomes a span.** `map[key]{value}` in prose
+   renders `map<span>key</span>` and loses `{value}`. Put it in a code span.
+9. **A backslash does not escape a status word or `§`.** `\[draft]` is
+   still a badge. Put it in a code span.
+10. **Unquoted YAML in a `fig` label breaks or truncates.** `box: Step #3`
+    renders "Step". See [Quote labels](#quote-labels).
+11. **A backtick in a code caption breaks every fence after it.** Use a
+    `~~~` fence for that block.
+12. **A caption on a `mermaid` fence is dropped.** Caption the diagram in
+    prose.
+13. **A `|` inside a code span in a table still splits the cell.** Write
+    `\|`.
+14. **Markdown inside an HTML block needs a blank line before and after
+    it.** Without them, `**bold**` stays literal.
+15. **`## 4.2. Title` claims no number.** Anything but a space after the
+    number, `.`, `)` or `:`, stops `§4.2` from linking to it.
+16. **A fragment in a link is never checked.** `./b.md#no-such` passes.
+17. **Two explicit `{#same}` ids both stay.** The page then has duplicate
+    ids, and links go to the first.
 
-The ratio shrinks as documents grow, because the stylesheet is a fixed cost.
-So "Markdown is cheaper to write" is true but modest — 1.4x to 2.5x on the
-markup itself.
+## Page structure
 
-The larger saving is the part that does not appear in that table: you do not
-write the design layer at all. No typography scale, no dark-mode palette, no
-responsive rules, no table overflow handling. That is one embedded stylesheet,
-written once and fixed once. Hand-rolling a stylesheet per document means
-re-deriving those decisions each time, and re-introducing the same bugs — two
-early fixes in this repo were a stylesheet that let long inline code
-widen the page, and a slug function that dropped every non-ASCII character.
-Both were fixed in one place, for every document.
+### Front matter
 
-## What conversion does to your document
+A `---` block at the very top of the file, of flat `key: value` lines:
 
-Markdown is parsed, re-parsed into a real HTML tree, transformed, then wrapped
-in a page. Because it is a real tree, the transforms reach hand-written HTML in
-your Markdown as well as generated markup.
+```markdown
+---
+title: Rollback runbook
+subtitle: What to do when a deploy fails
+date: 2026-09-11
+lang: en-GB
+toc: float
+toc-title: Contents
+---
 
-You get, without asking:
+# Rollback runbook
+```
 
-- every heading gets a stable `id` and a hover anchor link
-- every table is wrapped in a horizontal scroll container
-- off-site links get `target="_blank" rel="noopener noreferrer"`, added to
-  any `rel` you wrote, and a `target` you wrote is kept
-- `.md` links become `.html` links that resolve inside the output tree
-- a `<title>` from the first `<h1>`, or the filename if there is none
-- the Markdown itself, verbatim and front matter included, hidden at the end
-  of the page with Copy and Download controls, so a reader can hand it to
-  their own agent (`--no-source` leaves it out; `--fragment` output never
-  has it)
+| Key | Effect |
+|---|---|
+| `title` | The `<title>`, shown in the browser tab. Nothing on the page. |
+| `subtitle` | A `<p class="subtitle">` under the first `<h1>`. |
+| `date` | A `<p class="docdate">` under the subtitle. |
+| `lang` | The page's `<html lang>`. Overrides `--lang`; default `en`. |
+| `toc` | The contents list's layout: `inline`, `float` or `none`. See [Contents list](#contents-list). |
+| `toc-title` | The contents list's name for screen readers. Default `Table of Contents`. |
 
-## Links
+`lang` is what screen readers use to pick a voice. A value that is not a
+language tag, such as `en_US`, warns and is ignored.
 
-**Link to `.md`, never to `.html`.** Write the source path; the crawler
-rewrites it to the emitted page and computes the relative path for you.
+Keys are case-insensitive, a value may be quoted (`title: "Rollback: why"`),
+and a repeated key keeps its last value. Any other key does nothing on the
+page, but it still travels in the embedded source unless you build with
+`--no-source`.
+
+The block must be flat. A nested value, a YAML comment, or a line without a
+colon makes the whole block fail to parse, and it renders as body text with
+a warning.
+
+Without front matter, an italic line directly under the first `<h1>` becomes
+the subtitle. That also happens to an italic line you meant as prose, such
+as `*Draft, do not circulate*`; give the page a `subtitle:` or put the
+line lower down.
+
+### Title
+
+Write the title as the first `# heading`. The page `<title>` comes from
+front matter `title:`, else from that first `<h1>`, else from the file name.
+
+### Headings and anchors
+
+Every heading gets an `id` and a hover anchor link. Slugs follow the rules
+GitHub, GitLab and Pandoc share: lower case, punctuation dropped, each space
+a hyphen, nothing merged afterwards. `## Sizes: small × large` is
+`#sizes-small--large`. Letters and digits from any script are kept, so
+`## はじめに` is `#はじめに`; a heading with none gets `section-N`. A repeated
+heading is numbered: the second `## Setup` is `#setup-1`. A status badge in
+a heading stays out of its slug.
+
+For an anchor that survives rewording, give the heading an explicit id:
+
+```markdown
+## Breaking change in v2 {#breaking-v2}
+```
+
+A heading's attribute block takes an `id`, classes, and `key="value"`
+pairs. Quote every value: `{data-step="1"}`, since an unquoted number
+becomes an empty value. It takes the common global attributes (`title`,
+`lang`, `dir`, `role`, `style`…) and `data-` names; `aria-` names and
+event handlers are dropped. An explicit id is never rewritten, and
+generated slugs avoid it.
+
+An attribute block at the end of a heading line belongs to the heading,
+even straight after a link: `## See [docs](./docs.md){.ext}` puts the class
+on the `<h2>`.
+
+### Contents list
+
+`[[toc]]` alone in its paragraph becomes a `<nav class="toc">` listing the
+page's headings, each linking to its anchor. `[TOC]` works too, in any
+case. Depth shows as `›` marks, up to three.
+
+```markdown
+[[toc]]
+```
+
+On a long page, `toc: float` in front matter pins the list beside the text
+on a wide screen. On a narrow screen and in print it is the inline list
+again. `--toc float` does the same for a whole run, and `toc: inline` opts
+one page out. Only the first list on a page floats.
+
+A run can add the list itself. `--autotoc all` gives every page without a
+marker one, and `--autotoc long` only pages over 1000 lines or five
+headings. It goes under the title, subtitle and date, and floats unless
+`--toc` or the page's `toc:` says otherwise. `toc: none` opts one page out.
+
+Things that leave no list:
+
+- `toc: float` or `toc: inline` without a marker, unless `--autotoc` adds
+  a list. Front matter warns; `--toc float` does not.
+- A marker inside a code span or a link, or sharing its paragraph with
+  other text. It stays literal.
+- A page with no headings, or built with `--no-anchors`. The marker stays
+  as literal text.
+- GitLab's `[[_TOC_]]`, which is not recognized.
+
+## Links and images
+
+**Link to the `.md` file.** md2html rewrites it to the page it emits and
+works out the relative path:
 
 ```markdown
 [Auth](./api/auth.md)          -> href="api/auth.html"
-[Setup](./api/auth.md#setup)   -> href="api/auth.html#setup"   fragment kept
-[Home](../index.md)            -> resolved, may still be inside the tree
+[Setup](./api/auth.md#setup)   -> href="api/auth.html#setup"
 ```
 
-A `.html` link is left exactly as written — it is not a document link, so
-nothing rewrites it, and it will point at a file that may not exist.
+Reference-style links are rewritten the same way. `.md` and `.markdown` are
+document extensions; every other file is an asset.
 
-Recognized document extensions are `.md` and `.markdown`. Everything else is an
-asset.
+- **A link to a missing `.md` warns** and is left as written.
+- **An `.html` link is an asset link, not a page link.** If the file is
+  missing it warns; if it exists, `-o` points the link back at the source
+  tree. It is never matched to the page md2html emits.
+- **A link starting with `/` is a filesystem path**, not a site path, so it
+  usually warns that the target does not exist. Use relative links.
+- **A link to a directory** points at the directory, not at an index page
+  inside it. Link the file.
+- **A query string on a document link is dropped.** `./b.md?v=2` becomes
+  `b.html`. Fragments are kept.
+- **Links inside code are inert.** A fenced example containing
+  `[a](./nope.md)` is not followed and does not warn.
 
-**Assets are linked, never copied.** An image stays where it is, and the link
-is rewritten to point back at the original file:
-
-```markdown
-![Arch](./img/arch.png)   -> src="../../docs/img/arch.png"
-```
-
-The consequence: the output tree is self-contained for *documents* but not for
-*assets*. Moving `site/` on its own breaks images. Moving `site/` and the
-source tree together keeps them working.
-
-**Following is unbounded, by default.** Any `.md` you link to is pulled into
-the build, however far it is, including across directory boundaries. `--depth`
-bounds only how deep directory *seeding* goes — it never limits link
-following. `--link-depth` does, if set: it caps how many hops from a seed a
-link may travel, and left at its default (`-1`) following stays unbounded. One
-`../` link into a large repo pulls that repo's reachable docs in; the run
-prints a summary of everything it pulled in from outside.
-
-**Links inside code fences are inert.** A fenced example containing
-`[a](./nope.md)` is not followed and produces no warning. You can document link
-syntax safely.
-
-**A link to a missing `.md` warns and is left alone.** The build continues.
+**Assets are linked, not copied.** With `-o`, an image link is rewritten to
+point back at the original file, so moving the output tree on its own
+breaks images. Without `-o`, each page sits beside its source and links are
+left as written. `<img src>` and Markdown images are rewritten and checked;
+`srcset`, `<video poster>`, `<track src>` and `<object data>` are not.
 
 **A link or image can carry attributes.** Write a `{#id .class key=value}`
-block straight after it, with no space. This is Pandoc's `link_attributes`:
+block straight after it, with no space (Pandoc's `link_attributes`):
 
 ```markdown
-[Intro](./intro.md){aria-current=page}  -> <a href="intro.html" aria-current="page">
-![Chart](./chart.png){width=50% .wide}  -> <img ... class="wide" width="50%">
+[Intro](./intro.md){aria-current=page}   -> <a href="intro.html" aria-current="page">
+![Chart](./chart.png){width=50% .wide}   -> <img ... class="wide" width="50%">
 ```
 
-The usual reason on a link is `aria-current="page"`, marking the page you
-are on inside a hand-written `::: nav`. md2html cannot work that out itself,
-because only you know which page a navigation block is on. A block with a
-space before it, with no attributes in it (`{}`), or with something that
-cannot be an attribute name (`{{version}}`, `{a, b}`) stays as literal text.
-`href`, `src` and `srcset` cannot be set this way, and warn: write the target in the
-link, where `.md` rewriting can see it.
+It takes the global attributes, the element's own (`target`, `rel`,
+`download` on a link; `width`, `height`, `loading` on an image), and any
+`data-` or `aria-` name. Anything else, such as an event handler, is
+dropped. `href`, `src` and `srcset` warn: write the target in the link. A
+block with a space before it, with nothing in it, or with something that is
+not an attribute name (`{{version}}`) stays as literal text.
 
-## Features, with the syntax that actually works
+Off-site links get `target="_blank" rel="noopener noreferrer"`, added to
+any `rel` you wrote.
 
-### Choosing between forms
+## Callouts and containers
 
-Seven constructs accept more than one spelling. None of the alternatives is
-deprecated and none is a dialect of ours that others must learn: each exists
-because a different ecosystem already writes it that way, and a document
-written for that ecosystem should not have to be rewritten to pass through
-this tool.
+### Alerts
 
-Which one to write depends on where the file is *read*, which is usually not
-only here.
-
-| Construct | Forms | Choose by |
-|---|---|---|
-| Warning, note | `> [!WARNING]` — `::: warning` | **Where it is read.** The alert renders natively on GitHub, Obsidian and Typora, and degrades to an ordinary blockquote with a visible marker anywhere else. `::: warning` shows up on GitHub as literal text. In a repository file the alert is almost always right. |
-| Container kind | `::: callout` — `::: {.callout}` — `::: callout {#id .class}` | **Who else parses it.** The braced form is Pandoc's `fenced_divs`, so a document shared with Pandoc, kramdown or MyST keeps its class there — which is also why the braced form's first class token is what selects the kind, not some other marker. The kind-outside-braces form is the clearest of the three to read, but it is md2html's own invention: Pandoc does not parse `::: callout {#id}` as a fenced div at all. Neither unbraced form renders on GitHub. |
-| Container title | `::: aside Why` — `:::aside[Why]` | **Whether the title needs to be unambiguous next to attributes.** Every container form now carries a title — see Containers. The label form is still the only one that *delimits* it, so it is what to reach for when a title might itself end in something that looks like a brace group, or when a directive-reading tool (remark-directive, Docusaurus) needs to parse the title out on its own. It is the CommonMark generic directives syntax. |
-| Chip, span | `[proven]` — `[proven]{.chip}` — `[c:proven]` | **Vocabulary.** The bare form only works for the six status words. The attribute form is Pandoc's `bracketed_spans`, works for any label or class, and is the form to prefer in new writing. `[c:…]` predates it and still parses. |
-| Code caption | `` ```go caption="x" `` — `` ```{.go caption="x"} `` | **Syntax highlighting elsewhere, and quoting.** GitHub reads the first word as the language and ignores the rest, so the brace-free form still highlights there; the braced form does not highlight on GitHub but is what Pandoc and MyST read, and is the only one that can escape a `"` inside the caption. |
-| Contents list | `[[toc]]` — `[TOC]` | **Whether the source is read on GitLab.** GitLab renders its own list from `[TOC]`, and GitHub from neither: there, either marker shows as literal text, and the reader uses GitHub's own outline button instead. Otherwise pick for the humans reading the source: `[[toc]]` is markdown-it and VitePress, `[TOC]` is Python-Markdown, MkDocs, Typora and StackEdit. This repo writes `[[toc]]`. |
-| Collapsible block | `::: details Title` — `<details class="container">` | **Whether it is read on GitHub.** `::: details` shows there as literal text with its body always open. Raw `<details class="container"><summary>Title</summary>`, with a blank line after the `<summary>` line and before `</details>` so the body is still Markdown, renders here exactly as `::: details` does and collapses on GitHub too. Without the `container` class it is unstyled here. |
-| Title, subtitle | front matter — an italic line under the `<h1>` | **Whether the metadata is data.** Front matter is machine-readable and hidden by GitHub; the italic line is visible prose everywhere and cannot carry a date. |
-
-Two rules cut across all of them. A form that another renderer does not
-understand should still *degrade* to something readable rather than to
-noise — which is the whole argument for the alert syntax over `::: warning`.
-And nothing here is exclusive: the forms mix freely within a document, so
-there is no need to convert a file wholesale to one style.
-
-### Tables
-
-Plain GFM. Wrapped in `<div class="table-scroll">` automatically — do not wrap
-one yourself.
+Use GitHub's alert syntax for a note or a warning. It renders natively on
+GitHub, Obsidian and Typora, and as a blockquote everywhere else.
 
 ```markdown
-| Option | Default |
-|---|---|
-| `--depth` | unlimited |
+> [!WARNING]
+> This overwrites state.
 ```
+
+`NOTE`, `TIP` and `IMPORTANT` render as a `callout`; `WARNING` and
+`CAUTION` as a warning callout. The marker must be upper case and alone on
+its line: `[!note]`, `[!HINT]` and `> [!NOTE] Title` stay ordinary
+blockquotes. The box shows no "Note" or "Warning" label, as GitHub does, so
+do not write text that relies on one. An alert takes no title, id or class;
+use a container when you need one.
 
 ### Containers
 
-Fenced containers become `<div>`, a `<nav>` landmark, or — for two
-collapsible kinds — `<details>`. Bare and braced forms are equivalent in
-element and classes:
+A container is a block between `:::` fences. Write the kind after the
+opening fence, then an optional title, then an optional attribute block:
 
+```markdown
+::: warning Before you migrate
+Back up the database first.
+:::
+
+::: aside Why this matters {#why .compact}
+Because.
+:::
+```
+
+The space after `:::` is optional. The opening fence needs a kind or an
+attribute block: `:::` alone is literal text, and so is the closing line of
+a container that was never opened.
+
+| Kind | Element | Use it for |
+|---|---|---|
+| `callout` | `<div class="callout">` | A highlighted note that needs a title, id or class |
+| `warning` | `<div class="callout callout-warning">` | The same, for a warning |
+| `card` | `<div class="card">` | A bordered panel for a self-contained item |
+| `details` | `<details class="container">` | Content the reader expands on demand |
+| `aside` | `<details class="container aside">` | A tangent, collapsed by default |
+| `example` | `<details class="container example">` | A worked example; its summary reads "Example — Title" |
+| `stats` | `<div class="stats">` | A row of stat tiles |
+| `defs` | `<div class="defs">` | A term/definition grid |
+| `group` | `<div class="group">` | A titled panel |
+| `nav` | `<nav>` | A navigation landmark; adds no class |
+
+`details` with no title shows "Details"; `aside` with none shows "Aside".
+
+**Other spellings.** Pandoc's braced form, `::: {.warning #id}`, and the
+directive form, `:::aside[Title]{#id}`, both work. Use the braced form,
+with no title, only in a file that Pandoc also reads; every titled form
+breaks there. Use the directive form when a title ends in something shaped
+like `{…}`: in any other form a trailing brace group is read as
+attributes, so `::: card The {x}` is titled "The".
+
+**Only the first class names the kind.** In the braced form,
+`{.warning .compact}` is a warning, but `{.compact .warning}` is a plain
+`<div class="compact warning">`, unstyled, with no warning. Put the kind
+first, or outside the braces.
+
+**Unknown kinds.** `::: house-style` warns and emits an unclassed `<div>`,
+with the title kept as a plain paragraph. `::: {.house-style}` emits a
+classed, unstyled `<div>` without a warning, as a hook for a stylesheet you
+supply. `::: {#only-an-id}` is an unclassed `<div>`.
+
+**Attributes.** The block takes an id, classes, the global attributes and
+any `data-` or `aria-` name, case-insensitively. Anything else, such as an
+event handler, is dropped, as is any name starting `data-fence`, which md2html
+reserves. A bare key (`{data-flag}`) and a single-quoted value work.
+Classes merge with the kind's own.
+
+**Nesting.** Containers nest. An inner `:::` closes the nearest open
+container, so a container whose body shows `:::` source, inside a code
+block or not, needs a longer outer fence:
+
+````markdown
+:::: example Writing a callout
 ```markdown
 ::: callout
-This renders as a styled callout box.
-:::
-
-::: {.callout}
-Same thing.
+Text.
 :::
 ```
+::::
+````
 
-The shipped vocabulary is ten kinds: `callout`, `warning`, `card`,
-`stats`, `defs` and `group` (`<div>`), `details`, `aside` and `example`
-(`<details>`), and `nav` (`<nav>`):
+### stats, defs and group
 
-```markdown
-::: warning
-Overwrites state.
-:::
-```
-
-renders `<div class="callout callout-warning">`.
-
-**`nav` adds no class of its own** — every other kind styles an element;
-this one's whole job is to *be* one, for a landmark a bare `<ul>` of links
-would not announce as such. `[[toc]]` already emits its own `<nav
-class="toc">`, so a hand-written `nav` container is almost always the
-*second* `<nav>` on the page — which is exactly when it needs a name, since
-assistive tech otherwise has no way to tell two landmarks apart:
-
-```markdown
-::: nav {aria-label="Section contents"}
-- [One](./one.md){aria-current=page}
-- [Two](./two.md)
-:::
-```
-
-renders `<nav aria-label="Section contents">`, with the link to the page
-you are on marked `aria-current="page"` (see Links).
-
-**`stats`, `defs` and `group` are the figure kinds of the same names as
-containers.** Use them whenever one does not sit inside a diagram, and keep
-the figure form for when it does. They look the
-same as their [structured figure](#structured-figures) forms, but each
-entry is ordinary Markdown: a list, a code span, a second paragraph. `stats`
-and `defs` hold a definition list. In `stats`, each term is a tile's value,
-its first definition the label, and an optional second definition a detail
-line:
+`stats` and `defs` hold a definition list. In `stats` each term is a
+tile's value, its first definition the label, and an optional second
+definition a detail line. Either one without a definition list warns.
 
 ```markdown
 ::: stats
@@ -252,506 +346,93 @@ fence
 : a line of colons
 :::
 
-::: group[Ingest]
+::: group Ingest
 Parse each file, then validate it.
 :::
 ```
 
-A `stats` or `defs` container without a definition list still renders, and
-warns. A `group`'s title is its container title; the figure form's `note`,
-`foot` and `accent` have no container equivalent, because a paragraph or a
-class already says each of them.
+These look the same as the `fig` items of the same names. Use the container
+unless the item sits inside a diagram: its entries are ordinary Markdown,
+and on GitHub it still reads as a definition list.
 
-**Every form carries a title now.** Write it on the fence's opening line,
-delimit it in brackets, or put it after a braced attribute block — these
-all render the same `<summary>Why this matters</summary>`:
+### nav
+
+`::: nav` makes a `<nav>` landmark. Name it with `aria-label`, since the
+contents list is already a `<nav>` and screen readers need to tell them
+apart. Mark the current page on its link:
 
 ```markdown
-::: aside Why this matters
-Because.
-:::
-
-:::aside[Why this matters]
-Because.
-:::
-
-::: {.aside} Why this matters
-Because.
-:::
-
-::: aside Why this matters {#why .compact}
-Because.
+::: nav {aria-label="Section contents"}
+- [One](./one.md){aria-current=page}
+- [Two](./two.md)
 :::
 ```
 
-and the last of those also carries the id and class onto the `<details>`,
-same as the label form below.
+### Collapsible blocks read on GitHub
 
-The label form is the directive syntax from the CommonMark generic
-directives proposal, as implemented by remark-directive and used by
-Docusaurus. It is still the one to reach for when the title needs to stay
-unambiguous next to an id or classes, because it *delimits* the title
-rather than reading to the end of the line:
+`::: details` shows on GitHub as literal text with its body always open.
+For a file read there too, write the HTML, with a blank line after
+`<summary>` and before `</details>` so the body stays Markdown:
 
 ```markdown
-:::aside[Why this matters]{#why .compact}
+<details class="container">
+<summary>Title</summary>
+
+Body in **Markdown**.
+
+</details>
 ```
 
-Every other spelling instead treats a trailing `{...}` on the fence line as
-the attribute block, with everything before it — after the kind, if the
-kind sits outside braces — read as the title. That is right almost always,
-with one trap: a title that itself *ends* in something shaped like a brace
-group is read as attributes, not words. `::: card The {x}` titles the card
-"The" and consumes `{x}` as an (empty) attribute. Reach for the label form,
-or avoid a trailing brace-like title, when that shape is a real risk.
+It renders here exactly as `::: details` does. Without the `container`
+class it is unstyled.
 
-A label form naming an unknown kind falls through to the bare form's rules
-and warns there, so `:::housestyle[Title]` is reported, not silently
-dropped.
+## Code blocks
 
-`details` carries no prefix at all — a titled block's `<summary>` is exactly
-its title, and a titleless one falls back to "Details". `aside` with no
-title falls back to "Aside" in its `<summary>`; `example` falls back to
-"Example", or "Example — Title" when one is given.
+### Nesting fences
 
-**Classes merge, they never replace.** A braced container's extra classes
-and id survive alongside the kind's own:
+A fence closes at the first line with as many backticks as it opened with.
+To show a three-backtick block, open the outer fence with four:
 
-```markdown
-::: {#note .callout .compact}
-An id and several classes.
-:::
+`````markdown
+````markdown
+```go
+func main() {}
 ```
+````
+`````
 
-renders `<div id="note" class="callout compact">`.
+Get this wrong and the example ends early, the rest becomes body text, and
+nothing warns. A `~~~` fence avoids the question for code that contains
+backticks.
 
-**Kind-matching inspects only the first class token.** `{.callout
-.compact}` normalizes; `{.compact .callout}` does not — `compact` is
-checked as the kind name, isn't one, and the whole class list is left
-exactly as written, unstyled. Put the kind word first.
+### Captions
 
-That positional rule is also the bridge to Pandoc: a document written for
-`fenced_divs` spells its kind as an ordinary first class — `{.warning}`,
-`{.aside}` — and reading the kind off that token, rather than from some
-marker of our own, is what lets such a document pick up md2html's styling
-for free instead of landing as an unclassed div. The rule cannot be
-retired without changing what three shipped kinds do: `{.warning}` would
-fall from `<div class="callout callout-warning">` to a plain `<div
-class="warning">`, and `{.aside}` / `{.example}` would stop being
-collapsible.
-
-The kind can also sit outside the braces, with a real attribute block
-after it — a third spelling, alongside the bare and braced forms:
-
-```markdown
-::: aside {#id .compact}
-Because.
-:::
-```
-
-renders `<details id="id" class="container aside compact">`.
-
-Containers nest.
-
-An unknown bare kind (`::: house-style`) consumes its kind word and any
-title, emits an unclassed `<div>`, and the run warns; the title still
-reaches the page, as an ordinary paragraph with no styling class to hang
-on a kind that does not exist. A braced class outside the vocabulary
-(`::: {.house-brand}`) emits a correctly classed, unstyled `<div>` —
-silently, since the author supplies their own CSS for it.
-
-**A container passes a fixed attribute set through.** `id`, `class`,
-goldmark's global attribute list, and any `data-` or `aria-` name reach the
-element; anything else — an event handler, most obviously — is dropped,
-and an attribute name outside `[A-Za-z][A-Za-z0-9_.:-]*` is dropped
-whatever prefix it carries. The braced grammar itself also accepts a bare
-key with no value and a single-quoted value, not just `key="value"`:
-
-```markdown
-::: {.callout data-flag}
-Because.
-:::
-
-::: {.callout data-x='single'}
-Because.
-:::
-```
-
-render `<div class="callout" data-flag="">` and `<div class="callout"
-data-x="single">`.
-
-```markdown
-::: card {onclick="alert(1)" data-tracking="x"}
-Because.
-:::
-```
-
-renders `<div data-tracking="x" class="card">` — the tracking attribute
-survives, the handler does not. `data-fence` is a reserved *namespace*, not
-three literal names: any attribute whose name **begins with** `data-fence`
-is dropped, with no hyphen required at the boundary — `data-fence-kind`,
-`data-fence-title` and an unrelated `data-fencepost` are all dropped alike,
-so writing one yourself gets it silently dropped rather than honored. Case
-does not matter either, because an HTML attribute name has none:
-`data-Fence-Title` is the same reserved name as `data-fence-title`. The
-`data-` and `aria-` allowlist above is case-insensitive for the same reason,
-so `ARIA-label` is honored exactly like `aria-label`.
-
-Do not hand-write `<div class="callout">` in raw HTML. It works, but it is more
-to write and it drops you out of Markdown for the enclosed content. The one
-exception is a collapsible block in a file also read on GitHub — see
-Choosing between forms.
-
-### Alerts
-
-GitHub's alert syntax is accepted and renders as the matching container:
-
-```markdown
-> [!WARNING]
-> Overwrites state.
-```
-
-is exactly `::: warning`. The five types map onto the two shipped kinds —
-`NOTE`, `TIP` and `IMPORTANT` to `callout`; `WARNING` and `CAUTION` to
-`callout callout-warning`.
-
-**Prefer this to `::: warning` in a file that lives in a repository.**
-GitHub, Obsidian and Typora all render it natively, and a renderer that
-does not know it shows an ordinary blockquote with a visible marker.
-`::: warning` shows up on GitHub as the literal text `::: warning`.
-
-The marker must be upper case and alone on its first line, exactly as
-GitHub requires — accepting more would let a document render here and not
-there. `[!HINT]`, `[!note]` and a marker mid-sentence are all left as
-ordinary blockquotes.
-
-The three informational types collapse onto one appearance because the
-stylesheet draws one informational box. The distinction survives in the
-source, where GitHub still renders all three differently.
-
-### Status chips
-
-A fixed vocabulary of bracketed words becomes a small badge, in body text
-or in a heading alike:
-
-```markdown
-[proven] [verified] [designed] [planned] [draft] [deprecated]
-```
-
-Each becomes `<span class="chip chip-proven">proven</span>` (and so on).
-
-Anything outside that list uses the attribute form — Pandoc's
-`bracketed_spans`, and the form to prefer in new writing:
-
-```markdown
-[needs review]{.chip}      ->   <span class="chip">needs review</span>
-[proven]{.chip}            ->   <span class="chip chip-proven">proven</span>
-[shipped]{.chip .chip-ok}  ->   <span class="chip chip-ok">shipped</span>
-```
-
-A status word picks up its `chip-<word>` class automatically; write your
-own `chip-*` class and yours is used instead. The form is general, not
-chip-only — `[lead in]{.lead}` is a `<span class="lead">`, subject to the
-usual rule that a class the stylesheet does not name is inert.
-
-The older escape hatch still works and is no longer the recommended
-spelling:
-
-```markdown
-[c:needs review]   ->   <span class="chip">needs review</span>
-```
-
-`[c:]` — no label — is left as literal text: an empty badge is worse than
-showing the author what they wrote.
-
-A chip on a heading never enters its slug or the page `<title>`:
-`## 4.2 Rollback [proven]` still gets `id="42-rollback"`, so relabeling or
-removing a marker later never rots an anchor or retitles the tab. A chip
-inside a code span or code block is inert — `` `[proven]` `` stays literal
-text, not a badge — and a bracketed word outside the vocabulary, like
-`[1]`, is never touched.
-
-### Section cross-references
-
-`§4.2` autolinks to whichever heading's visible text begins with the number
-`4.2` — followed by a space, or by the end of the heading:
-
-```markdown
-## 4.2 Rollback
-
-See §4.2 for details.   ->   <a class="xref" href="#42-rollback">§4.2</a>
-```
-
-**That separator is part of the rule, and a trailing dot breaks it.** A
-heading written `## 4.2. Rollback` claims no number at all, because what
-follows `4.2` is a `.` rather than a space — so `§4.2` in prose stays plain
-text, silently. Number headings `4.2`, not `4.2.`. A heading that is
-*only* a number (`## 4.2.1`) is fine: the end of the heading is the
-separator.
-
-No heading claims that number: left as plain text. Two things opt out even
-when a number does match:
-
-- **A possessive scoping it to another document** — "the design doc's §7"
-  — is recognized and left literal. Any other cross-document phrasing
-  still needs an escape.
-- **A code span**: `` `§4.2` `` stays literal, same as any other inline
-  code.
-
-This resolves against heading ids after they are assigned, so an explicit
-`{#custom-id}` is what a reference to that heading's number resolves to.
-
-### Contents list
-
-`[[toc]]` alone on its own line — nothing else in the paragraph — becomes a
-flat `<nav class="toc">` listing every heading in the current document, in
-document order, each linking to its id:
-
-```markdown
-[[toc]]
-```
-
-`[TOC]` works too, and case does not matter for either. Two conventions
-exist — `[[toc]]` is markdown-it and VitePress, `[TOC]` is
-Python-Markdown and so MkDocs, as well as Typora and StackEdit — and a
-document written for one should not have to be rewritten for this tool.
-
-For a document that is also read on GitLab, write `[TOC]`: GitLab builds
-its own contents list from that spelling, so the marker works in both
-places. GitHub builds a list from neither. Otherwise the choice is about the
-humans reading the source. This repo writes `[[toc]]`.
-
-GitLab's other spelling, `[[_TOC_]]`, is **not** recognized: its
-underscores are emphasis delimiters, so the marker never arrives as the
-single unbroken run of text this feature requires.
-
-Flat, not nested: each `<li>` carries its heading's tag as a
-`toc-h2`/`toc-h3`/… class and its depth in the page's outline as a
-`toc-d0`/`toc-d1`/… class, and the title's also carries `toc-title`, so a
-document that jumps from `h2` to `h4` doesn't produce broken list nesting.
-Chips and the heading's own anchor link are excluded from the link text.
-
-The title is the first entry when it is shallower than every other one:
-an `h1` over `h2` sections, or an `h2` over `h3` sections on a page that
-titles itself with `##`. It stands apart from the outline, so the
-top-level sections under it are depth 0, as they are on a page with no
-title. Below those, depth is the entry's place in the outline, not its
-tag: one more than the nearest heading above it with a higher level. A
-level skipped for how it looks adds no depth, so an `h4` directly under an
-`h2` section is depth 1, as an `h3` would be. Depth shows as chevrons
-rather than indentation: every entry starts at the same edge, the title
-and top-level sections are bare, and each deeper entry leads with one `›`
-per level of depth, up to three. A long heading's wrapped lines hang further in than any
-entry's start, so a continuation never passes for the next entry. The
-chevrons are styling, hidden from screen readers, and not part of the link
-text.
-
-The list is named for screen readers, as `<nav class="toc"
-aria-label="Table of Contents">`, so it can be told apart from a
-hand-written `::: nav` on the same page. Nothing about it is visible. A page
-in another language renames it with the `toc-title` front matter key, which
-is Pandoc's key for the same label:
-
-```markdown
----
-lang: de
-toc-title: Inhalt
----
-```
-
-On a long page the list can float instead: `toc: float` in front matter,
-or `--toc float` for a whole run, pins it beside the text column on a wide
-screen, where it stays in view as the page scrolls:
-
-```markdown
----
-toc: float
----
-```
-
-It starts on the left of the column. An arrow in the list's corner moves it
-to the right, and the reader's choice is remembered across pages. The list sits clear of wide
-figures as well as the text, and is as wide as the space beside them allows.
-On a narrower screen, and in print, it is the inline list again, where the
-marker stands. `toc: inline` opts one page out of a floating run. Only a
-page's first list floats, and `--fragment` output never does: an Artifact
-carries no script, so it could not offer the side control. Any other value
-warns and is ignored. The marker is the same either way, so `[TOC]` still
-builds GitLab's own list.
-
-The marker must be the paragraph's *entire* content. Wrapped in a link or a
-code span, it is left alone — `` `[[toc]]` `` and a link whose text happens
-to be `[[toc]]` both stay literal. A document with no linkable headings —
-none present, or built with `--no-anchors` — leaves the marker as literal
-text rather than deleting it, so the reader isn't left wondering where the
-list went.
-
-A run can also add the list itself: `--autotoc all` gives every page
-without a marker one, and `--autotoc long` only the pages of more than 1000
-lines or more than five headings. The list goes after the title, subtitle
-and date, where you would put the marker by hand, and floats unless `--toc`
-or the page's `toc:` says otherwise. A page with its own marker keeps it,
-and a page with nothing to list gets no list and no stray `[[toc]]`.
-`toc: none` in front matter opts one page out:
-
-```markdown
----
-toc: none
----
-```
-
-This is a per-page contents list only — see Traps for what is still out of
-scope.
-
-### Front matter
-
-A leading `---`-delimited block of flat `key: value` lines sets `title`,
-`subtitle`, `date`, `lang`, `toc` and `toc-title`:
-
-```markdown
----
-title: Reference
-subtitle: every new convention
-date: 2026-09-11
-lang: en-GB
----
-
-# Reference
-```
-
-A value may be quoted, as YAML allows: `title: "Rollback: why"` is the
-title `Rollback: why`, without the quotes. Only those six keys do anything; any other key is silently stripped from
-the body and dropped — from the rendered page, that is. The page still
-carries the source, so an unused key such as `author:` travels with it
-unless the page is built with `--no-source`. A repeated key keeps the last value. `subtitle` and
-`date` render as `<p class="subtitle">` / `<p class="docdate">` immediately
-under the document's leading `<h1>` — body nodes, not a page-shell slot.
-`toc` sets the contents list's layout (or, as `none`, keeps `--autotoc` off the page) and `toc-title` names it; see
-Contents list.
-
-`lang` is the page's `<html lang>`, which screen readers use to pick a
-voice and browsers use for hyphenation and spell-checking. It is the key
-Pandoc reads for the same attribute. It overrides `--lang`, which sets a
-default for the whole run; with neither, a page is `en`. A value that is not
-a language tag, such as `en_US` or `English`, warns and is ignored.
-`--fragment` output has no `<html>` element, so it has nowhere to go and is
-left to the host page.
-
-**The block must be flat.** An indented (nested) value makes the whole
-thing fail to parse as front matter, and it falls through to being rendered
-as visible Markdown — an `<hr>` followed by whatever heading-like thing the
-leftover lines happen to form. That is intentionally noisy, so a malformed
-block is hard to miss.
-
-Without front matter, an italic line immediately after the leading `<h1>`
-is lifted into the same subtitle — but only when neither a subtitle nor a
-title was supplied some other way (front matter, or `Options` in library
-use):
-
-```markdown
-# Reference
-
-*every new convention*
-```
-
-### Code captions
-
-A `caption="…"` attribute in a fenced code block's info string renders a
-caption bar above the code, wrapping the block in a `<figure>`:
+A `caption` in a fence's attribute block adds a caption bar and wraps the
+block in a `<figure class="code-figure">`:
 
 ````markdown
-```go caption="server.go"
+```go {caption="server.go"}
 func main() {}
 ```
 ````
 
-renders `<figure class="code-figure"><figcaption>server.go</figcaption>`
-around the existing `<pre><code class="language-go">`.
+Write the language first and the braced block after it. GitHub reads the
+first word as the language and still highlights the block, Pandoc reads the
+caption, and `\"` inside the value is a literal quote.
 
-The caption may come before the language — `` ```caption="x.go" go `` still
-yields `class="language-go"` — since only the caption token is stripped
-out; the language is whatever token is left, not whatever is first.
+The caption is plain text apart from status badges and `§` references,
+which render as they do in prose; `*emphasis*` and links stay literal. A
+backtick in a caption is invalid on a backtick fence and breaks every fence
+after it; use `~~~` for that block. An `id` reaches the `<pre>` and further
+classes reach the `<code>`. Other keys, including `title=`, are ignored.
 
-Prefer this brace-free form in a file that is also read on GitHub: GitHub
-takes the first word of an info string as the language and ignores whatever
-follows, so the block still gets syntax highlighting there even though the
-caption itself does nothing.
+Two other spellings work: brace-free, ```` ```go caption="server.go" ````,
+which cannot escape a quote, and fully braced, ```` ```{.go caption="x"} ````,
+which GitHub does not highlight.
 
-**The braced form works too**, and is what a document written for Pandoc,
-kramdown or MyST will use:
+## Diagrams
 
-````markdown
-```{.go caption="server.go"}
-```go {caption="server.go"}
-````
-
-In the braced form the language is the first class, as Pandoc reads it,
-unless a word outside the braces names one — so `` ```go {.wide} `` is Go
-with a `wide` class. An `id` reaches the `<pre>` and any further class
-reaches the `<code>`, rather than being dropped.
-
-The cost is the highlighting: `{.go …}` is not a language name to GitHub,
-so a braced block renders there unhighlighted. Choose by which matters more
-for the file in hand — and note the one thing only the braced form can do.
-
-There is no escaping for a quote embedded in the caption's value in the
-brace-free form — `caption="has \"quote\""` does not produce a caption
-containing a literal `"`. The braced form does support it, so write
-`` ```{.go caption="has \"quote\""} `` when you need one.
-
-The caption's text runs through the same inline rewriters as any other
-prose: a status chip or a `§` cross-reference inside a caption renders as a
-badge or a link, exactly as it would in a paragraph, not as literal text.
-
-````markdown
-```go caption="[proven] auth handler"
-func handleAuth() {}
-```
-````
-
-renders a `<span class="chip chip-proven">` inside the `<figcaption>`.
-
-### Heading ids and classes
-
-Headings get slugs automatically. Override when you want a stable anchor that
-survives rewording:
-
-```markdown
-## Breaking change in v2 {#breaking-v2 .lead}
-```
-
-An explicit id always wins and is never rewritten. Generated slugs are made to
-avoid colliding with it, in both directions, and with an id anywhere else on
-the page: after `[Setup](./setup.md){#setup}`, a `## Setup` heading gets
-`#setup-1`.
-
-Slugs keep letters and digits from any script, so `## 日本語の見出し` gets
-`id="日本語の見出し"` and a working anchor. A heading with no letters or digits
-at all falls back to a positional `section-N` id.
-
-Otherwise slugs follow the rules GitHub, GitLab and Pandoc's `commonmark_x`
-share, so an in-page link written against any of them resolves here too.
-Punctuation is dropped, but each space still becomes a hyphen and nothing is
-merged afterwards: `## Sizes: small × large` is `#sizes-small--large`, and
-`## — Intro` is `#-intro`. Underscores are kept. A repeated heading is
-numbered `-1`, `-2`…, so the second `## Setup` is `#setup-1`. Two small
-differences remain: an emoji is dropped, as GitHub does, where Pandoc spells
-it out by name, and chips stay out of the slug, which no other renderer
-knows to do.
-
-One thing that looks wrong in the output and is not: a link you write yourself
-to a non-ASCII heading is percent-encoded, while the generated anchor beside
-the heading stays literal.
-
-```html
-<a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB">はじめに</a>   your link
-<h2 id="はじめに">…<a class="anchor" href="#はじめに">          generated
-```
-
-Both resolve to the same heading in a browser. Write the fragment in plain
-text; the encoding is a serializer detail, not a mismatch to fix.
-
-### Mermaid diagrams
+### Mermaid
 
 ````markdown
 ```mermaid
@@ -760,22 +441,22 @@ graph LR
 ```
 ````
 
-A standalone page loads a pinned MermaidJS build from a CDN and initialises it
-against the same light/dark signals the stylesheet uses — you do not need to
-theme the diagram yourself. Only pages that contain a diagram load it.
+A page with a diagram loads a pinned MermaidJS build from a CDN, themed to
+match the page in light and dark mode. `--fragment` output loads nothing,
+and leaves the diagram to a host that renders mermaid itself, as a Claude
+Artifact does. The fence must be spelled ```` ```mermaid ````:
+```` ```{.mermaid} ```` is an ordinary code block, and a `caption=` on a
+mermaid fence is dropped. Click a diagram to expand it.
 
-With `--fragment` nothing is injected, because a fragment's host is expected
-to render mermaid itself, as Claude Artifacts do.
+Use mermaid for graphs, sequences and flowcharts. Use a `fig` fence when
+you need to place things yourself: panels side by side, stat tiles beside
+boxes, a file tree.
 
 ### Structured figures
 
-A ```` ```fig ```` fence is a hand-laid-out diagram: boxes, arrows and
-panels you place yourself, for layouts a mermaid graph cannot express. The
-body is YAML.
-
-(The examples below are shown in `yaml` fences. In a real document they go
-in a `fig` fence — shown that way here, they would render as figures
-instead of showing you the syntax.)
+A ```` ```fig ```` fence is a figure you lay out yourself, written as YAML.
+The examples below are in `yaml` fences so they show as source; in a real
+document they go in a `fig` fence.
 
 ```yaml
 caption: Request path
@@ -788,7 +469,21 @@ items:
       - result: 200 OK
 ```
 
-Every item is exactly one *kind*:
+#### Quote labels
+
+Labels take inline Markdown (code spans, emphasis, links, badges, `§`
+references) only when YAML reads them as a string. Quote a label that:
+
+- starts with `` ` ``, `*`, `_`, `[`, `{`, `&`, `!`, `%`, `@`, `|` or `>`
+- contains `: ` or ` #`
+
+Unquoted, the first group fails to parse and the figure renders as a code
+block with a YAML error, and ` #` starts a comment, so `box: Step #3 of 4`
+silently renders "Step". An unquoted `null` or `~` is no value.
+
+#### Kinds
+
+Every item is exactly one kind:
 
 | Kind | Value | What it is |
 |---|---|---|
@@ -798,28 +493,33 @@ Every item is exactly one *kind*:
 | `rail` | label | a full-width accent rail |
 | `stats` | list of `value`/`label`, plus optional `detail` | a row of stat tiles |
 | `defs` | list of `term`/`def` | a term/definition grid |
-| `group` | title, plus `items` | a labeled container |
+| `group` | title, plus `items` | a labeled panel |
 | `chain` | list of items | steps connected in sequence |
 | `lanes` | list of lists | parallel stacks |
-| `tree` | an indented block scalar | a file or config hierarchy |
-| `cols` | list of items | items side by side, anywhere an item goes |
+| `tree` | an indented block | a file or config hierarchy |
+| `cols` | list of items | items side by side |
 | `split` | list of exactly 2 items | two panels either side of a `boundary` |
 
-**Use `stats`, `defs` and `group` in a figure only when they are part of
-the diagram**, sitting beside boxes, in a column or under an arrow.
-Otherwise use the [container](#containers) form, `::: stats`, `::: defs` or
-`::: group`. It looks the same, each entry can be block Markdown rather
-than one line of inline text, and on GitHub or in Pandoc it still reads as
-a definition list instead of a block of YAML.
+A blank box is `box: ""`; a bare `box:` names no kind and is an error.
 
-`layout` is `rows` (the default), `cols`, or `split`. Under `cols`, a
-top-level item may carry `weight` (1–12; out-of-range values are clamped,
-not rejected). Under `split`, exactly two items sit either side of a
-`boundary` label.
+#### Modifiers
 
-`cols` and `split` are also item kinds, so a layout can sit anywhere an
-item can — context above a split and an outcome below it, or a split
-inside one column:
+| Modifier | On | What it does |
+|---|---|---|
+| `note` | `box`, `result`, `rail`, `group` | a quieter gloss beside the label |
+| `accent` | `box`, `result`, `rail`, `group` | marks the item out from its siblings |
+| `foot` | `group` | a line below the group's items |
+| `boundary` | `split` | the label between the two panels |
+| `weight` | a child of a `cols` layout or `cols` item | its share of the width, 1–12 |
+| `items` | `group` | the group's contents |
+
+A modifier anywhere else is an error. A panel that needs a title, an accent
+or a footnote holds a `group`.
+
+#### Layout
+
+The top-level `layout` is `rows` (the default), `cols` or `split`. `cols`
+and `split` are also item kinds, so a layout can sit anywhere an item can:
 
 ```yaml
 items:
@@ -833,76 +533,101 @@ items:
   - result: The response is signed
 ```
 
-A `cols` item's children take `weight` exactly as a `cols` figure's items
-do. Inside a `chain`, the other steps size to their content and a `cols`
-or `split` step takes the width they leave, so its weights share out that
-width rather than the whole row's. A
-figure whose only item is a `cols` or `split` item is an error: that
-is `layout: cols` or `layout: split` spelled a second way, and the warning
-names the spelling to use.
+A figure whose only item is a `cols` or `split` item is an error; write
+`layout: cols` or `layout: split` instead. Every panel draws a card,
+except one holding an arrow.
 
-Some kinds take **modifiers** alongside their value:
+`wide: true` at the top level lets the figure extend past the text column.
+It has no effect inside a container or in `--fragment` output.
 
-| Modifier | On | What it does |
-|---|---|---|
-| `note` | `box`, `result`, `rail`, `group` | a quieter gloss beside the label |
-| `accent` | `box`, `result`, `rail`, `group` | marks this item out from its siblings |
-| `foot` | `group` | a trailing line below the group's items |
-| `boundary` | `split` | the label between its two panels |
-
-A modifier used anywhere else is an error, not a silent no-op.
-
-`detail` is not in that table because it belongs to a `stats` entry, not
-to an item kind: it is a third, quieter line beneath a stat tile's label.
-
-`note` and `foot` are different positions on a `group`, not alternatives. A
-`note` follows the title and glosses it — the reader meets it before the
-group's items. A `foot` follows those items. A group may carry both.
-
-**A panel that needs a title, an accent or a footnote is a `group`.** There
-is no panel-level metadata: put a `group` inside the panel and use its
-title, `accent` and `foot`. The same goes for a lane of a `lanes` item.
-
-**Every panel draws a card** — a border and padding around whatever item
-sits in it, on top of that item's own look. A panel whose item carries
-`accent` tints its card. A panel holding an arrow draws no card, so a
-`cols` of group, arrow, group still reads as one thing leading to another.
-
-Set `wide: true` at the top level to let a figure break out of the text
-column.
+#### Trees
 
 A `tree` is an indented listing, one node per line:
 
 ```yaml
 items:
   - tree: |
-      fig.go -- the fence branch
-        * figtree.go -- the line grammar
-      - testdata/ -- not shipped
+      src/
+        * main.go -- the entry point
+        util.go
+      - vendor/ -- not ours
 ```
 
-Leading spaces carry the nesting — any consistent width works. On each line,
-` -- ` (with a space on both sides) splits the label from a trailing note,
-`* ` marks the line as accented and `- ` as de-emphasized.
+Indent with spaces; a tab is an error. ` -- ` splits a label from its note,
+a leading `* ` accents a line and `- ` mutes it. Each needs its spaces, so
+`*_test.go` stays literal; escape one with a backslash (`\--`) to keep it.
 
-Every sigil needs its space, which is what keeps `*_test.go` a literal glob
-and splits `md2html --fragment -- writes a fragment` at the second `--` and
-not the first. To write one literally anyway, escape it as you would in
-Markdown: `go run \-- args`.
+#### Faults
 
-Every text field takes inline Markdown, so code spans, links, chips and
-`§` references work in a label exactly as in prose. A `.md` link inside a
-figure is rewritten and crawled like any other.
+A figure that does not parse or validate renders as a code block and warns,
+naming the item and the fault. Line numbers count from the first line of
+the fence body. The figure's caption is the `caption:` key; `caption=` on
+the fence line warns.
 
-**A figure that does not parse or validate renders as a code block and
-warns.** You see your own YAML, unstyled — the run says which item and why.
-An intentionally blank box is `box: ""`; a bare `box:` names no kind and is
-an error. Line numbers in a warning count from the first line of the fence
-body, not from the top of the file.
+## Inline marks
 
-A figure's caption is the `caption:` key in the body. The `caption="…"`
-info-string attribute that `code` fences take does nothing on a `fig` fence
-and warns.
+### Status badges and spans
+
+Six lowercase words in brackets become badges, in prose or a heading:
+
+```markdown
+[proven] [verified] [designed] [planned] [draft] [deprecated]
+```
+
+`[proven]` renders `<span class="chip chip-proven">proven</span>`.
+`[Proven]` stays literal.
+
+Any other badge uses Pandoc's bracketed span syntax with the `chip` class:
+
+```markdown
+[needs review]{.chip}      ->  <span class="chip">needs review</span>
+[shipped]{.chip .chip-ok}  ->  <span class="chip chip-ok">shipped</span>
+```
+
+The span syntax takes any class: `[lead in]{.lead}` is a
+`<span class="lead">`, unstyled unless your stylesheet names it. The label
+must be plain text, since `[**x**]{.chip}` stays literal, and only classes
+and an id are kept.
+
+A badge stays literal inside a code span, a code block or a link's text.
+A backslash does not stop it, so write `` `[draft]` `` to show the word.
+`[c:label]` also makes a badge, up to 60 characters.
+
+### Section cross-references
+
+`§4.2` links to the heading whose text begins with `4.2` followed by a
+space or the end of the heading. `§ 4.2` works too.
+
+```markdown
+## 4.2 Rollback
+
+See §4.2 for details.   ->   <a class="xref" href="#42-rollback">§4.2</a>
+```
+
+Number headings `4.2`, not `4.2.`: any other character after the number
+means the heading claims none. When two headings claim one number, the
+first wins. A number no heading claims stays as plain text.
+
+A possessive naming another document, "the design doc's §7", stays literal.
+So does a `§` in a code span. A backslash does not stop it. `--no-anchors`
+turns cross-references off along with anchors.
+
+Use `§` when your headings are numbered. Otherwise link the heading's
+anchor: `[Rollback](#rollback)`.
+
+## Other Markdown
+
+### Tables
+
+GitHub tables. Each is wrapped in a horizontal scroll container, so do not
+wrap one yourself. A `|` inside a code span in a cell still splits the
+cell; write `\|`.
+
+```markdown
+| Option | Default |
+|---|---|
+| `--depth` | unlimited |
+```
 
 ### Footnotes, definition lists, task lists
 
@@ -912,120 +637,200 @@ Claim needing support.[^src]
 [^src]: The source.
 
 Term
-:   The definition.
+: The definition.
 
 - [ ] not done
 - [x] done
 ```
 
-All three convert correctly. Note that the default stylesheet styles definition
-lists but does **not** style the footnote block or task-list checkboxes — they
-render as plain semantic HTML.
+All three render. Definition lists are styled; footnotes and task-list
+checkboxes are plain HTML.
 
-### Raw HTML and inline SVG
+Also available: `~~strikethrough~~` (a single `~` pair strikes too, so
+`H~2~O` is struck), autolinked bare URLs, and the rest of GitHub Flavored
+Markdown. Not supported: math, `==highlight==`, `^superscript^` and
+`:emoji:` codes, which stay literal.
 
-Raw HTML passes through untouched, including `<style>`, `<script>`, and inline
-`<svg>`. Script contents are never re-parsed as Markdown.
+### Raw HTML
 
-Reach for it only when Markdown genuinely cannot express the thing. A diagram
-is usually better as a mermaid fence, and a callout as a `:::` container.
+Raw HTML passes through, including `<style>`, `<script>` and inline `<svg>`.
+Use it only when Markdown cannot express the thing. Leave a blank line
+between an HTML tag and Markdown inside it, or the Markdown stays literal:
 
-### Also available
+```markdown
+<div class="card">
 
-`~~strikethrough~~`, bare URLs as autolinks, and the rest of GFM.
+**Bold**, as Markdown.
 
-### Images and inline SVG click to expand
+</div>
+```
 
-A standalone page wires up the same click-to-expand a mermaid diagram gets:
-an `![alt](src)` image or a hand-authored inline `<svg>` that's actually
-being scaled down to fit the prose measure becomes clickable, opening a
-native `<dialog>` sized against the viewport instead. Nothing to opt into —
-it's automatic, and skips anything already at its own size (so icons and
-badges don't get a zoom cursor), anything already wrapped in a link, and
-mermaid's own SVG (which the other runtime already handles).
+HTML comments stay in the page, and in its embedded source.
 
-With `--fragment` nothing is injected, matching the mermaid runtime.
+Images and inline SVGs that are scaled down to fit the text open full size
+when clicked.
 
-## What the default theme styles
+## Choosing between forms
 
-Styled: headings and anchors, paragraphs, lists, tables, code and `<pre>`,
-blockquotes, `<hr>`, images, video, inline SVG, definition lists, the shipped
-containers (`.callout`, `.callout-warning`, `.card`, `details.container`,
-`.example`, `.stats`, `.defs`, `.group`), status chips, cross-references (`.xref`), the contents list
-(`nav.toc`), document metadata (`.subtitle`, `.docdate`), and code captions
-(`.code-figure`).
+Where a construct has several spellings, write the default:
 
-Not styled: the footnote block, and task-list checkboxes.
+- **Note or warning:** an alert, `> [!NOTE]` or `> [!WARNING]`. Use
+  `::: callout Title` or `::: warning Title` only for a title, id or class.
+- **Container:** `::: kind Title {#id .class}`. Braced `::: {.kind}`, with
+  no title, only for a file Pandoc also reads; `:::kind[Title]{…}` only when
+  a title ends in braces.
+- **Collapsible:** `::: details`. `aside` for a tangent, `example` for a
+  worked example, and the raw `<details class="container">` for a file read
+  on GitHub.
+- **Code caption:** ```` ```go {caption="x"} ````.
+- **Badge:** `[draft]` for the six status words, `[label]{.chip}` for any
+  other.
+- **Contents list:** `[[toc]]`. `[TOC]` in a file read on GitLab, which
+  builds its own list from it; GitHub shows either as literal text. Prefer
+  a marker to relying on `--autotoc`, so the page places its own list.
+- **Title, subtitle, date:** front matter for subtitle and date, a
+  `# Title` heading for the title.
+- **Reference:** `§4.2` for numbered headings, `[text](#anchor)` otherwise.
+- **Diagram:** mermaid, or `fig` when you need to place things yourself.
+- **Stat tiles, term grid, panel:** the container, unless the item sits in
+  a `fig` diagram.
 
-**A class you write is inert unless the stylesheet names it.** The shipped
-vocabulary above does; nothing else does. A class on a container outside
-that vocabulary (`::: {.house-brand}`) or on a heading (`## Title {.lead}`)
-is faithfully emitted and then ignored — the markup is correct, the page
-looks unchanged. Write such classes only as hooks for a stylesheet you are
-actually going to supply.
+Forms mix freely within a document.
 
-Supply `--css mine.css` to replace the stylesheet entirely.
+## Build behaviour
 
-## Traps
+### What conversion adds
 
-- **A fence inside a fence needs more backticks on the outside.** A
-  ```` ```markdown ```` block whose body contains a ``` ``` ``` line ends
-  at that line, not at the one you meant — the rest of your example
-  becomes body text and the block after it inherits the wrong language.
-  Use a four-backtick fence to show three-backtick source. This is silent:
-  nothing warns, and the page renders as *something*.
-- **Container kind-matching checks only the first class token.** `{.compact
-  .callout}` is not recognized as `callout`; put the kind word first:
-  `{.callout .compact}`. A bare unknown kind (`::: house-style`) warns; a
-  braced unknown class does not.
-- **A cross-reference scoped to another document may still autolink.** Only
-  the possessive phrasing ("the design doc's §7") is recognized as
-  cross-document. Write `` `§7` `` to keep any other phrasing literal.
-- **An attribute block at the end of a heading belongs to the heading.**
-  `## See [docs](./docs.md){.ext}` puts `class="ext"` on the `<h2>`, not the
-  link, as Pandoc does. Put some text after the block, or give the link its
-  class in prose instead of a heading.
-- **Front matter must be flat `key: value`.** A nested value makes the whole
-  block render as visible text above the title rather than being parsed.
-- **Only `caption=` is read from a *brace-free* code fence info string.**
-  In the braced form an `id`, classes and `caption` are all read; any other
-  key is still ignored.
-- **Linking to `.html`** is never rewritten and will usually 404.
-- **`a.md` and `a.markdown` in one directory** both map to `a.html`, and the
-  build refuses the whole run rather than racing two writes to one path.
-- **`<source srcset>`, `<img srcset>`, `<video poster>`, `<track src>` and
-  `<object data>`** are not rewritten or existence-checked. Use `<img src>` or
-  Markdown image syntax for anything that must be rewritten.
-- **Query strings on document links** are dropped: `./b.md?v=2` becomes
-  `b.html`. Fragments are preserved; query strings are not.
-- **A link into an `--exclude`d directory keeps its href as written.** The
-  target is never converted, so the link resolves to whatever that subtree's
-  own tool produced — which is the point — but nothing checks that it did.
-  The run warns once per such link.
-- **No cross-document navigation is generated.** There is still no sidebar
-  or site index. `[[toc]]` gives a per-page contents list, and `toc: float`
-  only moves that same list beside the text; anything that
-  reaches across documents you still write yourself with anchor links — the
-  heading ids are stable and predictable, so this is reliable.
-- **Several entry points build as one set.** `md2html -o ./site ./docs
-  ./notes` emits both trees into one output root, with links between them
-  rewritten. Nothing has to be added to a standing entry list to include a
-  directory for a single run.
-- **Existing HTML is never overwritten.** A file without the tool's provenance
-  marker is refused and the run exits non-zero. There is no override flag.
+- an `id` and a hover anchor on every heading
+- a horizontal scroll wrapper around every table
+- `target="_blank" rel="noopener noreferrer"` on off-site links
+- `.md` links rewritten to `.html`, and asset links pointed back at the
+  source
+- a `<title>`, from front matter, the first `<h1>`, or the file name
+- the Markdown source, hidden at the end of the page with Copy and Download
+  controls
 
-## Fragment output
+Flags turn each off: `--no-anchors` (which also turns off the contents list
+and `§` references), `--no-table-scroll`, `--no-external-links`,
+`--no-md-links`, `--no-assets` and `--no-source`.
 
-`--fragment` emits the marker, `<title>`, `<style>`, and body content, with no
-`<!doctype>`, `<html>`, `<head>` or `<body>` — for a host that supplies the
-document wrapper itself, such as a Claude Artifact, which publishes it
-unchanged.
+### Following links
 
-A fragment carries no script. A mermaid fence arrives as `<pre
-class="mermaid">` holding the diagram's source, which an Artifact draws; a
-host that does not run mermaid shows that source as text. Build a full
-page instead for such a host.
+Every `.md` a page links to is converted too, however far away it is, and
+the run reports how many it pulled in from outside the entry points.
+`--depth` limits how deep directories are scanned, not how far links are
+followed; `--link-depth` limits link hops. Several entry points
+(`md2html -o site ./docs ./notes`) build as one set, with links between
+them rewritten.
 
-This is a way to skip hand-writing HTML for **document-shaped** content: a
-report, a spec, a guide. If the page wants a bespoke look, an app-like layout,
-or anything beyond a styled document, write it as HTML instead.
+Without `-o`, each page is written beside its source, and a link that
+leaves the entry tree is refused with a warning and left as written.
+
+`--exclude DIR` never enters or writes to a directory, and `--exclude
+'AUDIT_*'` skips any file or directory with a matching name at any depth.
+A link into an excluded path keeps its href and warns.
+
+### Overwriting
+
+md2html only overwrites HTML it generated. Any other file at an output path
+is refused and the run exits non-zero. `a.md` and `a.markdown` in one
+directory both map to `a.html`, and the run stops before writing anything.
+
+md2html builds no site navigation. The contents list covers one page; link
+between pages yourself.
+
+### Fragment output
+
+`--fragment` emits the `<title>`, `<style>` and body only, for a host that
+supplies the page, such as a Claude Artifact. A fragment has no script: no
+mermaid runtime, no floating contents list, no click-to-expand, and no
+embedded source. A mermaid fence arrives as `<pre class="mermaid">`, which
+an Artifact draws and other hosts show as text.
+
+md2html suits document-shaped pages: a report, a spec, a guide. A page that
+wants an app-like layout or a bespoke look is better written as HTML.
+
+## Styling
+
+The default stylesheet styles text, lists, tables, code, blockquotes,
+images and inline SVG, definition lists, the shipped containers, badges,
+cross-references, the contents list, subtitle and date, and code captions.
+It leaves footnotes and task-list checkboxes plain.
+
+A class you add is inert unless a stylesheet names it: on a heading, a span,
+or a container outside the shipped kinds, it is emitted and ignored. The
+shipped class names (`callout`, `card`, `group`, `stats`, `defs`) are
+styled wherever they appear, raw HTML included. `--css mine.css` replaces
+the stylesheet.
+
+## Warnings
+
+What each warning means and how to fix it. The text in bold is the start of
+the message.
+
+**link target does not exist** — the `.md` file is missing. Fix the path.
+
+**referenced asset does not exist** — an image or other file, or an
+`.html` link, points at nothing. Fix the path; link pages by their `.md`.
+
+**refusing to follow … outside … (no -o given)** — without `-o`, links
+may not leave the entry tree. Add `-o`, or add the target's tree as an
+entry point.
+
+**not following …: excluded** — the link points into an `--exclude`d path.
+Expected if that tree is built by another tool.
+
+**exclude "…" matches nothing** / **is not a valid pattern** — check the
+`--exclude` value; a name pattern cannot contain `/`.
+
+**pulled in N document(s) from outside** — links reached pages outside the
+entry points. Check none were unintended.
+
+**front matter block is not flat key: value** — see
+[Front matter](#front-matter): no nesting, comments or colon-less lines.
+
+**front matter toc "…" has no [[toc]] or [TOC] marker** — add the marker,
+or drop the `toc:` key.
+
+**… is not a contents list layout** — use `inline`, `float` or `none`.
+
+**… is not a language tag** — use a tag such as `en`, `de` or `pt-BR`.
+
+**unknown container kind** — use a kind from [Containers](#containers), or
+the braced form for your own class.
+
+**container has no class and no recognizable kind name** — `::: {}` has
+nothing in it. Name a kind.
+
+**stats container has no definition list** / **defs container** — write
+each entry as a term line followed by `: ` definition lines.
+
+**href cannot be set from an attribute block** (or `src`, `srcset`) —
+write the target in the link itself.
+
+**fig fence: …; rendering it as a code block** — the figure is shown as
+its YAML source. The rest of the message names the fault:
+
+- *did not find expected key*, *found character that cannot start any
+  token*, *mapping values are not allowed in this context* — a label needs
+  quotes. See [Quote labels](#quote-labels).
+- *unknown key "…"* — a misspelled kind or modifier.
+- *names no kind* — a bare `box:`; write `box: ""` for a blank box.
+- *names N kinds* — one item per list entry.
+- *carries note / accent / foot / boundary / weight / items, which only …
+  takes* — move the modifier to an item that takes it.
+- *layout … is not rows, cols or split*, *a split needs exactly 2 items* —
+  fix the layout.
+- *the figure's only item; write layout: cols instead* — as it says.
+- *the fence is empty*, *more than one YAML document* — add items, or
+  remove the `---` separator.
+- *a tab in a tree's indentation*, *indented to no enclosing level* —
+  indent the tree with spaces, consistently.
+
+**fig fence: a caption in the info string is not part of a figure** —
+use a `caption:` key in the body.
+
+**output path collision** — two sources map to one page; rename one.
+
+**refusing to overwrite … (not generated by md2html)** — an output path
+holds a file md2html did not write. Move it, or choose another `-o`.

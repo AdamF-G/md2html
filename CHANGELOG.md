@@ -17,13 +17,21 @@ major version instead.
   `md2html --guide` instead of an `authoring.md` copied beside it, which
   described whichever binary installed it rather than the one converting
   the page. Re-installing removes that copy if an earlier version wrote it.
+- The authoring guide is reorganised from the most common needs to the
+  rarest, and says which spelling to write wherever there are several. It
+  opens with a quick reference and a list of the silent traps, adding ones
+  it missed: a `:::` inside a code block closing its container, front
+  matter after a byte order mark, `word[x]{y}` in prose, unquoted YAML in a
+  `fig` label, a backtick in a code caption, and others. It now recommends
+  ```` ```go {caption="…"} ```` for code captions, and ends with every
+  warning and its fix. Tests hold its claims to the binary.
 
 ### Added
 
 - **`--guide`** (`AuthoringGuide`) prints the Markdown authoring guide,
   and both `--help` and the skill point at it. On a
-  terminal it opens in `$PAGER`, or `less`, since it runs to a thousand
-  lines; piped or redirected it is written unchanged. An agent
+  terminal it opens in `$PAGER`, or `less`, since it runs to several
+  hundred lines; piped or redirected it is written unchanged. An agent
   without the skill could otherwise learn the syntax only by probing the
   output: in a skill evaluation, runs without it reverse-engineered the
   stylesheet's class names or ran `strings` on the binary to find the

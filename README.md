@@ -392,7 +392,8 @@ recipient's agent anyway.
 ## Writing docs for it
 
 Callouts, diagrams, heading attributes, footnotes and definition lists all
-work, and one of them fails silently if you get the syntax wrong. See
+work, and a few of them fail silently if you get the syntax wrong: the
+guide lists those as silent traps. See
 [docs/authoring.md](./docs/authoring.md), or `md2html --guide` for the copy
 that matches your binary, or install [the authoring
 skill](#the-authoring-skill-for-agents) so your agent has it to hand.
