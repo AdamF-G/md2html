@@ -27,7 +27,7 @@ anything it links to, into `./site`.
 ### The authoring skill for agents
 
 md2html understands more than plain Markdown — callouts, diagrams, status
-chips, cross-references — and a couple of those features fail silently when
+chips, cross-references — and some of those features fail silently when
 the syntax is slightly off. The authoring skill teaches an agent the syntax
 that works and the traps to avoid, so what it writes renders the way it
 meant. It is a plain Agent Skills skill — a `SKILL.md` with a name and
@@ -123,12 +123,12 @@ with no page shell, ready to drop into a Claude Artifact.
 - **Diagrams.** `mermaid` fences render as diagrams, and a `fig` fence
   describes hand-laid-out boxes, arrows and panels in YAML, for layouts a
   mermaid graph cannot express.
-- **Callouts and containers.** Fenced containers (`::: callout` … `:::`, or
-  `:::callout[With a title]`) for callouts, warnings, cards, collapsible
-  asides and examples, and named `<nav>` landmarks. GitHub alerts
-  (`> [!WARNING]`) work as an alias.
+- **Callouts and containers.** GitHub alerts (`> [!NOTE]`,
+  `> [!WARNING]`) for notes and warnings, and fenced containers
+  (`::: callout Title` … `:::`) for titled callouts, cards, collapsible
+  asides and examples, and named `<nav>` landmarks.
 - **Document furniture.** A `[[toc]]` or `[TOC]` marker for a per-page
-  contents list, inline or floating beside the text, `title`/`subtitle`/`date` front matter, `caption="…"` on
+  contents list, inline or floating beside the text, `title`/`subtitle`/`date` front matter, `{caption="…"}` on
   code fences, `[proven]`-style status chips, and `§4.2` cross-references
   that link to numbered headings.
 - **The source travels with the page.** Each page carries its original
@@ -392,7 +392,7 @@ recipient's agent anyway.
 ## Writing docs for it
 
 Callouts, diagrams, heading attributes, footnotes and definition lists all
-work, and a few of them fail silently if you get the syntax wrong: the
+work, and some of them fail silently if you get the syntax wrong: the
 guide lists those as silent traps. See
 [docs/authoring.md](./docs/authoring.md), or `md2html --guide` for the copy
 that matches your binary, or install [the authoring

@@ -83,9 +83,9 @@ before you finish.
     or a single-quoted value, as in `## Setup {#setup data-flag}`, leaves
     the whole block in the heading text, id included. See
     [Headings and anchors](#headings-and-anchors).
-19. **An attribute block works only after a heading, link, image, span or
-    container fence.** After a paragraph or list item, `{.lead}` stays
-    literal text.
+19. **An attribute block works only after a heading, link, image or span,
+    or on a container or code fence's opening line.** After a paragraph or
+    list item, `{.lead}` stays literal text.
 
 ## Page structure
 
@@ -837,13 +837,15 @@ write the target in the link itself.
 its YAML source. The rest of the message names the fault:
 
 - *did not find expected key*, *found character that cannot start any
-  token*, *mapping values are not allowed in this context* — a label needs
-  quotes. See [Quote labels](#quote-labels).
+  token*, *mapping values are not allowed in this context*, *unknown
+  anchor … referenced*, *cannot unmarshal !!map into string* (or
+  *!!seq*) — a label needs quotes. See [Quote labels](#quote-labels).
 - *unknown key "…"* — a misspelled kind or modifier.
 - *names no kind* — a bare `box:`; write `box: ""` for a blank box.
-- *names N kinds* — one item per list entry.
-- *carries note / accent / foot / boundary / weight / items, which only …
-  takes* — move the modifier to an item that takes it.
+- *names … kinds* — one item per list entry.
+- *carries …, which only … takes*, naming `note`, `accent`, `foot`,
+  `boundary`, `weight` or `items` — move the modifier to an item that
+  takes it.
 - *layout … is not rows, cols or split*, *a split needs exactly 2 items* —
   fix the layout.
 - *the figure's only item; write layout: cols instead* — as it says.

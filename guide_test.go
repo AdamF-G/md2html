@@ -1,9 +1,12 @@
 package md2html
 
 import (
+	"go/scanner"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -256,7 +259,7 @@ func TestGuideClaims(t *testing.T) {
 		},
 		{
 			name:  "an attribute block after a paragraph is literal",
-			quote: "After a paragraph or list item, `{.lead}` stays",
+			quote: "After a paragraph or\n    list item, `{.lead}` stays literal text",
 			src:   "Para. {.lead}\n\n- item {.lead}\n",
 			want:  []string{"<p>Para. {.lead}</p>", "item {.lead}"},
 		},
@@ -379,13 +382,14 @@ func TestGuideWideNeedsMain(t *testing.T) {
 	}
 }
 
-// The Warnings section quotes the start of each message in bold. Every
-// fragment of that text between the "…" placeholders must still occur in
-// a message in the code, or the section is pointing readers at a warning
-// they will never see. Format verbs in the code are read as "…", and %q
-// as a quoted "…".
-func TestGuideWarningsExistInTheCode(t *testing.T) {
-	var src strings.Builder
+// messageText returns every string literal in the package's and the
+// CLI's non-test sources, with literals joined by + read as one, and
+// format verbs read as "…" (%q as a quoted "…"). Comments are not
+// included, so a message that survives only in a comment does not count.
+func messageText(t *testing.T) string {
+	t.Helper()
+	var out strings.Builder
+	verbs := strings.NewReplacer(`%q`, `"…"`, `%s`, `…`, `%d`, `…`, `%v`, `…`, `%w`, `…`)
 	for _, dir := range []string{".", filepath.Join("cmd", "md2html")} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
@@ -399,30 +403,156 @@ func TestGuideWarningsExistInTheCode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			src.Write(b)
+			fset := token.NewFileSet()
+			var sc scanner.Scanner
+			sc.Init(fset.AddFile(f, -1, len(b)), b, nil, 0)
+			joined := false
+			for {
+				_, tok, lit := sc.Scan()
+				if tok == token.EOF {
+					break
+				}
+				switch tok {
+				case token.STRING:
+					v, err := strconv.Unquote(lit)
+					if err != nil {
+						continue
+					}
+					if !joined {
+						out.WriteString("\x00")
+					}
+					out.WriteString(verbs.Replace(v))
+					joined = false
+				case token.ADD:
+					joined = true
+				default:
+					joined = false
+				}
+			}
 		}
 	}
-	code := strings.NewReplacer(`%q`, `"…"`, `%s`, `…`, `%d`, `…`, `%v`, `…`, `%w`, `…`).Replace(src.String())
+	return out.String()
+}
+
+// yamlMessages are the YAML parser's own messages the Warnings section
+// names, each with a label that produces it. They come from a dependency,
+// not this repository, so they are checked by producing them.
+var yamlMessages = map[string]string{
+	"did not find expected key":                      "box: [proven] x",
+	"found character that cannot start any token":    "box: `code` first",
+	"mapping values are not allowed in this context": "box: Note: colon",
+	"unknown anchor":                                 "box: *x",
+	"cannot unmarshal !!map into string":             "box: {a}",
+	"!!seq":                                          "box: [a]",
+}
+
+// The Warnings section quotes each message: the start of it in bold, and
+// the fig faults in italics. Every fragment between the "…" placeholders
+// must occur in a message string in the code, or, for the YAML parser's
+// messages, be produced by converting a label, or the section is pointing
+// readers at a warning they will never see.
+func TestGuideWarningsExistInTheCode(t *testing.T) {
+	code := messageText(t)
+
+	for msg, label := range yamlMessages {
+		var warnings []string
+		convert(t, "```fig\nitems:\n  - "+label+"\n```\n", func(w string) { warnings = append(warnings, w) })
+		if len(warnings) != 1 || !strings.Contains(warnings[0], msg) {
+			t.Errorf("%q gives %q, want a warning containing %q", label, warnings, msg)
+		}
+	}
 
 	text := guide(t)
 	_, section, ok := strings.Cut(text, "\n## Warnings\n")
 	if !ok {
 		t.Fatal("the guide has no Warnings section")
 	}
-	quoted := regexp.MustCompile(`(?m)^\*\*(.+?)\*\*`).FindAllStringSubmatch(section, -1)
-	if len(quoted) < 15 {
-		t.Fatalf("found only %d warnings in the section; has its format changed?", len(quoted))
-	}
-	for _, q := range quoted {
-		for _, frag := range strings.Split(q[1], "…") {
-			frag = strings.Trim(frag, ` "`)
-			if len(frag) < 4 {
-				continue
-			}
-			if !strings.Contains(code, frag) {
-				t.Errorf("the guide quotes %q, which no message in the code contains", frag)
+	check := func(kind string, quoted [][]string, min int) {
+		if len(quoted) < min {
+			t.Fatalf("found only %d %s messages in the section; has its format changed?", len(quoted), kind)
+		}
+		for _, q := range quoted {
+			for _, frag := range strings.Split(q[1], "…") {
+				frag = strings.Join(strings.Fields(strings.Trim(frag, ` "`)), " ")
+				if len(frag) < 4 {
+					continue
+				}
+				known := strings.Contains(code, frag)
+				for msg := range yamlMessages {
+					known = known || strings.Contains(msg, frag) || strings.Contains(frag, msg)
+				}
+				if !known {
+					t.Errorf("the guide quotes %q, which no message contains", frag)
+				}
 			}
 		}
+	}
+	check("bold", regexp.MustCompile(`(?m)^\*\*(.+?)\*\*`).FindAllStringSubmatch(section, -1), 15)
+	check("italic", regexp.MustCompile(`(?s)(?:^|[^*])\*([^*\n][^*]*?)\*`).FindAllStringSubmatch(section, -1), 15)
+}
+
+// Claims about links that only a crawl can check: a leading / is a
+// filesystem path, a query string is dropped, and a reference-style link
+// is rewritten like an inline one.
+func TestGuideLinkClaims(t *testing.T) {
+	text := guide(t)
+	for _, q := range []string{
+		"A link starting with `/` is a filesystem path",
+		"A query string on a document link is dropped",
+		"Reference-style links are rewritten the same way",
+	} {
+		if !strings.Contains(text, q) {
+			t.Errorf("the guide no longer says %q", q)
+		}
+	}
+	root := writeTree(t, map[string]string{
+		"docs/a.md": "[q](./b.md?v=2) [r][ref] [s](/b.md)\n\n[ref]: ./b.md#top\n",
+		"docs/b.md": "# B\n",
+	})
+	res := mustCrawl(t, CrawlOptions{Entries: []string{filepath.Join(root, "docs")}, OutDir: filepath.Join(root, "site"), Depth: -1})
+	var a Doc
+	for _, d := range res.Docs {
+		if filepath.Base(d.Src) == "a.md" {
+			a = d
+		}
+	}
+	var slashWarned bool
+	for _, w := range res.Warnings {
+		slashWarned = slashWarned || strings.Contains(w.Message, "does not exist: /b.md")
+	}
+	if !slashWarned {
+		t.Errorf("a /-rooted link did not warn: %+v", res.Warnings)
+	}
+	src, err := os.ReadFile(a.Src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Convert(src, Options{Fragment: true, CSS: "/**/", LinkMap: a.LinkMap})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`<a href="b.html">q</a>`, `<a href="b.html#top">r</a>`, `<a href="/b.md">s</a>`} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("output lacks %s\ngot: %s", want, out)
+		}
+	}
+}
+
+// --toc float on a page with no marker adds nothing and, unlike the front
+// matter key, says nothing.
+func TestGuideTOCFloatWithoutAMarkerIsSilent(t *testing.T) {
+	if !strings.Contains(guide(t), "Front matter warns; `--toc float` does not.") {
+		t.Error("the guide no longer says --toc float is silent")
+	}
+	var warnings []string
+	out, err := Convert([]byte("# A\n\n## B\n"), Options{CSS: "/**/", TOC: "float",
+		Warn: func(w string) { warnings = append(warnings, w) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), `class="toc`) || len(warnings) > 0 {
+		t.Errorf("toc = %v, warnings = %q; want no list and no warning",
+			strings.Contains(string(out), `class="toc`), warnings)
 	}
 }
 
