@@ -33,6 +33,8 @@ func TestGuideClaims(t *testing.T) {
 		want  []string
 		not   []string
 		warns bool
+		page  bool    // convert a full page, not a fragment
+		opts  Options // further options for the conversion
 	}{
 		{
 			name:  "a ::: inside a code block closes the container",
@@ -149,7 +151,7 @@ func TestGuideClaims(t *testing.T) {
 		},
 		{
 			name:  "an unquoted [ in a fig label fails to parse",
-			quote: "starts with `` ` ``, `*`, `_`, `[`",
+			quote: "starts with `` ` ``, `*`, `[`",
 			src:   "```fig\nitems:\n  - box: [proven] x\n```\n",
 			want:  []string{`class="language-fig"`},
 			warns: true,
@@ -163,8 +165,9 @@ func TestGuideClaims(t *testing.T) {
 		{
 			name:  "a backtick in a caption breaks the fence",
 			quote: "is invalid on a backtick fence",
-			src:   "```go caption=\"a `b`\"\nx\n```\n",
-			not:   []string{"code-figure"},
+			src:   "```go caption=\"a `b`\"\nx\n```\n\n```py\ny\n```\n",
+			want:  []string{"```py"},
+			not:   []string{"code-figure", "language-py"},
 		},
 		{
 			name:  "a tilde fence takes a caption with a backtick",
@@ -218,7 +221,7 @@ func TestGuideClaims(t *testing.T) {
 		},
 		{
 			name:  "an unquoted number in a heading block is empty",
-			quote: "an unquoted number\nbecomes an empty value",
+			quote: "An unquoted number becomes an empty\nvalue",
 			src:   "## A {data-y=1}\n\n## B {data-y=\"1\" aria-label=\"x\"}\n",
 			want:  []string{`<h2 data-y="" id="a">`, `<h2 data-y="1" id="b">`},
 			not:   []string{"aria-label"},
@@ -241,13 +244,53 @@ func TestGuideClaims(t *testing.T) {
 			name:  "HTML comments stay in the page",
 			quote: "HTML comments stay in the page",
 			src:   "<!-- TODO -->\n",
-			want:  []string{"<!-- TODO -->"},
+			page:  true,
+			want:  []string{"<!-- TODO -->", "&lt;!-- TODO --&gt;"},
 		},
 		{
-			name:  "wide has no effect inside a container",
-			quote: "It has no effect inside a container",
-			src:   "::: card\n```fig\nwide: true\nitems:\n  - box: x\n```\n:::\n",
-			want:  []string{"<div class=\"card\">\n<figure class=\"fig fig-wide\">"},
+			name:  "a heading block with a bare key is literal text",
+			quote: "a bare key (`{data-flag}`) or a single-quoted value leaves the\nwhole block",
+			src:   "## J {#j data-flag}\n\n## K {.a data-x='s'}\n",
+			want:  []string{"J {#j data-flag}", "K {.a data-x=&#39;s&#39;}"},
+			not:   []string{`id="j"`, `class="a"`},
+		},
+		{
+			name:  "an attribute block after a paragraph is literal",
+			quote: "After a paragraph or list item, `{.lead}` stays",
+			src:   "Para. {.lead}\n\n- item {.lead}\n",
+			want:  []string{"<p>Para. {.lead}</p>", "item {.lead}"},
+		},
+		{
+			name:  "a link block drops hreflang and type",
+			quote: "`hreflang` and `type` are among those dropped",
+			src:   "[l](./b.md){hreflang=de type=text/html referrerpolicy=no-referrer}\n",
+			want:  []string{`referrerpolicy="no-referrer"`},
+			not:   []string{"hreflang", "type="},
+		},
+		{
+			name:  "a colon after a heading's number claims none",
+			quote: "Anything but a space after the\n    number, `.`, `)` or `:`",
+			src:   "## 4.3: B\n\n## 4.4. C\n\n§4.3 §4.4\n",
+			want:  []string{"<p>§4.3 §4.4</p>"},
+		},
+		{
+			name:  "the first heading claiming a number wins",
+			quote: "When two headings claim one number, the\nfirst wins",
+			src:   "## 4.2 A\n\n## 4.2 B\n\n§4.2\n",
+			want:  []string{`href="#42-a"`},
+		},
+		{
+			name:  "--no-anchors turns off cross-references",
+			quote: "`--no-anchors`\nturns cross-references off",
+			src:   "## 4.2 A\n\n§4.2\n",
+			opts:  Options{Transforms: without("headingAnchors")},
+			want:  []string{"<p>§4.2</p>"},
+		},
+		{
+			name:  "a [c:] badge stops at 60 characters",
+			quote: "up to 60 characters",
+			src:   "[c:" + strings.Repeat("x", 60) + "] [c:" + strings.Repeat("y", 61) + "]\n",
+			want:  []string{`<span class="chip">` + strings.Repeat("x", 60), "[c:" + strings.Repeat("y", 61) + "]"},
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -255,16 +298,17 @@ func TestGuideClaims(t *testing.T) {
 				t.Errorf("the guide no longer says %q", c.quote)
 			}
 			var warnings []string
-			got := convert(t, c.src, func(w string) { warnings = append(warnings, w) })
-			if strings.Contains(c.src, "---\n") || strings.Contains(c.src, "\ufeff") {
-				// Front matter claims concern the page shell's <title>.
-				out, err := Convert([]byte(c.src), Options{CSS: "/**/", NoSource: true,
-					Warn: func(w string) { warnings = append(warnings, w) }})
-				if err != nil {
-					t.Fatal(err)
-				}
-				got = string(out)
+			opt := c.opts
+			opt.CSS = "/**/"
+			opt.Warn = func(w string) { warnings = append(warnings, w) }
+			// Front matter claims concern the page shell's <title>, so
+			// they need a full page too.
+			opt.Fragment = !c.page && !strings.Contains(c.src, "---\n") && !strings.Contains(c.src, "\ufeff")
+			out, err := Convert([]byte(c.src), opt)
+			if err != nil {
+				t.Fatal(err)
 			}
+			got := string(out)
 			for _, w := range c.want {
 				if !strings.Contains(got, w) {
 					t.Errorf("output lacks %q\ngot: %s", w, got)
@@ -310,4 +354,86 @@ func TestGuideConvertsCleanly(t *testing.T) {
 			t.Errorf("%s appears in the guide's prose, outside code", stray)
 		}
 	}
+}
+
+// The wide flag is honoured only by a rule scoped to a figure that is a
+// direct child of the page's <main>, which is what makes the guide's claim
+// true: inside a container the figure is not a child of <main>, and a
+// fragment has no <main>. A rule naming fig-wide any other way would break
+// it.
+func TestGuideWideNeedsMain(t *testing.T) {
+	if !strings.Contains(guide(t), "It has no effect inside a container or in `--fragment` output") {
+		t.Error("the guide no longer states where wide has no effect")
+	}
+	rules := regexp.MustCompile(`(?m)^[^{}\n]*fig-wide[^{}\n]*\{`).FindAllString(defaultCSS, -1)
+	if len(rules) == 0 {
+		t.Error("no stylesheet rule names fig-wide")
+	}
+	for _, r := range rules {
+		if !strings.HasPrefix(strings.TrimSpace(r), "main > figure.fig-wide") {
+			t.Errorf("fig-wide rule %q is not scoped to main > figure", r)
+		}
+	}
+	if strings.Contains(convert(t, "x\n", nil), "<main") {
+		t.Error("fragment output has a <main>")
+	}
+}
+
+// The Warnings section quotes the start of each message in bold. Every
+// fragment of that text between the "…" placeholders must still occur in
+// a message in the code, or the section is pointing readers at a warning
+// they will never see. Format verbs in the code are read as "…", and %q
+// as a quoted "…".
+func TestGuideWarningsExistInTheCode(t *testing.T) {
+	var src strings.Builder
+	for _, dir := range []string{".", filepath.Join("cmd", "md2html")} {
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			if strings.HasSuffix(f, "_test.go") {
+				continue
+			}
+			b, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			src.Write(b)
+		}
+	}
+	code := strings.NewReplacer(`%q`, `"…"`, `%s`, `…`, `%d`, `…`, `%v`, `…`, `%w`, `…`).Replace(src.String())
+
+	text := guide(t)
+	_, section, ok := strings.Cut(text, "\n## Warnings\n")
+	if !ok {
+		t.Fatal("the guide has no Warnings section")
+	}
+	quoted := regexp.MustCompile(`(?m)^\*\*(.+?)\*\*`).FindAllStringSubmatch(section, -1)
+	if len(quoted) < 15 {
+		t.Fatalf("found only %d warnings in the section; has its format changed?", len(quoted))
+	}
+	for _, q := range quoted {
+		for _, frag := range strings.Split(q[1], "…") {
+			frag = strings.Trim(frag, ` "`)
+			if len(frag) < 4 {
+				continue
+			}
+			if !strings.Contains(code, frag) {
+				t.Errorf("the guide quotes %q, which no message in the code contains", frag)
+			}
+		}
+	}
+}
+
+// without returns the builtin transforms minus the named one, as the CLI's
+// --no-* flags build them.
+func without(name string) []Transform {
+	var ts []Transform
+	for _, t := range Builtins() {
+		if t.Name != name {
+			ts = append(ts, t)
+		}
+	}
+	return ts
 }

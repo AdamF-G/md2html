@@ -11,13 +11,14 @@ cannot describe a different version. In the md2html repo the same guide is
 `docs/authoring.md`. Read its quick reference and its Silent traps list;
 the rest is detail to look up.
 
-Three of those traps come up most. Each gives valid output, a zero exit and
-no warning:
+Three of those traps come up most. Each gives valid output and a zero exit,
+with no warning:
 
 - **A fence inside a fence needs a longer outer fence.** Showing
   three-backtick source takes four backticks around it; showing a `:::`
   container inside a container takes `::::` on the outer one.
 - **Link to the `.md` source, never the `.html`.** An `.html` link is never
-  matched to the page md2html emits.
+  matched to the page md2html emits, and when the file exists nothing
+  warns.
 - **Only the first class names a container's kind.** `::: {.compact
   .warning}` is a plain, unstyled div; write `::: warning {.compact}`.

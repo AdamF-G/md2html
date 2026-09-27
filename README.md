@@ -407,10 +407,11 @@ out, err := md2html.Convert(src, md2html.Options{SourcePath: "doc.md"})
 ```
 
 `Options.Warn`, when set, receives one message per non-fatal problem found
-while converting a document. Three things report so far: a front matter
-block that isn't flat `key: value`, a container naming a kind that doesn't
-exist, and a `fig` fence whose body doesn't parse or doesn't validate. All
-three arrive whatever `Transforms` holds — a builtin that reports is rebuilt
+while converting a document: a front matter block that isn't flat
+`key: value`, a container naming a kind that doesn't exist, a `fig` fence
+whose body doesn't parse or doesn't validate, and the others listed under
+Warnings in the [authoring guide](./docs/authoring.md#warnings). They all
+arrive whatever `Transforms` holds — a builtin that reports is rebuilt
 against this sink before it runs, so appending to `Builtins()` costs you no
 diagnostics. `Convert` never writes to stderr itself; the callback runs
 synchronously on the calling goroutine.

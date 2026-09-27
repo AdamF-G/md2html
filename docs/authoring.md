@@ -46,8 +46,9 @@ before you finish.
    [Nesting fences](#nesting-fences).
 2. **An unclosed `:::` container runs to the end of the document**, headings
    and all.
-3. **Link to the `.md` source, never the `.html` output.** See
-   [Links and images](#links-and-images).
+3. **Link to the `.md` source, never the `.html` output.** An `.html` link
+   is never matched to the page md2html emits, and when the file exists
+   nothing warns. See [Links and images](#links-and-images).
 4. **Only the first class names a container's kind.** `::: {.compact
    .warning}` is a plain, unstyled div; write `::: warning {.compact}`.
 5. **A container class outside the shipped kinds is unstyled.**
@@ -62,8 +63,9 @@ before you finish.
    renders `map<span>key</span>` and loses `{value}`. Put it in a code span.
 9. **A backslash does not escape a status word or `§`.** `\[draft]` is
    still a badge. Put it in a code span.
-10. **Unquoted YAML in a `fig` label breaks or truncates.** `box: Step #3`
-    renders "Step". See [Quote labels](#quote-labels).
+10. **An unquoted ` #` in a `fig` label starts a comment.** `box: Step #3`
+    renders "Step". Other unquoted labels that YAML cannot read fail with a
+    warning. See [Quote labels](#quote-labels).
 11. **A backtick in a code caption breaks every fence after it.** Use a
     `~~~` fence for that block.
 12. **A caption on a `mermaid` fence is dropped.** Caption the diagram in
@@ -77,6 +79,13 @@ before you finish.
 16. **A fragment in a link is never checked.** `./b.md#no-such` passes.
 17. **Two explicit `{#same}` ids both stay.** The page then has duplicate
     ids, and links go to the first.
+18. **A heading's attribute block needs double-quoted values.** A bare key
+    or a single-quoted value, as in `## Setup {#setup data-flag}`, leaves
+    the whole block in the heading text, id included. See
+    [Headings and anchors](#headings-and-anchors).
+19. **An attribute block works only after a heading, link, image, span or
+    container fence.** After a paragraph or list item, `{.lead}` stays
+    literal text.
 
 ## Page structure
 
@@ -145,11 +154,14 @@ For an anchor that survives rewording, give the heading an explicit id:
 ```
 
 A heading's attribute block takes an `id`, classes, and `key="value"`
-pairs. Quote every value: `{data-step="1"}`, since an unquoted number
-becomes an empty value. It takes the common global attributes (`title`,
-`lang`, `dir`, `role`, `style`…) and `data-` names; `aria-` names and
-event handlers are dropped. An explicit id is never rewritten, and
-generated slugs avoid it.
+pairs, with a stricter grammar than a container's. Write every value in
+double quotes: `{data-step="1"}`. An unquoted number becomes an empty
+value, and a bare key (`{data-flag}`) or a single-quoted value leaves the
+whole block, id included, as literal heading text. It takes the common
+global attributes (`title`, `lang`, `dir`, `role`, `style`…) and `data-`
+names; `aria-` names and event handlers are dropped. An explicit id is
+never rewritten, and generated slugs avoid it. GitHub shows the block as
+literal text.
 
 An attribute block at the end of a heading line belongs to the heading,
 even straight after a link: `## See [docs](./docs.md){.ext}` puts the class
@@ -159,7 +171,8 @@ on the `<h2>`.
 
 `[[toc]]` alone in its paragraph becomes a `<nav class="toc">` listing the
 page's headings, each linking to its anchor. `[TOC]` works too, in any
-case. Depth shows as `›` marks, up to three.
+case. Depth shows as `›` marks, up to three. Headings inside a `details`, `aside`
+or `example` block are listed too, even though the block starts closed.
 
 ```markdown
 [[toc]]
@@ -225,9 +238,10 @@ block straight after it, with no space (Pandoc's `link_attributes`):
 ![Chart](./chart.png){width=50% .wide}   -> <img ... class="wide" width="50%">
 ```
 
-It takes the global attributes, the element's own (`target`, `rel`,
-`download` on a link; `width`, `height`, `loading` on an image), and any
-`data-` or `aria-` name. Anything else, such as an event handler, is
+It takes the global attributes, some of the element's own (`target`,
+`rel`, `download`, `referrerpolicy` on a link; `width`, `height`,
+`loading`, `decoding`, `sizes` on an image), and any `data-` or `aria-`
+name. `hreflang` and `type` are among those dropped. Anything else, such as an event handler, is
 dropped. `href`, `src` and `srcset` warn: write the target in the link. A
 block with a space before it, with nothing in it, or with something that is
 not an attribute name (`{{version}}`) stays as literal text.
@@ -353,7 +367,11 @@ Parse each file, then validate it.
 
 These look the same as the `fig` items of the same names. Use the container
 unless the item sits inside a diagram: its entries are ordinary Markdown,
-and on GitHub it still reads as a definition list.
+and the source stays readable on GitHub, which shows them as plain lines.
+
+A plain definition list, with no container, is already styled as a list of
+terms. Use `::: defs` when you want the terms and definitions laid out as a
+grid.
 
 ### nav
 
@@ -390,7 +408,8 @@ class it is unstyled.
 
 ### Nesting fences
 
-A fence closes at the first line with as many backticks as it opened with.
+A fence closes at the first line with at least as many backticks as it
+opened with.
 To show a three-backtick block, open the outer fence with four:
 
 `````markdown
@@ -474,7 +493,7 @@ items:
 Labels take inline Markdown (code spans, emphasis, links, badges, `§`
 references) only when YAML reads them as a string. Quote a label that:
 
-- starts with `` ` ``, `*`, `_`, `[`, `{`, `&`, `!`, `%`, `@`, `|` or `>`
+- starts with `` ` ``, `*`, `[`, `{`, `&`, `!`, `%`, `@`, `|` or `>`
 - contains `: ` or ` #`
 
 Unquoted, the first group fails to parse and the figure renders as a code
@@ -741,7 +760,8 @@ between pages yourself.
 
 ### Fragment output
 
-`--fragment` emits the `<title>`, `<style>` and body only, for a host that
+`--fragment` emits the provenance marker, `<title>`, `<style>` and body
+only, for a host that
 supplies the page, such as a Claude Artifact. A fragment has no script: no
 mermaid runtime, no floating contents list, no click-to-expand, and no
 embedded source. A mermaid fence arrives as `<pre class="mermaid">`, which
@@ -783,7 +803,7 @@ Expected if that tree is built by another tool.
 **exclude "…" matches nothing** / **is not a valid pattern** — check the
 `--exclude` value; a name pattern cannot contain `/`.
 
-**pulled in N document(s) from outside** — links reached pages outside the
+**pulled in … document(s) from outside** — links reached pages outside the
 entry points. Check none were unintended.
 
 **front matter block is not flat key: value** — see
@@ -792,7 +812,11 @@ entry points. Check none were unintended.
 **front matter toc "…" has no [[toc]] or [TOC] marker** — add the marker,
 or drop the `toc:` key.
 
-**… is not a contents list layout** — use `inline`, `float` or `none`.
+**… is not a contents list layout** — use `inline` or `float`, or, in
+front matter only, `none`.
+
+**--autotoc "…" is not all or long** — use `all` or `long`. The run stops
+with exit status 2; the library instead warns and ignores the value.
 
 **… is not a language tag** — use a tag such as `en`, `de` or `pt-BR`.
 
@@ -802,10 +826,11 @@ the braced form for your own class.
 **container has no class and no recognizable kind name** — `::: {}` has
 nothing in it. Name a kind.
 
-**stats container has no definition list** / **defs container** — write
-each entry as a term line followed by `: ` definition lines.
+**… container has no definition list** — in a `stats` or `defs`
+container, write each entry as a term line followed by `: ` definition
+lines.
 
-**href cannot be set from an attribute block** (or `src`, `srcset`) —
+**… cannot be set from an attribute block** — `href`, `src` or `srcset`;
 write the target in the link itself.
 
 **fig fence: …; rendering it as a code block** — the figure is shown as
