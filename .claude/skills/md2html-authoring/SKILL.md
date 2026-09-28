@@ -5,6 +5,11 @@ description: Use when writing or editing Markdown that will be converted to HTML
 
 # Authoring Markdown for md2html
 
+No `md2html` on `PATH`? Get it from
+[github.com/AdamF-G/md2html](https://github.com/AdamF-G/md2html):
+`go install github.com/AdamF-G/md2html/cmd/md2html@latest` (needs Go 1.26
+or later).
+
 **Run `md2html --guide` and read its output before writing the page.** It
 prints the authoring guide for the binary that will convert the page, so it
 cannot describe a different version. In the md2html repo the same guide is
