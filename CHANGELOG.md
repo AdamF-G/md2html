@@ -9,18 +9,10 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
-## Unreleased
+## v0.9.0 — 2026-09-28
 
 ### Changed
 
-- **`--guide`** prints the guide's quick reference, its silent traps and
-  an index of its other sections, about a fifth of the whole, rather than
-  all of it. `--guide <section>` prints one section, such as
-  `--guide diagrams`, and `--guide all` the
-  whole guide. At nine thousand tokens the whole guide was a lot to put in
-  an agent's context each time the skill loaded, and more than Claude
-  Code shows of a command's output before cutting it short. The library
-  adds `GuideSummary` and `GuideSection`.
 - The installed authoring skill is `SKILL.md` alone. It sends the agent to
   `md2html --guide` instead of an `authoring.md` copied beside it, which
   described whichever binary installed it rather than the one converting
@@ -36,12 +28,17 @@ major version instead.
 
 ### Added
 
-- **`--guide`** (`AuthoringGuide`) prints the Markdown authoring guide,
-  and both `--help` and the skill point at it. On a
-  terminal it opens in `$PAGER`, or `less`, since it runs to several
-  hundred lines; piped or redirected it is written unchanged. An agent
-  without the skill could otherwise learn the syntax only by probing the
-  output: in a skill evaluation, runs without it reverse-engineered the
+- **`--guide`** (`GuideSummary`) prints the Markdown authoring guide's
+  quick reference and silent traps, with an index of its other sections,
+  and both `--help` and the skill point at it. `--guide <section>`
+  (`GuideSection`) prints one section, such as `--guide diagrams`, and
+  `--guide all` (`AuthoringGuide`) the whole guide. The whole guide is
+  about nine thousand tokens: more than an agent needs every time it
+  writes a page, and more than Claude Code shows of a command's output
+  before cutting it short. On a terminal the output opens in `$PAGER`, or
+  `less`; piped or redirected it is written unchanged. An agent without
+  the skill could otherwise learn the syntax only by probing the output:
+  in a skill evaluation, runs without it reverse-engineered the
   stylesheet's class names or ran `strings` on the binary to find the
   embedded guide.
 - **`--install-skill DIR`** installs the authoring skill into any agent's
