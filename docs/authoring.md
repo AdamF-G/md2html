@@ -1,9 +1,11 @@
 # Writing Markdown for md2html
 
-How to write `.md` that converts well with `md2html`. `md2html --guide`
-prints this text for the binary you have, and `md2html --version` names
-that binary. Read the quick reference and the silent traps; the rest is
-detail to look up.
+How to write `.md` that converts well with `md2html`. Read the quick
+reference and the silent traps; the rest is detail to look up.
+`md2html --guide` prints those two for the binary you have, with an index
+of the other sections: `md2html --guide diagrams` prints one of them, and
+`md2html --guide all` the whole guide. `md2html --version` names that
+binary.
 
 [[toc]]
 

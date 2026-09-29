@@ -567,3 +567,70 @@ func without(name string) []Transform {
 	}
 	return ts
 }
+
+// The summary is what every authoring session reads, so it holds the
+// quick reference and every silent trap, and nothing past them: a section
+// that grows into it is context each session pays for. The size budget
+// is what notices that happening, or the traps list outgrowing it.
+func TestGuideSummaryHoldsTheQuickReferenceAndTraps(t *testing.T) {
+	sum := string(GuideSummary())
+	for _, name := range summarySections {
+		sec, err := GuideSection(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(sum, strings.TrimRight(string(sec), "\n")) {
+			t.Errorf("summary is missing the whole %s section", name)
+		}
+	}
+	for _, not := range []string{"## Page structure", "### Nesting fences", "\n[[toc]]\n"} {
+		if strings.Contains(sum, not) {
+			t.Errorf("summary carries %q", not)
+		}
+	}
+	if len(sum) > 8000 {
+		t.Errorf("summary is %d bytes; keep it under 8000, or move detail into a section", len(sum))
+	}
+}
+
+// Every name the summary's index offers is a section GuideSection
+// prints, starting at that section's heading.
+func TestGuideSummaryNamesResolve(t *testing.T) {
+	sum := string(GuideSummary())
+	index := regexp.MustCompile("(?m)^- `([^`]+)`: (.*)$").FindAllStringSubmatch(sum, -1)
+	if len(index) < 8 {
+		t.Fatalf("found only %d sections in the index", len(index))
+	}
+	for _, m := range index {
+		b, err := GuideSection(m[1])
+		if err != nil {
+			t.Errorf("%s: %v", m[1], err)
+			continue
+		}
+		first, _, _ := strings.Cut(string(b), "\n")
+		if first != "## "+strings.SplitN(m[2], " (", 2)[0] {
+			t.Errorf("%s printed a section starting %q", m[1], first)
+		}
+	}
+}
+
+// A section runs from its `##` heading to the next, carrying the headings
+// below it, and a heading inside a code block is example text, not a
+// section. Only a section's whole name finds it.
+func TestGuideSection(t *testing.T) {
+	src := []byte("# T\n\nintro\n\n## Links and images\n\nl\n\n### Following links\n\nf\n\n" +
+		"## Code\n\n```markdown\n## Not a section\n```\n\nc\n")
+	parts := splitGuide(src)
+	got, err := guideSection(src, parts, "links-and-images")
+	if err != nil || string(got) != "## Links and images\n\nl\n\n### Following links\n\nf\n" {
+		t.Errorf("links-and-images: %q, %v", got, err)
+	}
+	if got, _ := guideSection(src, parts, "code"); !strings.HasSuffix(string(got), "```\n\nc\n") {
+		t.Errorf("code: %q", got)
+	}
+	for _, name := range []string{"not-a-section", "following-links", "links"} {
+		if _, err := guideSection(src, parts, name); err == nil {
+			t.Errorf("%s found a section", name)
+		}
+	}
+}

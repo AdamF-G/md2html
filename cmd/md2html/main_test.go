@@ -332,27 +332,56 @@ func TestRunVersionAfterEntryConvertsNothing(t *testing.T) {
 	}
 }
 
-// --guide prints the authoring guide to stdout and nothing else, so it can
+// --guide prints the guide's summary to stdout and nothing else, so it can
 // be piped or read straight into an agent's context.
-func TestRunGuidePrintsTheAuthoringGuide(t *testing.T) {
+func TestRunGuidePrintsTheSummary(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := run([]string{"--guide"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
-	if out.String() != string(md2html.AuthoringGuide()) {
-		t.Error("stdout is not the authoring guide")
+	if out.String() != string(md2html.GuideSummary()) {
+		t.Error("stdout is not the guide's summary")
 	}
 	if errb.Len() != 0 {
 		t.Errorf("nothing should go to stderr, got: %s", errb.String())
 	}
 }
 
-// Like --version, asking for the guide is the whole invocation.
+// With "all" as its entry, --guide prints the whole guide.
+func TestRunGuideAllPrintsTheWholeGuide(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--guide", "all"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	if out.String() != string(md2html.AuthoringGuide()) {
+		t.Error("stdout is not the authoring guide")
+	}
+}
+
+// With section names as its entries, --guide prints each of them, in the
+// order asked for.
+func TestRunGuidePrintsNamedSections(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--guide", "styling", "diagrams"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	got := out.String()
+	if !strings.HasPrefix(got, "## Styling\n") || !strings.Contains(got, "\n## Diagrams\n") {
+		t.Errorf("did not print Styling then Diagrams:\n%s", got)
+	}
+}
+
+// Like --version, asking for the guide is the whole invocation: an entry
+// beside it is a section name, and a path names none, so the run fails
+// having converted nothing rather than printing a guide nobody asked for.
 func TestRunGuideAfterEntryConvertsNothing(t *testing.T) {
 	root := tree(t, map[string]string{"docs/a.md": "# A"})
 	var out, errb bytes.Buffer
-	if code := run([]string{filepath.Join(root, "docs"), "--guide"}, &out, &errb); code != 0 {
-		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	if code := run([]string{filepath.Join(root, "docs"), "--guide"}, &out, &errb); code != 2 {
+		t.Errorf("exit %d, want 2 for a section that does not exist", code)
+	}
+	if !strings.Contains(errb.String(), "no guide section") {
+		t.Errorf("stderr does not say the section is unknown: %s", errb.String())
 	}
 	if _, err := os.Stat(filepath.Join(root, "docs", "a.html")); err == nil {
 		t.Error("--guide converted a document")

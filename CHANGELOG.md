@@ -13,6 +13,14 @@ major version instead.
 
 ### Changed
 
+- **`--guide`** prints the guide's quick reference, its silent traps and
+  an index of its other sections, about a fifth of the whole, rather than
+  all of it. `--guide <section>` prints one section, such as
+  `--guide diagrams`, and `--guide all` the
+  whole guide. At nine thousand tokens the whole guide was a lot to put in
+  an agent's context each time the skill loaded, and more than Claude
+  Code shows of a command's output before cutting it short. The library
+  adds `GuideSummary` and `GuideSection`.
 - The installed authoring skill is `SKILL.md` alone. It sends the agent to
   `md2html --guide` instead of an `authoring.md` copied beside it, which
   described whichever binary installed it rather than the one converting

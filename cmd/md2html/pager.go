@@ -8,7 +8,7 @@ import (
 )
 
 // page writes text to stdout, through a pager when stdout is a terminal.
-// The guide runs to a thousand lines, and a terminal given all of them at
+// The whole guide runs to a thousand lines, and a terminal given them all at
 // once shows only the end. Anything else — a pipe, a file, a test buffer,
 // an agent capturing output — gets the bytes unchanged, so --guide stays
 // safe to read straight into a context.

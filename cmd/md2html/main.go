@@ -59,7 +59,8 @@ Output never leaves -o.
 
 Writing the Markdown: md2html --guide prints the syntax it understands
 (callouts, figures, chips, cross-references) and the traps that render
-wrong without a warning.
+wrong without a warning; md2html --guide <section> prints the detail on
+one construct, and md2html --guide all the whole guide.
 
 Flags:
 `)
@@ -82,7 +83,7 @@ Flags:
 		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
 		version   = fs.Bool("version", false, "print the version and exit")
-		guide     = fs.Bool("guide", false, "print the Markdown authoring guide, through $PAGER on a terminal, and exit")
+		guide     = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
 
 		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
 		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
@@ -115,8 +116,16 @@ Flags:
 	}
 	// The guide the skill sends its reader to, and the one --help names for
 	// a reader without the skill. Paged on a terminal; raw anywhere else.
+	// Its entries, if any, are the sections to print rather than documents:
+	// the flag package cannot give a bool flag an optional value, and the
+	// guide is the whole invocation, so there is nothing else for them to be.
 	if *guide {
-		page(stdout, md2html.AuthoringGuide())
+		text, err := guideText(entries)
+		if err != nil {
+			fmt.Fprintf(stderr, "md2html: %v\n", err)
+			return 2
+		}
+		page(stdout, text)
 		return 0
 	}
 	// Also ahead of the entry check, and for the same reasons: installing
@@ -262,6 +271,29 @@ Flags:
 		return 1
 	}
 	return 0
+}
+
+// guideText is what --guide prints for the sections named: the summary
+// for none, the whole guide for "all", and otherwise each section in turn.
+func guideText(names []string) ([]byte, error) {
+	if len(names) == 0 {
+		return md2html.GuideSummary(), nil
+	}
+	if len(names) == 1 && names[0] == "all" {
+		return md2html.AuthoringGuide(), nil
+	}
+	var out []byte
+	for _, n := range names {
+		b, err := md2html.GuideSection(n)
+		if err != nil {
+			return nil, err
+		}
+		if len(out) > 0 {
+			out = append(out, '\n')
+		}
+		out = append(out, b...)
+	}
+	return out, nil
 }
 
 // buildOptions assembles per-document conversion options from the flags.

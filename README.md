@@ -42,8 +42,9 @@ md2html --install-skill DIR       # any agent, into the skills directory it read
 
 Each writes `SKILL.md` into a `md2html-authoring` directory. The skill
 tells the agent when to look and what the silent traps are, and sends it to
-`md2html --guide` for the full [authoring reference](./docs/authoring.md),
-so the guidance always describes the binary that will convert the page —
+`md2html --guide` for the [authoring reference](./docs/authoring.md) —
+its quick reference and traps first, then one section at a time as the
+page needs them — so the guidance always describes the binary that will convert the page —
 which neither a copy installed beside the skill nor a link to this repo's
 `main` would. None of the flags creates the directory it is anchored to —
 `.claude` for the first two, `DIR` itself for the third. A missing one
@@ -384,7 +385,7 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
-| `--guide` | print the Markdown authoring guide — the syntax and the silent traps — and exit; the reference the skill points to. On a terminal it opens in `$PAGER` (`less` if unset; `PAGER=cat` for none); piped or redirected, it is written unchanged |
+| `--guide` | print the Markdown authoring guide's quick reference, its silent traps and an index of its other sections, and exit; the reference the skill points to. `--guide diagrams` prints one section instead, and `--guide all` the whole guide. On a terminal it opens in `$PAGER` (`less` if unset; `PAGER=cat` for none); piped or redirected, it is written unchanged |
 | `--install-skill DIR` | install the authoring skill into `DIR`, an existing skills directory any agent reads, and exit |
 | `--install-skill-user` | install it for Claude Code, under `~/.claude/skills`, instead |
 | `--install-skill-project` | install it under `./.claude/skills` instead |
