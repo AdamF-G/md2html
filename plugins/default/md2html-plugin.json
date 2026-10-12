@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "name": "default",
+  "description": "The stylesheet md2html uses when no style is selected",
+  "styles": {
+    "default": {
+      "description": "Warm neutrals, system fonts, both themes",
+      "base": "none",
+      "css": ["default.css"]
+    }
+  }
+}
