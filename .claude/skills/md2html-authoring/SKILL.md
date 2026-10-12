@@ -18,9 +18,9 @@ a construct beyond a plain line in the quick reference, such as a
 container, a `fig` diagram or a cross-reference, print its section:
 `md2html --guide callouts-and-containers`, `md2html --guide diagrams`. If
 the conversion prints warnings, `md2html --guide warnings` says what each
-one means and how to fix it. To change how pages look, `md2html --guide styles`
-covers choosing a style and writing a plugin that adds one. In the md2html
-repo the whole guide is `docs/authoring.md`.
+one means and how to fix it. To change how pages look,
+`md2html --guide styles` covers choosing a style and writing a plugin that
+adds one. In the md2html repo the whole guide is `docs/authoring.md`.
 
 Three of those traps come up most. Each gives valid output and a zero exit,
 with no warning:

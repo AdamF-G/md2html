@@ -672,7 +672,7 @@ func TestGuideStylesNamesRealFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, s := range []string{"--list-styles", "--style", "--plugin", "style:", "plugins:", "claude-artifact", ManifestName} {
+	for _, s := range []string{"--list-styles", "--style", "--plugin", "style:", "plugins:", "claude-artifact", ManifestName, "woff2", "starting with a letter", "reserved"} {
 		if !strings.Contains(string(sec), s) {
 			t.Errorf("the styles section does not mention %s", s)
 		}

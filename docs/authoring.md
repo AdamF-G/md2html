@@ -783,7 +783,8 @@ wants an app-like layout or a bespoke look is better written as HTML.
 ## Styles
 
 A page's look comes from styles. With none chosen it gets the default.
-`md2html --list-styles` lists every style available:
+`md2html --list-styles` lists every style available. Long descriptions are
+shortened here:
 
 ```text
 claude-artifact: Looks from pages Claude publishes as Artifacts
@@ -817,6 +818,11 @@ another with `--plugin path/to/it` for a whole run, or with `plugins:
 comma-separated list. A page's `plugins:` only matters with its own
 `style:`.
 
+Paths resolve in four places. `--plugin DIR` is relative to the directory
+md2html runs in. `plugins:` is relative to the page. The `css` paths in a
+manifest are relative to the plugin's directory. A `url()` in a CSS file is
+relative to that CSS file.
+
 ### Writing a plugin
 
 A plugin is a directory holding an `md2html-plugin.json` manifest and the
@@ -849,9 +855,15 @@ accent colour and the text column's width:
 | Key | Meaning |
 |---|---|
 | `format` | Always `1`. |
-| `name` | The plugin's name: lowercase letters, digits and hyphens. |
+| `name` | The plugin's name: lowercase letters, digits and hyphens, starting with a letter. |
 | `description` | One line for `--list-styles`. |
 | `styles` | Each style by name: its `description`, its `css` files in order, and `base`. |
+| `base` | Per style. `default`, the default, adds the style to the default stylesheet. `none` starts from nothing. |
+
+Style names follow the same rules as plugin names. `default` is reserved
+for the built-in plugin and its style, so a plugin or style named `default`
+fails to load. A manifest with no `format`, no `name`, no `styles`, or a
+style with no `css` list fails to load. An unknown key only warns.
 
 A style is added on top of the default stylesheet, so it only needs to say
 what differs. `"base": "none"` starts from nothing instead, and is only
@@ -859,8 +871,14 @@ allowed for the first style a page lists.
 
 Fonts and images the CSS names with `url(fonts/x.woff2)` are copied into
 every page as `data:` URIs, so the page stays one file that loads nothing.
+Only these file types can be inlined: `woff2`, `woff`, `ttf`, `otf`, `svg`,
+`png`, `jpg` or `jpeg`, `gif` and `webp`. Any other extension in a `url()`
+is an error. A `url(#id)` reference and a `data:` URL already in the CSS
+are left as written.
+
 For the same reason a plugin cannot use `@import`, a web address, or a
-file outside its own directory: each is an error naming the file.
+file outside its own directory: each is an error naming the file. A symlink
+that leads outside the plugin counts as outside.
 
 ### What a style can change
 
