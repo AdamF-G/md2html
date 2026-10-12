@@ -915,10 +915,15 @@ Set each colour four times: on `:root`, in the
 Figures have two more. `--fig-weight` is written by md2html onto each
 figure panel from its item's `weight`, and sets the panel's share of the
 row; a style can read it but should not set it. `--fig-surface` is the fill
-of the card drawn around a figure panel, and an accent ring inside the card
-paints its gap in the same colour. To change the card's fill, set
-`--fig-surface` on `.fig-panel:not(.fig-panel-arrow)`, the selector the
-default uses, rather than `background`, so the ring still matches.
+the default stylesheet gives the card drawn around a figure panel, and an
+accent ring inside the card paints its gap in the same colour. It belongs
+to the default's card rules, not to md2html, so it exists only while those
+rules do. A style built on the default can change the card's fill by
+setting `--fig-surface` on
+`.fig-panel:not(.fig-panel-arrow):not(.fig-panel-accent)`, rather than
+setting `background`, so the ring still matches. The extra `:not()` leaves
+accented panels their tint: without it the rule ties with the default's
+accent rule and, coming later, wins.
 
 Classes you can style, beyond plain elements: `callout`, `card`, `group`,
 `stats`, `defs`, `details.container`, `chip` and `chip-*`, `xref`,
