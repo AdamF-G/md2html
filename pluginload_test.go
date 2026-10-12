@@ -168,3 +168,17 @@ func TestAvailablePluginsRefusesShadowingABuiltin(t *testing.T) {
 		t.Error("a local plugin shadowed a built-in")
 	}
 }
+
+// The manifest is read through the same containment as every other file
+// in the plugin: a manifest symlinked from outside would let a directory
+// pass for a plugin it does not hold.
+func TestLoadRefusesAManifestFromOutside(t *testing.T) {
+	root := pluginDir(t, map[string]string{"elsewhere.json": acmeManifest, "p/style.css": "a{}"})
+	if err := os.Symlink(filepath.Join(root, "elsewhere.json"), filepath.Join(root, "p", ManifestName)); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewPluginCache().Load("p", root, nil)
+	if err == nil || !strings.Contains(err.Error(), "outside the plugin") {
+		t.Errorf("err = %v, want outside the plugin", err)
+	}
+}

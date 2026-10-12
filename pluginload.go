@@ -100,7 +100,8 @@ func loadDir(real, where string, warn func(string)) (*Plugin, error) {
 	if !fi.IsDir() {
 		return nil, fmt.Errorf("plugin %s: not a directory", where)
 	}
-	data, err := os.ReadFile(filepath.Join(real, ManifestName))
+	fsys := os.DirFS(real)
+	data, err := readContained(real, fsys, ManifestName)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, fmt.Errorf("plugin %s: no %s in it", where, ManifestName)
 	} else if err != nil {
@@ -110,7 +111,7 @@ func loadDir(real, where string, warn func(string)) (*Plugin, error) {
 	if err != nil {
 		return nil, err
 	}
-	p.key, p.fsys, p.dir = real, os.DirFS(real), real
+	p.key, p.fsys, p.dir = real, fsys, real
 	return p, nil
 }
 
@@ -119,24 +120,33 @@ func loadDir(real, where string, warn func(string)) (*Plugin, error) {
 // symlink pointing elsewhere. That is what stops a plugin pulling an
 // arbitrary local file into every page it styles.
 func (p *Plugin) readFile(rel string) ([]byte, error) {
-	clean := path.Clean(rel)
-	if !fs.ValidPath(clean) {
-		return nil, fmt.Errorf("plugin %s: %s is outside the plugin", p.Name, rel)
-	}
-	if p.dir != "" {
-		real, err := filepath.EvalSymlinks(filepath.Join(p.dir, filepath.FromSlash(clean)))
-		if err != nil {
-			return nil, fmt.Errorf("plugin %s: %w", p.Name, err)
-		}
-		if r, err := filepath.Rel(p.dir, real); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf("plugin %s: %s is outside the plugin", p.Name, rel)
-		}
-	}
-	b, err := fs.ReadFile(p.fsys, clean)
+	b, err := readContained(p.dir, p.fsys, rel)
 	if err != nil {
 		return nil, fmt.Errorf("plugin %s: %w", p.Name, err)
 	}
 	return b, nil
+}
+
+// readContained reads rel from fsys, the plugin rooted at dir, or at no
+// directory for a built-in, refusing a path that leads outside it. The
+// manifest is read this way too, before the plugin has a name, so that a
+// manifest symlinked from elsewhere cannot make a directory pass for a
+// plugin it does not hold.
+func readContained(dir string, fsys fs.FS, rel string) ([]byte, error) {
+	clean := path.Clean(rel)
+	if !fs.ValidPath(clean) {
+		return nil, fmt.Errorf("%s is outside the plugin", rel)
+	}
+	if dir != "" {
+		real, err := filepath.EvalSymlinks(filepath.Join(dir, filepath.FromSlash(clean)))
+		if err != nil {
+			return nil, err
+		}
+		if r, err := filepath.Rel(dir, real); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("%s is outside the plugin", rel)
+		}
+	}
+	return fs.ReadFile(fsys, clean)
 }
 
 // builtinPlugins parses the embedded plugins once. A built-in that does not
