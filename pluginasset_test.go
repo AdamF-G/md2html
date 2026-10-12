@@ -241,3 +241,25 @@ func TestInlineAssetsKeepsLegitimateCSS(t *testing.T) {
 		})
 	}
 }
+
+// Whatever the input, the scanner must end, and a stylesheet it accepts
+// must hold no URL left to fetch: rescanning its output finds every URL
+// already inline.
+func FuzzInlineAssets(f *testing.F) {
+	for _, s := range []string{
+		defaultCSS, `a{b:url(i.svg#x)}`, `a{b:image-set("a.png" 1x)}`, `\75 rl(a.png)`,
+		"a{content:\"x\r}", `@\69mport "x";`, `<!--url(a.png)-->`, `a{b:src("a.png")}`,
+	} {
+		f.Add(s)
+	}
+	files := map[string]string{"i.svg": "<svg/>", "a.png": "PNG"}
+	f.Fuzz(func(t *testing.T, css string) {
+		out, err := inlineAssets(css, "style.css", fakeRead(files))
+		if err != nil {
+			return
+		}
+		if err := checkInline(out); err != nil {
+			t.Errorf("accepted %q, but its output %q fails the recheck: %v", css, out, err)
+		}
+	})
+}
