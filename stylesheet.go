@@ -80,6 +80,10 @@ func (c *PluginCache) Stylesheet(names []string, plugins []*Plugin, warn func(st
 // starts from nothing, and each pick's CSS files in order, one newline
 // between parts. A lone base-none pick is its CSS exactly, so selecting
 // the default style reproduces defaultCSS byte for byte.
+//
+// The joined sheet is scanned once more, as the browser will read it,
+// since files that each pass alone can join into one that fetches; see
+// checkInline.
 func assemble(picks []selected) (string, error) {
 	var parts []string
 	if !picks[0].style.BaseNone {
@@ -98,7 +102,15 @@ func assemble(picks []selected) (string, error) {
 			parts = append(parts, css)
 		}
 	}
-	return strings.Join(parts, "\n"), nil
+	sheet := strings.Join(parts, "\n")
+	if err := checkInline(sheet); err != nil {
+		names := make([]string, len(picks))
+		for i, s := range picks {
+			names[i] = s.qualified()
+		}
+		return "", fmt.Errorf("style %s: %w", strings.Join(names, ", "), err)
+	}
+	return sheet, nil
 }
 
 // resolveStyle finds the style a name selects. A qualified name picks from

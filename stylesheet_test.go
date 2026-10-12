@@ -391,3 +391,32 @@ func TestClaudeArtifactFontBudget(t *testing.T) {
 		t.Errorf("fonts total %d bytes, want 1..%d", total, 150*1024)
 	}
 }
+
+// Each CSS file is checked alone, but the browser reads them joined: a file
+// that ends inside an open image-set( turns the next file's strings into
+// URLs. The joined stylesheet is checked again, so no split across files
+// carries a fetch past the check.
+func TestStylesheetChecksTheJoinedFiles(t *testing.T) {
+	for _, c := range []struct{ name, second, want string }{
+		{"remote", `"http://h/x.png" 1x)}`, "is not inline"},
+		{"plugin file", `"i.png" 1x)}`, "is not inline"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := pluginDir(t, map[string]string{
+				"p/md2html-plugin.json": `{"format": 1, "name": "p", "styles": {"s": {"css": ["a.css", "b.css"]}}}`,
+				"p/a.css":               `a{b:image-set(`,
+				"p/b.css":               c.second,
+				"p/i.png":               "PNG",
+			})
+			c2 := NewPluginCache()
+			p, err := c2.Load("p", root, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = c2.Stylesheet([]string{"s"}, []*Plugin{p}, nil)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("err = %v, want it to contain %q", err, c.want)
+			}
+		})
+	}
+}

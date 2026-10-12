@@ -28,6 +28,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -2614,5 +2615,102 @@ func TestBrowserClaudeArtifactFitsAPhone(t *testing.T) {
 				t.Errorf("%s %s: body font %q", name, theme, s.Font)
 			}
 		}
+	}
+}
+
+// TestBrowserPluginCSSFetchesNothing builds a plugin around each way a
+// stylesheet can make a page fetch, converts a page with it, and serves
+// what converts to a real browser. A payload md2html refuses must fail the
+// conversion; one it accepts must reach nothing but the test's own server.
+// The "remote" host is a second server that records every request, and a
+// control page that fetches from it directly proves the recording works:
+// without it, a browser that never loaded the pages would pass.
+func TestBrowserPluginCSSFetchesNothing(t *testing.T) {
+	var mu sync.Mutex
+	var hits []string
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits = append(hits, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(remote.Close)
+	h := strings.TrimPrefix(remote.URL, "http://")
+
+	files := map[string][]byte{}
+	for _, c := range []struct {
+		name, css string
+		refused   bool
+	}{
+		{"escaped-url", `body{background-image:\url(http://` + h + `/evil/a.png)}`, true},
+		{"hex-url", `body{background-image:\75 rl(http://` + h + `/evil/b.png)}`, true},
+		{"hex-url-upper", `body{background-image:\55 RL(http://` + h + `/evil/b2.png)}`, true},
+		{"escaped-import", `@\69mport "http://` + h + `/evil/c.css";`, true},
+		{"image-set", `body{background-image:image-set("http://` + h + `/evil/d.png" 1x)}`, true},
+		{"webkit-image-set", `body{background-image:-webkit-image-set("http://` + h + `/evil/d2.png" 1x)}`, true},
+		{"image-set-var", `body{--u:"http://` + h + `/evil/d3.png";background-image:image-set(var(--u) 1x)}`, true},
+		{"cr-string", "body{content:\"x\r;background-image:url(http://" + h + "/evil/e.png)}\n", true},
+		{"ff-string", "body{content:\"x\f;background-image:url(http://" + h + "/evil/e2.png)}\n", true},
+		{"cdo-url", `<!--url(http://` + h + `/evil/e3.png)`, true},
+		{"style-close", `body{} </style><img src="http://` + h + `/evil/g.png"><style>`, true},
+		{"frag-inject", `body{background-image:url('i.svg#"),url(//` + h + `/evil/f.png)/*')} /**/}`, false},
+		{"image-set-local", `body{background-image:image-set("a.png" 1x, url(i.svg) 2x)}`, false},
+		{"fragment-ref", `body{filter:url(#nothing)}`, false},
+	} {
+		dir := t.TempDir()
+		writeFiles(t, dir, map[string][]byte{
+			"md2html-plugin.json": []byte(`{"format":1,"name":"p","styles":{"s":{"css":["s.css"]}}}`),
+			"s.css":               []byte(c.css),
+			"i.svg":               []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>`),
+			"a.png":               pngFixture(4, 4),
+		})
+		page, err := md2html.Convert([]byte("# Hi\n\ntext\n"),
+			md2html.Options{Plugins: []string{dir}, Styles: []string{"s"}})
+		if c.refused {
+			if err == nil {
+				t.Errorf("%s: Convert accepted the payload", c.name)
+				files[c.name+".html"] = page
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("%s: Convert: %v", c.name, err)
+			continue
+		}
+		files[c.name+".html"] = page
+	}
+	files["control.html"] = []byte(`<!doctype html><title>control</title><img src="http://` + h + `/control.png">`)
+
+	baseURL := serveGenerated(t, files)
+	ctx := newBrowserCtx(t)
+	names := make([]string, 0, len(files))
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		// The load event waits for images a stylesheet asked for; the pause
+		// covers fonts and anything else requested after it.
+		if err := chromedp.Run(ctx,
+			chromedp.Navigate(baseURL+"/"+n),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+			chromedp.Sleep(300*time.Millisecond),
+		); err != nil {
+			t.Fatalf("%s: browser run: %v", n, err)
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	sawControl := false
+	for _, p := range hits {
+		if p == "/control.png" {
+			sawControl = true
+			continue
+		}
+		t.Errorf("a page fetched %s from another host", p)
+	}
+	if !sawControl {
+		t.Error("the control page's fetch was not seen, so the check proves nothing")
 	}
 }
