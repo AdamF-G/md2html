@@ -62,6 +62,10 @@ Writing the Markdown: md2html --guide prints the syntax it understands
 wrong without a warning; md2html --guide <section> prints the detail on
 one construct, and md2html --guide all the whole guide.
 
+Styling the page: md2html --list-styles lists the styles available, and
+--style or a page's style: front matter picks them. md2html --guide styles
+explains both, and how to write a plugin that adds a style.
+
 Flags:
 `)
 		fs.PrintDefaults()
@@ -73,7 +77,7 @@ Flags:
 		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
 		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
 		noSource  = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
-		cssPath   = fs.String("css", "", "replace the embedded stylesheet with this file")
+		cssPath   = fs.String("css", "", "replace the stylesheet with this file (not with --style)")
 		lang      = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
 		toc       = fs.String("toc", "", "contents list layout, inline or float (beside the text on a wide screen), unless front matter sets toc (default inline, or float with --autotoc)")
 		autoTOC   = fs.String("autotoc", "", "give pages without a [[toc]] marker a contents list: all, or long for pages over 1000 lines or 5 headings")
@@ -85,11 +89,16 @@ Flags:
 		version   = fs.Bool("version", false, "print the version and exit")
 		guide     = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
 
+		listStyles = fs.Bool("list-styles", false, "list the styles available, from built-in plugins and any --plugin, and exit")
+
 		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
 		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
 		installProject = fs.Bool("install-skill-project", false, "install the authoring skill for Claude Code under ./.claude/skills and exit")
 	)
 	var exclude stringList
+	var plugins, styles stringList
+	fs.Var(&plugins, "plugin", "load a local plugin directory, for its styles (repeatable, comma-separated)")
+	fs.Var(&styles, "style", "style every page with these styles, stacked in order, unless its front matter sets style (comma-separated; see --list-styles)")
 	fs.Var(&exclude, "exclude", "directory prefix, or file/directory name glob such as 'AUDIT_*', never to enter or write to (repeatable, comma-separated)")
 	// Go's flag package stops parsing at the first positional argument, so a
 	// plain fs.Parse would read "md2html ./docs -o ./site" as three entry
@@ -128,6 +137,11 @@ Flags:
 		page(stdout, text)
 		return 0
 	}
+	// Ahead of the entry check, like --version: listing is the whole
+	// invocation. It honours --plugin, so a plugin can be checked before use.
+	if *listStyles {
+		return listAvailableStyles(plugins, stdout, stderr)
+	}
 	// Also ahead of the entry check, and for the same reasons: installing
 	// the skill is the whole invocation, not something done alongside a
 	// conversion.
@@ -165,6 +179,28 @@ Flags:
 	}
 	if *autoTOC != "" && !md2html.IsAutoTOCMode(*autoTOC) {
 		fmt.Fprintf(stderr, "md2html: --autotoc %q is not all or long\n", *autoTOC)
+		return 2
+	}
+
+	if len(styles) > 0 && *cssPath != "" {
+		fmt.Fprint(stderr, "md2html: give only one of --style and --css\n")
+		return 2
+	}
+	// Plugins and styles are checked once, up front, so a typo stops the run
+	// before any page is written rather than costing a warning per page.
+	// Their load warnings are reported here, once; Convert stays quiet about
+	// run-wide plugins for the same reason.
+	cache := md2html.NewPluginCache()
+	runWarn := func(m string) { fmt.Fprintf(stderr, "md2html: %s\n", m) }
+	loaded, err := cache.LoadAll(plugins, "", runWarn)
+	if err == nil && len(styles) > 0 {
+		_, err = cache.Stylesheet(styles, loaded, runWarn)
+	}
+	if err == nil {
+		_, err = md2html.AvailablePlugins(loaded)
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 2
 	}
 
@@ -221,6 +257,7 @@ Flags:
 			var warnings []string
 			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt,
 				func(m string) { warnings = append(warnings, m) })
+			opts.Plugins, opts.Styles, opts.PluginCache = plugins, styles, cache
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
 				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err, warnings: warnings}
@@ -294,6 +331,34 @@ func guideText(names []string) ([]byte, error) {
 		out = append(out, b...)
 	}
 	return out, nil
+}
+
+// listAvailableStyles prints every style a run could select, grouped by
+// plugin: the plugin's name and description, then each style's qualified
+// name and description, indented beneath it.
+func listAvailableStyles(dirs []string, stdout, stderr io.Writer) int {
+	warn := func(m string) { fmt.Fprintf(stderr, "md2html: %s\n", m) }
+	loaded, err := md2html.NewPluginCache().LoadAll(dirs, "", warn)
+	if err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
+		return 2
+	}
+	all, err := md2html.AvailablePlugins(loaded)
+	if err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
+		return 2
+	}
+	for _, p := range all {
+		if p.Description != "" {
+			fmt.Fprintf(stdout, "%s: %s\n", p.Name, p.Description)
+		} else {
+			fmt.Fprintf(stdout, "%s\n", p.Name)
+		}
+		for _, n := range p.StyleNames() {
+			fmt.Fprintf(stdout, "  %s/%s  %s\n", p.Name, n, p.Styles[n].Description)
+		}
+	}
+	return 0
 }
 
 // buildOptions assembles per-document conversion options from the flags.

@@ -757,3 +757,73 @@ func TestRunNoSourceFlag(t *testing.T) {
 		}
 	}
 }
+
+const cliPlugin = `{"format": 1, "name": "acme", "description": "Acme looks",
+	"styles": {"plain": {"description": "Plain and quiet", "css": ["p.css"]}}}`
+
+func TestRunStyleFromPlugin(t *testing.T) {
+	root := tree(t, map[string]string{
+		"doc.md": "# A\n", "acme/md2html-plugin.json": cliPlugin, "acme/p.css": "/*acme-plain*/",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{filepath.Join(root, "doc.md"), "--plugin", filepath.Join(root, "acme"), "--style", "plain"}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	b, _ := os.ReadFile(filepath.Join(root, "doc.html"))
+	if !strings.Contains(string(b), "/*acme-plain*/") {
+		t.Error("the page lacks the selected style")
+	}
+}
+
+func TestRunBadStyleStopsBeforeWriting(t *testing.T) {
+	for _, args := range [][]string{
+		{"--style", "nope"},
+		{"--plugin", "missing-dir"},
+		{"--style", "default", "--css", "x.css"},
+	} {
+		root := tree(t, map[string]string{"doc.md": "# A\n", "x.css": ""})
+		var out, errb bytes.Buffer
+		code := run(append([]string{filepath.Join(root, "doc.md")}, args...), &out, &errb)
+		if code != 2 {
+			t.Errorf("%v: exit %d, want 2; stderr %s", args, code, errb.String())
+		}
+		if _, err := os.Stat(filepath.Join(root, "doc.html")); err == nil {
+			t.Errorf("%v: a page was written", args)
+		}
+	}
+}
+
+func TestRunFrontMatterStyleWarnsAndFallsBack(t *testing.T) {
+	root := tree(t, map[string]string{"doc.md": "---\nstyle: nope\n---\n# A\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{filepath.Join(root, "doc.md")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(errb.String(), `front matter style: no style named "nope"`) {
+		t.Errorf("stderr = %s", errb.String())
+	}
+}
+
+func TestRunListStyles(t *testing.T) {
+	root := tree(t, map[string]string{"acme/md2html-plugin.json": cliPlugin, "acme/p.css": ""})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-styles", "--plugin", filepath.Join(root, "acme")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	for _, want := range []string{
+		"acme: Acme looks\n  acme/plain  Plain and quiet\n",
+		"default: The stylesheet md2html uses when no style is selected\n  default/default  ",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+func TestRunListStylesBadPluginExits2(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-styles", "--plugin", "/no/such/dir"}, &out, &errb); code != 2 {
+		t.Errorf("exit %d, want 2", code)
+	}
+}
