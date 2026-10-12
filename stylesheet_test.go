@@ -244,9 +244,10 @@ func TestConvertBadFrontMatterPluginsFallsBack(t *testing.T) {
 	}
 }
 
-// Review Focus 4: a page that loads a plugin but does not choose a style
-// must keep the run's styles exactly, even when the page's plugin would
-// make the run's bare name ambiguous.
+// A page that loads a plugin but does not choose a style must keep the
+// run's styles exactly, even when the page's plugin would make the run's
+// bare name ambiguous: the page's plugins only widen what its own style:
+// can name, so loading one alone must not change or break its look.
 func TestPagePluginsWithoutStyleWarnAndKeepRunStyles(t *testing.T) {
 	root := stylePlugins(t)
 	css, w := convertPage(t, "---\nplugins: ./_p\n---\n# A\n", filepath.Join(root, "docs/a.md"),
@@ -312,10 +313,10 @@ func themeBlock(css, selector string) map[string]bool {
 // and the explicit light block define the same tokens, each first defined
 // on bare :root.
 //
-// The light block is the trap (Review Focus 1): the default stylesheet
-// has :root[data-theme="light"], which outranks bare :root, so a style
-// layered on it that set its light palette on :root alone would show the
-// default's palette on any page stamped light.
+// The light block is the trap: the default stylesheet has
+// :root[data-theme="light"], which outranks bare :root, so a style layered
+// on it that set its light palette on :root alone would show the default's
+// palette on any page stamped light.
 func TestEveryBuiltinStyleIsWellFormed(t *testing.T) {
 	for _, p := range BuiltinPlugins() {
 		for _, n := range p.StyleNames() {
