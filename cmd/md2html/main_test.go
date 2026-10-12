@@ -362,12 +362,12 @@ func TestRunGuideAllPrintsTheWholeGuide(t *testing.T) {
 // order asked for.
 func TestRunGuidePrintsNamedSections(t *testing.T) {
 	var out, errb bytes.Buffer
-	if code := run([]string{"--guide", "styling", "diagrams"}, &out, &errb); code != 0 {
+	if code := run([]string{"--guide", "styles", "diagrams"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "## Styling\n") || !strings.Contains(got, "\n## Diagrams\n") {
-		t.Errorf("did not print Styling then Diagrams:\n%s", got)
+	if !strings.HasPrefix(got, "## Styles\n") || !strings.Contains(got, "\n## Diagrams\n") {
+		t.Errorf("did not print Styles then Diagrams:\n%s", got)
 	}
 }
 

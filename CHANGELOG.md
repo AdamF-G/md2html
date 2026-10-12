@@ -9,6 +9,25 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- Plugins: a directory with an `md2html-plugin.json` manifest that
+  provides styles, with no change to md2html itself. `--style` and a page's
+  `style:` front matter choose styles, stacked in order. `--plugin` and a
+  page's `plugins:` load local plugins, and `--list-styles` lists what is
+  available. Fonts and images a style uses are inlined, so pages still load
+  nothing. `md2html --guide styles` documents all of it, including how to
+  write a plugin.
+- The built-in `claude-artifact` style follows the rules every page Claude
+  publishes as an Artifact does.
+
+### Changed
+
+- The default stylesheet is now the built-in `default` plugin's style. Its
+  content and the output are unchanged.
+
 ## v0.9.0 — 2026-09-28
 
 ### Changed

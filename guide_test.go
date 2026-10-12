@@ -634,3 +634,47 @@ func TestGuideSection(t *testing.T) {
 		}
 	}
 }
+
+// The Styles section's example plugin must be one an agent can copy and
+// load: its manifest and stylesheet, written to disk as the section says,
+// load cleanly and stack on the default.
+func TestGuideStylesExampleLoads(t *testing.T) {
+	sec, err := GuideSection("styles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := func(lang string) string {
+		m := regexp.MustCompile("(?s)```" + lang + "\n(.*?)```").FindStringSubmatch(string(sec))
+		if m == nil {
+			t.Fatalf("the styles section has no %s example", lang)
+		}
+		return m[1]
+	}
+	root := pluginDir(t, map[string]string{
+		"_style/md2html-plugin.json": block("json"),
+		"_style/house.css":           block("css"),
+	})
+	var warnings []string
+	c := NewPluginCache()
+	p, err := c.Load("_style", root, func(w string) { warnings = append(warnings, w) })
+	if err != nil || len(warnings) > 0 {
+		t.Fatalf("err %v, warnings %q", err, warnings)
+	}
+	css, err := c.Stylesheet([]string{"house"}, []*Plugin{p}, nil)
+	if err != nil || !strings.HasPrefix(css, defaultCSS) {
+		t.Errorf("err %v; stacked on the default? %v", err, strings.HasPrefix(css, defaultCSS))
+	}
+}
+
+// The section names flags and front matter keys; each must exist.
+func TestGuideStylesNamesRealFlags(t *testing.T) {
+	sec, err := GuideSection("styles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"--list-styles", "--style", "--plugin", "style:", "plugins:", "claude-artifact", ManifestName} {
+		if !strings.Contains(string(sec), s) {
+			t.Errorf("the styles section does not mention %s", s)
+		}
+	}
+}

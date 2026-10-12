@@ -374,7 +374,10 @@ recipient's agent anyway.
 | `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
 | `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
 | `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
-| `--css FILE` | replace the embedded stylesheet |
+| `--css FILE` | replace the stylesheet; not with `--style` |
+| `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
+| `--plugin DIR` | load a local plugin for its styles (repeatable) |
+| `--list-styles` | list the styles available, including any `--plugin`'s, and exit |
 | `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
 | `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`, or `float` with `--autotoc`. Ignored with `--fragment` |
 | `--autotoc MODE` | give pages without a `[[toc]]` marker a contents list, after the title: `all` for every page, `long` for pages over 1000 lines or 5 headings. A page's own marker wins, and `toc: none` in its front matter opts it out |

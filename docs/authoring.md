@@ -35,6 +35,7 @@ construct has other spellings, they are under
 | Navigation block | `::: nav {aria-label="Section"}` … `:::` |
 | Hand-laid-out figure | a ```` ```fig ```` fence with a YAML body |
 | Page language | `lang: de` in front matter |
+| Page look | `style: claude-artifact` in front matter, or `--style`; `--list-styles` lists them |
 | Output for a host that supplies the page (a Claude Artifact) | `--fragment` |
 
 ## Silent traps
@@ -88,6 +89,11 @@ before you finish.
 19. **An attribute block works only after a heading, link, image or span,
     or on a container or code fence's opening line.** After a paragraph or
     list item, `{.lead}` stays literal text.
+20. **A style's light colours set only on `:root`.** The default stylesheet
+    also sets them on `:root[data-theme="light"]`, which wins. A page
+    switched to light then shows the default's colours. Set each colour on
+    `:root[data-theme="light"]` too. See
+    [What a style can change](#what-a-style-can-change).
 
 ## Page structure
 
@@ -116,6 +122,8 @@ toc-title: Contents
 | `lang` | The page's `<html lang>`. Overrides `--lang`; default `en`. |
 | `toc` | The contents list's layout: `inline`, `float` or `none`. See [Contents list](#contents-list). |
 | `toc-title` | The contents list's name for screen readers. Default `Table of Contents`. |
+| `style` | The page's styles, stacked in order. Replaces `--style`. See [Styles](#styles). |
+| `plugins` | Plugin directories this page's `style:` can draw on, relative to the page. |
 
 `lang` is what screen readers use to pick a voice. A value that is not a
 language tag, such as `en_US`, warns and is ignored.
@@ -772,18 +780,126 @@ an Artifact draws and other hosts show as text.
 md2html suits document-shaped pages: a report, a spec, a guide. A page that
 wants an app-like layout or a bespoke look is better written as HTML.
 
-## Styling
+## Styles
 
-The default stylesheet styles text, lists, tables, code, blockquotes,
-images and inline SVG, definition lists, the shipped containers, badges,
-cross-references, the contents list, subtitle and date, and code captions.
-It leaves footnotes and task-list checkboxes plain.
+A page's look comes from styles. With none chosen it gets the default.
+`md2html --list-styles` lists every style available:
 
-A class you add is inert unless a stylesheet names it: on a heading, a span,
-or a container outside the shipped kinds, it is emitted and ignored. The
-shipped class names (`callout`, `card`, `group`, `stats`, `defs`) are
-styled wherever they appear, raw HTML included. `--css mine.css` replaces
-the stylesheet.
+```text
+claude-artifact: Looks from pages Claude publishes as Artifacts
+  claude-artifact/claude-artifact  The rules every Artifact follows, …
+default: The stylesheet md2html uses when no style is selected
+  default/default  Warm neutrals, system fonts, both themes
+```
+
+### Choosing styles
+
+`--style claude-artifact` styles every page in the run. `style:
+claude-artifact` in a page's front matter styles that page and replaces
+the run's choice for it, the way `lang:` replaces `--lang`. `style:
+default` gives one page the plain default inside a run that chose
+something else.
+
+Both take a comma-separated list, stacked in order: `style:
+claude-artifact, wide-tables` puts `wide-tables` on top of
+`claude-artifact`, and later styles win where they overlap. Name a style
+alone, or as `plugin/style` when two plugins have a style of that name;
+md2html says when you need to.
+
+`--css mine.css` still replaces the stylesheet outright. It cannot be
+combined with `--style`, and a page's `style:` overrides it.
+
+### Loading a plugin
+
+Styles come from plugins. The built-in ones are always loaded. Load
+another with `--plugin path/to/it` for a whole run, or with `plugins:
+./_style` in a page's front matter, relative to the page. Both take a
+comma-separated list. A page's `plugins:` only matters with its own
+`style:`.
+
+### Writing a plugin
+
+A plugin is a directory holding an `md2html-plugin.json` manifest and the
+files it names. This one provides a style called `house` that changes the
+accent colour and the text column's width:
+
+```json
+{
+  "format": 1,
+  "name": "acme",
+  "description": "Acme's documentation look",
+  "styles": {
+    "house": {
+      "description": "Acme blue, a wider column",
+      "css": ["house.css"]
+    }
+  }
+}
+```
+
+```css
+:root { --accent: #1f5fa8; --measure: 72ch; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --accent: #8ab4f0; }
+}
+:root[data-theme="dark"] { --accent: #8ab4f0; }
+:root[data-theme="light"] { --accent: #1f5fa8; }
+```
+
+| Key | Meaning |
+|---|---|
+| `format` | Always `1`. |
+| `name` | The plugin's name: lowercase letters, digits and hyphens. |
+| `description` | One line for `--list-styles`. |
+| `styles` | Each style by name: its `description`, its `css` files in order, and `base`. |
+
+A style is added on top of the default stylesheet, so it only needs to say
+what differs. `"base": "none"` starts from nothing instead, and is only
+allowed for the first style a page lists.
+
+Fonts and images the CSS names with `url(fonts/x.woff2)` are copied into
+every page as `data:` URIs, so the page stays one file that loads nothing.
+For the same reason a plugin cannot use `@import`, a web address, or a
+file outside its own directory: each is an error naming the file.
+
+### What a style can change
+
+The default stylesheet draws every colour from these custom properties.
+Redefining them is the simplest way to restyle a page:
+
+| Property | Used for |
+|---|---|
+| `--bg`, `--fg` | Page background and text |
+| `--muted` | Secondary text: subtitle, date, captions |
+| `--accent` | Links, callout rules, the contents list |
+| `--rule` | Borders and table lines |
+| `--code-bg` | Code, callout and card backgrounds |
+| `--warn`, `--ok` | Warning callouts, and the status badges |
+| `--measure` | The text column's width |
+
+Set each colour four times: on `:root`, in the
+`@media (prefers-color-scheme: dark)` block for
+`:root:not([data-theme="light"])`, on `:root[data-theme="dark"]`, and on
+`:root[data-theme="light"]`. The example above shows the shape.
+
+Classes you can style, beyond plain elements: `callout`, `card`, `group`,
+`stats`, `defs`, `details.container`, `chip` and `chip-*`, `xref`,
+`nav.toc`, `subtitle`, `docdate`, `code-figure`, `fig` and `fig-*`,
+`table-scroll`, `anchor`, `source-tools`. A class you add to your own
+Markdown is inert until a style names it.
+
+### What a plugin cannot do yet
+
+A plugin cannot add scripts, change the page's HTML (no header bar, no
+footer), or add new containers or badges. If a page needs one of those,
+write it in the Markdown as raw HTML, or say it isn't possible yet.
+
+### Checking a style
+
+Run `md2html --plugin ./_style --list-styles` to check a plugin loads; a
+broken one exits with the reason. Then build a page and look at it at 400px
+wide and in both themes. A front matter `style:` that fails warns and the
+page falls back to the run's style, so read the warnings.
 
 ## Warnings
 
@@ -858,6 +974,26 @@ its YAML source. The rest of the message names the fault:
 
 **fig fence: a caption in the info string is not part of a figure** —
 use a `caption:` key in the body.
+
+**front matter style: … ; using the run's style** — a page's `style:`
+names a style that is not available, or one that cannot be stacked where
+it is. The message says which; fix the name or load its plugin with
+`plugins:`.
+
+**front matter plugins: … ; using the run's style** — a page's
+`plugins:` names a directory that is not a plugin. Fix the path; it is
+relative to the page.
+
+**front matter plugins has no effect without style** — add `style:`, or
+remove `plugins:`.
+
+**style … is selected twice; using it once** — remove the repeat.
+
+**stylesheet is … KB, over 1 MB** — a style's fonts or images are large,
+and every page carries them. Subset the fonts or drop some.
+
+**plugin …: unknown key … ; ignoring it** — the plugin was written for a
+newer md2html, or has a typo in its manifest.
 
 **output path collision** — two sources map to one page; rename one.
 
