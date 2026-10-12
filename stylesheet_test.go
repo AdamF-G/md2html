@@ -282,15 +282,24 @@ func TestConvertFragmentCarriesTheStyle(t *testing.T) {
 	}
 }
 
+// blockBody returns the declarations of one block, by the block's exact
+// selector, and whether the CSS has such a block.
+func blockBody(css, selector string) (string, bool) {
+	i := strings.Index(css, selector+" {")
+	if i < 0 {
+		return "", false
+	}
+	body := css[i+len(selector)+2:]
+	return body[:strings.Index(body, "}")], true
+}
+
 // themeBlock returns the custom properties one block defines, by the
 // block's exact selector, or nil if the CSS has no such block.
 func themeBlock(css, selector string) map[string]bool {
-	i := strings.Index(css, selector+" {")
-	if i < 0 {
+	body, ok := blockBody(css, selector)
+	if !ok {
 		return nil
 	}
-	body := css[i+len(selector)+2:]
-	body = body[:strings.Index(body, "}")]
 	got := map[string]bool{}
 	for _, m := range regexp.MustCompile(`(--[a-z0-9-]+)\s*:`).FindAllStringSubmatch(body, -1) {
 		got[m[1]] = true
@@ -336,6 +345,17 @@ func TestEveryBuiltinStyleIsWellFormed(t *testing.T) {
 				if root == nil || media == nil || dark == nil || light == nil {
 					t.Fatalf("want :root, the dark media block, [data-theme=dark] and [data-theme=light]; got %v %v %v %v",
 						root != nil, media != nil, dark != nil, light != nil)
+				}
+				// Both dark blocks must say color-scheme: dark, or form controls
+				// and scrollbars stay light on a dark page. The default style is
+				// exempt: its output must stay byte-identical to v0.9.0, which
+				// never set it.
+				if p.Name+"/"+n != "default/default" {
+					for _, sel := range []string{`  :root:not([data-theme="light"])`, `:root[data-theme="dark"]`} {
+						if body, _ := blockBody(css, sel); !regexp.MustCompile(`color-scheme:\s*dark`).MatchString(body) {
+							t.Errorf("%s does not set color-scheme: dark", strings.TrimSpace(sel))
+						}
+					}
 				}
 				for name, set := range map[string]map[string]bool{"dark media": media, "dark": dark, "light": light} {
 					if !reflect.DeepEqual(set, dark) {

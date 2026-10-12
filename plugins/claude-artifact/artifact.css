@@ -6,7 +6,14 @@
    differs.
 
    Layout: one 65ch column on a cool paper ground, ink-blue accent,
-   grotesque display headings over a humanist sans body. */
+   grotesque display headings over a humanist sans body. The neutrals
+   lean toward the accent's blue rather than sitting at pure grey. */
+
+/* Fonts, inlined into every page that uses this style, so their notices
+   travel with them. Bricolage Grotesque: Copyright 2022 The Bricolage
+   Grotesque Project Authors. IBM Plex Sans: Copyright 2017 IBM Corp., with
+   Reserved Font Name "Plex". Both are licensed under the SIL Open Font
+   License 1.1; the full texts are in this plugin's fonts/ directory. */
 
 @font-face {
   font-family: "Bricolage Grotesque";
@@ -34,13 +41,13 @@
 }
 
 :root {
-  --bg: #f6f7f5;
-  --fg: #1c201e;
-  --muted: #5b645f;
+  --bg: #f4f6f8;
+  --fg: #1b2027;
+  --muted: #56616d;
   --accent: #2c5a85;
-  --rule: #dde1dd;
-  --code-bg: #eceeea;
-  --surface: #ffffff;
+  --rule: #d9dfe6;
+  --code-bg: #e9edf1;
+  --surface: #fcfdfe;
   --warn: #a8540d;
   --ok: #2c6b45;
   --measure: 65ch;
@@ -51,13 +58,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #121514;
-    --fg: #e4e8e5;
-    --muted: #98a29c;
+    --bg: #111519;
+    --fg: #e2e7ec;
+    --muted: #95a0ac;
     --accent: #8db6df;
-    --rule: #2a302d;
-    --code-bg: #1b1f1d;
-    --surface: #181c1a;
+    --rule: #29313a;
+    --code-bg: #1a2027;
+    --surface: #171c22;
     --warn: #eb9a55;
     --ok: #71c08f;
     color-scheme: dark;
@@ -65,13 +72,13 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #121514;
-  --fg: #e4e8e5;
-  --muted: #98a29c;
+  --bg: #111519;
+  --fg: #e2e7ec;
+  --muted: #95a0ac;
   --accent: #8db6df;
-  --rule: #2a302d;
-  --code-bg: #1b1f1d;
-  --surface: #181c1a;
+  --rule: #29313a;
+  --code-bg: #1a2027;
+  --surface: #171c22;
   --warn: #eb9a55;
   --ok: #71c08f;
   color-scheme: dark;
@@ -80,13 +87,13 @@
 /* Restated because the default stylesheet's own light block outranks bare
    :root: without this, a page stamped light would get the default palette. */
 :root[data-theme="light"] {
-  --bg: #f6f7f5;
-  --fg: #1c201e;
-  --muted: #5b645f;
+  --bg: #f4f6f8;
+  --fg: #1b2027;
+  --muted: #56616d;
   --accent: #2c5a85;
-  --rule: #dde1dd;
-  --code-bg: #eceeea;
-  --surface: #ffffff;
+  --rule: #d9dfe6;
+  --code-bg: #e9edf1;
+  --surface: #fcfdfe;
   --warn: #a8540d;
   --ok: #2c6b45;
   color-scheme: light;
@@ -136,13 +143,27 @@ th {
   border-radius: 10px;
 }
 details.container { background: var(--surface); border-radius: 8px; }
+/* The default stylesheet gives a wide figure an explicit width, and on a
+   phone that width is the full column. Under content-box sizing this card's
+   padding and border would be added on top and push the page sideways, so
+   they are counted inside the width instead. */
 figure.fig {
+  box-sizing: border-box;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 10px;
   padding: 1rem 1.25rem;
 }
 pre { border: 1px solid var(--rule); border-radius: 8px; }
+/* A captioned code block is one object: the edge goes round caption and
+   code together, not round the code alone under a bare caption bar. */
+figure.code-figure {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+figure.code-figure > figcaption { border-radius: 0; }
+figure.code-figure > pre { border: 0; border-radius: 0; margin-bottom: 0; }
 
 /* The contents list is navigation, not running text: underlining every
    entry turns it into a wall of rules, so the underline waits for hover. */

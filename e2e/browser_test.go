@@ -2545,48 +2545,74 @@ func TestBrowserSourceToolsHiddenInPrint(t *testing.T) {
 // The claude-artifact style promises what every Artifact does: at phone
 // width the page never scrolls sideways, in either theme, and the gutter
 // is at least 16px. Only a live layout can say so.
+//
+// Two pages: the authoring guide, and a fixture of the blocks most likely
+// to push past a phone screen. The guide alone has no wide figure, so it
+// could not catch a style whose padding or border adds to a width the
+// default stylesheet sets explicitly.
 func TestBrowserClaudeArtifactFitsAPhone(t *testing.T) {
 	// The authoring guide, not the conformance fixture: the fixture carries
 	// its own <style> setting tokens, which would test that instead.
-	src, err := os.ReadFile("../docs/authoring.md")
+	guide, err := os.ReadFile("../docs/authoring.md")
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := md2html.Convert(src, md2html.Options{Styles: []string{"claude-artifact"}})
-	if err != nil {
-		t.Fatalf("Convert: %v", err)
+	wide := "# Wide blocks\n\n" +
+		"```fig\nwide: true\nlayout: cols\nitems:\n" +
+		"  - box: Ingest every file\n  - box: Validate each record\n  - box: Publish the result\n" +
+		"```\n\n" +
+		"| Region | Requests | Errors | p50 latency | p99 latency | Saturation | Owner team | Notes |\n" +
+		"|---|---:|---:|---:|---:|---:|---|---|\n" +
+		"| eu-west-1 | 1204331 | 12 | 12.4 ms | 118.0 ms | 61% | platform-infrastructure | steady |\n\n" +
+		"```text\n" + strings.Repeat("unbroken-", 40) + "\n```\n"
+	files := map[string][]byte{}
+	for name, src := range map[string][]byte{"guide.html": guide, "wide.html": []byte(wide)} {
+		page, err := md2html.Convert(src, md2html.Options{Styles: []string{"claude-artifact"}})
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", name, err)
+		}
+		files[name] = page
 	}
-	baseURL := serveGenerated(t, map[string][]byte{"page.html": page})
+	baseURL := serveGenerated(t, files)
 	ctx := newBrowserCtx(t)
 
 	const probe = `(() => ({
 		overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
 		gutter: parseFloat(getComputedStyle(document.body).paddingLeft),
 		font: getComputedStyle(document.body).fontFamily,
+		wideFig: !!document.querySelector("figure.fig-wide"),
 	}))()`
 	type sample struct {
 		Overflow, Gutter float64
 		Font             string
+		WideFig          bool
 	}
-	for _, theme := range []string{"light", "dark"} {
-		var s sample
-		if err := chromedp.Run(ctx,
-			chromedp.EmulateViewport(390, 800),
-			chromedp.Navigate(baseURL+"/page.html"),
-			chromedp.WaitVisible("main", chromedp.ByQuery),
-			figSetTheme(theme),
-			chromedp.Evaluate(probe, &s),
-		); err != nil {
-			t.Fatalf("%s: browser run: %v", theme, err)
-		}
-		if s.Overflow > 0 {
-			t.Errorf("%s: page scrolls sideways by %vpx at 390px", theme, s.Overflow)
-		}
-		if s.Gutter < 16 {
-			t.Errorf("%s: body gutter %vpx, want at least 16", theme, s.Gutter)
-		}
-		if !strings.Contains(s.Font, "IBM Plex Sans") {
-			t.Errorf("%s: body font %q", theme, s.Font)
+	for _, name := range []string{"guide.html", "wide.html"} {
+		for _, theme := range []string{"light", "dark"} {
+			var s sample
+			if err := chromedp.Run(ctx,
+				chromedp.EmulateViewport(390, 800),
+				chromedp.Navigate(baseURL+"/"+name),
+				chromedp.WaitVisible("main", chromedp.ByQuery),
+				figSetTheme(theme),
+				chromedp.Evaluate(probe, &s),
+			); err != nil {
+				t.Fatalf("%s %s: browser run: %v", name, theme, err)
+			}
+			// A fig fence that fails to parse falls back to a code block, which
+			// would leave this case testing nothing.
+			if name == "wide.html" && !s.WideFig {
+				t.Fatalf("%s: the fixture rendered no wide figure", name)
+			}
+			if s.Overflow > 0 {
+				t.Errorf("%s %s: page scrolls sideways by %vpx at 390px", name, theme, s.Overflow)
+			}
+			if s.Gutter < 16 {
+				t.Errorf("%s %s: body gutter %vpx, want at least 16", name, theme, s.Gutter)
+			}
+			if !strings.Contains(s.Font, "IBM Plex Sans") {
+				t.Errorf("%s %s: body font %q", name, theme, s.Font)
+			}
 		}
 	}
 }
