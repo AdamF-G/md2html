@@ -37,8 +37,29 @@ type Options struct {
 	// SourcePath is the absolute path of the source document. Used for the
 	// title fallback and diagnostics.
 	SourcePath string
-	// CSS replaces the embedded default stylesheet. Empty uses the default.
+	// CSS replaces the stylesheet outright for every page. A page's own
+	// "style:" front matter still overrides it. Setting both CSS and Styles
+	// is an error.
 	CSS string
+	// Plugins are the directories of local plugins every page can draw
+	// styles from, beside the built-in ones, resolved against the working
+	// directory. A page's own "plugins:" front matter adds to them for that
+	// page's "style:" only.
+	//
+	// Convert loads these without reporting their warnings: a run loads
+	// them once up front, as the CLI does, and hears them there, instead of
+	// once per page.
+	Plugins []string
+	// Styles selects the run's styles by name, stacked in order: a bare
+	// style name, or plugin/style where two plugins share one. A page's own
+	// "style:" front matter replaces the whole list. Empty means the
+	// default style.
+	Styles []string
+	// PluginCache keeps loaded plugins and assembled stylesheets across
+	// conversions. A caller converting many documents shares one, so a
+	// plugin's fonts are read and inlined once rather than once per page.
+	// Nil loads afresh on every call.
+	PluginCache *PluginCache
 	// MermaidURL is the ES module a page containing a mermaid diagram
 	// imports at view time. Empty uses the pinned CDN build.
 	//
@@ -155,7 +176,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
 	//
-	// Only title/subtitle/date/lang/toc/toc-title are read below. A block carrying some other
+	// Only title/subtitle/date/lang/toc/toc-title/plugins/style are read below. A block carrying some other
 	// flat key (an "author:" line, say) is still accepted and still
 	// stripped from the body — it parsed as valid front matter — but the
 	// key itself is silently dropped: there is nowhere in the page for it
@@ -263,9 +284,9 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	css := opt.CSS
-	if css == "" {
-		css = defaultCSS
+	css, err := pageCSS(opt, meta)
+	if err != nil {
+		return nil, err
 	}
 	if opt.Fragment {
 		return renderFragment(body, title, css), nil

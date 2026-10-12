@@ -1,7 +1,9 @@
 package md2html
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -147,4 +149,96 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+// maxStylesheet is the size past which a page's stylesheet is warned
+// about: every page carries its own copy, and an Artifact is capped at
+// 16 MB, fonts and all.
+const maxStylesheet = 1 << 20
+
+// pageCSS chooses one page's stylesheet: its front matter "style:" if it
+// has one, otherwise the run's CSS or Styles, otherwise the default.
+//
+// A front matter choice that fails is warned about and the page falls back
+// to the run's whole style list, not to the list minus the bad entry: a
+// page that loses one of three stacked styles renders as a look nobody
+// chose. The run's own choice failing is an error, since a caller that
+// asked for a style and silently got another would ship the wrong look.
+func pageCSS(opt Options, meta map[string]string) (string, error) {
+	warn := func(s string) {
+		if opt.Warn != nil {
+			opt.Warn(s)
+		}
+	}
+	if opt.CSS != "" && len(opt.Styles) > 0 {
+		return "", errors.New("Options.CSS and Styles are both set; choose one")
+	}
+	cache := opt.PluginCache
+	if cache == nil {
+		cache = NewPluginCache()
+	}
+	run := func() (string, error) {
+		if opt.CSS != "" {
+			return opt.CSS, nil
+		}
+		if len(opt.Styles) == 0 {
+			return defaultCSS, nil
+		}
+		ps, err := cache.LoadAll(opt.Plugins, "", nil)
+		if err != nil {
+			return "", err
+		}
+		return cache.Stylesheet(opt.Styles, ps, nil)
+	}
+
+	names := splitList(meta["style"])
+	pageDirs := splitList(meta["plugins"])
+	var css string
+	var err error
+	switch {
+	case len(names) == 0:
+		// The page's plugins only widen what its own style: can name; the
+		// run's list resolves against the run's plugins, so loading one here
+		// can never make the run's bare name ambiguous on this page.
+		if len(pageDirs) > 0 {
+			warn("front matter plugins has no effect without style; ignoring it")
+		}
+		css, err = run()
+	default:
+		css, err = frontMatterCSS(cache, opt, names, pageDirs, warn)
+		if err != nil {
+			warn(err.Error() + "; using the run's style")
+			css, err = run()
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	if len(css) > maxStylesheet {
+		warn(fmt.Sprintf("stylesheet is %d KB, over 1 MB; every page carries it", len(css)/1024))
+	}
+	return css, nil
+}
+
+// frontMatterCSS assembles a page's own style list from the run's plugins
+// and the page's, the page's resolved against its own directory. The error
+// says which key was at fault, for the warning pageCSS raises.
+func frontMatterCSS(cache *PluginCache, opt Options, names, pageDirs []string, warn func(string)) (string, error) {
+	ps, err := cache.LoadAll(opt.Plugins, "", nil)
+	if err != nil {
+		return "", fmt.Errorf("front matter style: %w", err)
+	}
+	baseDir := ""
+	if opt.SourcePath != "" {
+		baseDir = filepath.Dir(opt.SourcePath)
+	}
+	own, err := cache.LoadAll(pageDirs, baseDir, warn)
+	if err != nil {
+		return "", fmt.Errorf("front matter plugins: %w", err)
+	}
+	css, err := cache.Stylesheet(names, append(ps, own...), warn)
+	if err != nil {
+		return "", fmt.Errorf("front matter style: %w", err)
+	}
+	return css, nil
 }
