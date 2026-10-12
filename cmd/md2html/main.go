@@ -140,7 +140,7 @@ Flags:
 	// Ahead of the entry check, like --version: listing is the whole
 	// invocation. It honours --plugin, so a plugin can be checked before use.
 	if *listStyles {
-		return listAvailableStyles(plugins, stdout, stderr)
+		return listAvailableStyles(plugins, styles, stdout, stderr)
 	}
 	// Also ahead of the entry check, and for the same reasons: installing
 	// the skill is the whole invocation, not something done alongside a
@@ -191,15 +191,7 @@ Flags:
 	// Their load warnings are reported here, once; Convert stays quiet about
 	// run-wide plugins for the same reason.
 	cache := md2html.NewPluginCache()
-	runWarn := func(m string) { fmt.Fprintf(stderr, "md2html: %s\n", m) }
-	loaded, err := cache.LoadAll(plugins, "", runWarn)
-	if err == nil && len(styles) > 0 {
-		_, err = cache.Stylesheet(styles, loaded, runWarn)
-	}
-	if err == nil {
-		_, err = md2html.AvailablePlugins(loaded)
-	}
-	if err != nil {
+	if _, err := checkPlugins(cache, plugins, styles, stderr); err != nil {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 2
 	}
@@ -333,17 +325,49 @@ func guideText(names []string) ([]byte, error) {
 	return out, nil
 }
 
-// listAvailableStyles prints every style a run could select, grouped by
-// plugin: the plugin's name and description, then each style's qualified
-// name and description, indented beneath it.
-func listAvailableStyles(dirs []string, stdout, stderr io.Writer) int {
+// checkPlugins loads every --plugin directory and assembles every style
+// each one provides, then the --style list if there is one, and returns
+// all the plugins a page can draw from. Assembling a style is what reads
+// its CSS files and checks their URLs, so a style the run never selects is
+// still checked: a page's front matter could select it, and a plugin that
+// is broken anywhere should say so before a page is written, not as a
+// warning on each page that names the broken part. Load warnings go to
+// stderr here, once.
+//
+// The run and --list-styles both call it, so that listing a plugin checks
+// it exactly as using it would.
+func checkPlugins(cache *md2html.PluginCache, dirs, styles []string, stderr io.Writer) ([]*md2html.Plugin, error) {
 	warn := func(m string) { fmt.Fprintf(stderr, "md2html: %s\n", m) }
-	loaded, err := md2html.NewPluginCache().LoadAll(dirs, "", warn)
+	loaded, err := cache.LoadAll(dirs, "", warn)
 	if err != nil {
-		fmt.Fprintf(stderr, "md2html: %v\n", err)
-		return 2
+		return nil, err
 	}
 	all, err := md2html.AvailablePlugins(loaded)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range loaded {
+		for _, n := range p.StyleNames() {
+			if _, err := cache.Stylesheet([]string{p.Name + "/" + n}, loaded, warn); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(styles) > 0 {
+		if _, err := cache.Stylesheet(styles, loaded, warn); err != nil {
+			return nil, err
+		}
+	}
+	return all, nil
+}
+
+// listAvailableStyles prints every style a run could select, grouped by
+// plugin: the plugin's name and description, then each style's qualified
+// name and description, indented beneath it. Nothing is listed unless
+// every --plugin checks out, since a list would read as a plugin that
+// works.
+func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
+	all, err := checkPlugins(md2html.NewPluginCache(), dirs, styles, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 2
@@ -355,7 +379,11 @@ func listAvailableStyles(dirs []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stdout, "%s\n", p.Name)
 		}
 		for _, n := range p.StyleNames() {
-			fmt.Fprintf(stdout, "  %s/%s  %s\n", p.Name, n, p.Styles[n].Description)
+			if d := p.Styles[n].Description; d != "" {
+				fmt.Fprintf(stdout, "  %s/%s  %s\n", p.Name, n, d)
+			} else {
+				fmt.Fprintf(stdout, "  %s/%s\n", p.Name, n)
+			}
 		}
 	}
 	return 0

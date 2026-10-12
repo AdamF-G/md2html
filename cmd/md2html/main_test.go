@@ -827,3 +827,62 @@ func TestRunListStylesBadPluginExits2(t *testing.T) {
 		t.Errorf("exit %d, want 2", code)
 	}
 }
+
+// A --plugin is checked whole before anything is converted or listed:
+// every style it provides is assembled, so a forbidden url() or a missing
+// CSS file in a style the run never selects still stops the run, as the
+// guide promises of --list-styles.
+func TestRunChecksEveryPluginStyle(t *testing.T) {
+	for _, c := range []struct{ name, manifest, want string }{
+		{"remote url", `{"format": 1, "name": "bad", "styles": {"ok": {"css": ["ok.css"]}, "remote": {"css": ["remote.css"]}}}`,
+			"is not a relative path inside the plugin"},
+		{"missing css file", `{"format": 1, "name": "bad", "styles": {"ok": {"css": ["ok.css"]}, "gone": {"css": ["gone.css"]}}}`,
+			"gone.css"},
+	} {
+		for _, list := range []bool{false, true} {
+			root := tree(t, map[string]string{
+				"doc.md":                  "# A\n",
+				"bad/md2html-plugin.json": c.manifest,
+				"bad/ok.css":              "a{}",
+				"bad/remote.css":          "a{background:url(https://cdn.example/x.png)}",
+			})
+			args := []string{filepath.Join(root, "doc.md"), "--plugin", filepath.Join(root, "bad")}
+			if list {
+				args = []string{"--list-styles", "--plugin", filepath.Join(root, "bad")}
+			}
+			var out, errb bytes.Buffer
+			if code := run(args, &out, &errb); code != 2 {
+				t.Errorf("%s, list %v: exit %d, want 2; stderr %s", c.name, list, code, errb.String())
+			}
+			if !strings.Contains(errb.String(), c.want) {
+				t.Errorf("%s, list %v: stderr %q lacks %q", c.name, list, errb.String(), c.want)
+			}
+			if _, err := os.Stat(filepath.Join(root, "doc.html")); err == nil {
+				t.Errorf("%s: a page was written", c.name)
+			}
+			if out.Len() != 0 {
+				t.Errorf("%s, list %v: stdout %q, want nothing listed", c.name, list, out.String())
+			}
+		}
+	}
+}
+
+// A style with no description lists its name alone, with nothing after it.
+func TestRunListStylesNoTrailingSpace(t *testing.T) {
+	root := tree(t, map[string]string{
+		"acme/md2html-plugin.json": `{"format": 1, "name": "acme", "styles": {"bare": {"css": ["p.css"]}}}`,
+		"acme/p.css":               "",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-styles", "--plugin", filepath.Join(root, "acme")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), "\n  acme/bare\n") {
+		t.Errorf("stdout:\n%q", out.String())
+	}
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasSuffix(line, " ") {
+			t.Errorf("trailing space: %q", line)
+		}
+	}
+}
