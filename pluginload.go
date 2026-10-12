@@ -227,10 +227,3 @@ func findPlugin(ps []*Plugin, name string) *Plugin {
 	}
 	return nil
 }
-
-// sheetEntry is one assembled stylesheet; see stylesheet.go.
-type sheetEntry struct {
-	once sync.Once
-	css  string
-	err  error
-}
