@@ -882,8 +882,11 @@ file outside its own directory: each is an error naming the file. A symlink
 that leads outside the plugin counts as outside. md2html reads the CSS as a
 browser does, so writing one with escapes, as `\75 rl(` for `url(`, is
 caught the same way. `var()`, or another function whose value comes later,
-directly inside `url()`, `src()` or `image-set()` is an error too, since
-the URL it supplies cannot be checked.
+anywhere inside `url()`, `src()` or `image-set()` is an error too, since
+the URL it supplies cannot be checked, even when another function such as
+`light-dark()` sits between them. It is allowed only inside a gradient, a
+colour function such as `rgb()` or `color-mix()`, a calculation such as
+`calc()`, or `type()`, none of which can yield a URL.
 Write the file's path itself.
 
 CSS containing `</style`, even in a comment or a string, is an error: it

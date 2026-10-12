@@ -41,7 +41,8 @@ var assetTypes = map[string]string{
 // load. A fragment reference such as url(#shadow) names an element in the
 // page, not a file, so it passes through, as does a data: URL already
 // inline. @import, a URL that leaves the plugin, and a URL the scan cannot
-// check, such as var() inside image-set(), are errors.
+// check, such as var() anywhere inside image-set() but in a gradient, a
+// colour or a calculation, are errors.
 func inlineAssets(css, cssPath string, read func(rel string) ([]byte, error)) (string, error) {
 	return scanCSS(css, cssPath, func(ref, label string) (string, error) {
 		return inlineURL(ref, label, cssPath, read)
@@ -119,6 +120,31 @@ var urlFunctions = map[string]bool{"url": true, "src": true, "image": true, "ima
 // never sees, as var(--u) does with --u: "http://…", so there they are
 // refused. Custom functions, named with a leading "--", are refused too.
 var substitutions = map[string]bool{"var": true, "env": true, "attr": true, "if": true, "inherit": true}
+
+// opaqueFunctions are the functions a substitution may sit in inside a URL
+// function, because whatever it supplies them, they yield a gradient, a
+// number, a colour or a media type, never a URL or an image candidate.
+// Every other function is taken to pass its arguments through, as
+// light-dark() and random-item() do, handing a substitution in them on to
+// the URL function around them. The list names what is known to be safe
+// rather than what is known to be dangerous, so that a function a browser
+// adds later is refused until it is added here, rather than let through
+// until someone notices it fetches.
+var opaqueFunctions = map[string]bool{
+	"linear-gradient": true, "radial-gradient": true, "conic-gradient": true,
+	"repeating-linear-gradient": true, "repeating-radial-gradient": true, "repeating-conic-gradient": true,
+	"-webkit-linear-gradient": true, "-webkit-radial-gradient": true, "-webkit-conic-gradient": true,
+	"-webkit-repeating-linear-gradient": true, "-webkit-repeating-radial-gradient": true, "-webkit-repeating-conic-gradient": true,
+
+	"calc": true, "min": true, "max": true, "clamp": true, "round": true, "mod": true, "rem": true,
+	"abs": true, "sign": true, "sin": true, "cos": true, "tan": true, "asin": true, "acos": true,
+	"atan": true, "atan2": true, "pow": true, "sqrt": true, "hypot": true, "log": true, "exp": true,
+
+	"rgb": true, "rgba": true, "hsl": true, "hsla": true, "hwb": true, "lab": true, "lch": true,
+	"oklab": true, "oklch": true, "color": true, "color-mix": true,
+
+	"type": true,
+}
 
 func (s *cssScanner) run() error {
 	css := s.css
@@ -257,9 +283,11 @@ func (s *cssScanner) consumeIdentLike() (replaced bool, err error) {
 			return true, nil
 		}
 	}
-	if parent := s.parentFunction(); urlFunctions[parent] && (substitutions[fn] || strings.HasPrefix(fn, "--")) {
-		return false, fmt.Errorf("%s: %s() inside %s() cannot be checked for a URL to fetch; write the URL itself",
-			s.where, fn, parent)
+	if substitutions[fn] || strings.HasPrefix(fn, "--") {
+		if outer := s.exposingURLFunction(); outer != "" {
+			return false, fmt.Errorf("%s: %s() inside %s() cannot be checked for a URL to fetch; write the URL itself",
+				s.where, fn, outer)
+		}
 	}
 	s.stack = append(s.stack, fn)
 	return false, nil
@@ -306,14 +334,21 @@ func (s *cssScanner) urlFunction() string {
 
 func (s *cssScanner) inURLFunction() bool { return s.urlFunction() != "" }
 
-// parentFunction names the function a token at s.i is a direct argument
-// of, looking through bare parentheses. A substitution is only dangerous
-// there: one nested in, say, linear-gradient() inside image-set() can only
-// ever supply that gradient's arguments, never an image-set() candidate.
-func (s *cssScanner) parentFunction() string {
+// exposingURLFunction names the URL function a substitution at s.i could
+// hand a URL to, or "" when there is none. That is the nearest URL function
+// around it, unless an opaque function sits between them: a substitution in
+// linear-gradient() inside image-set() can only ever supply that gradient's
+// arguments, never an image-set() candidate. Any other function between
+// them, and any bare block, is looked through, since light-dark(var(--u),
+// x) inside image-set() is var(--u) there in a light page, and nesting one
+// pass-through in another changes nothing.
+func (s *cssScanner) exposingURLFunction() string {
 	for k := len(s.stack) - 1; k >= 0; k-- {
-		if s.stack[k] != "(" {
-			return s.stack[k]
+		switch f := s.stack[k]; {
+		case opaqueFunctions[f]:
+			return ""
+		case urlFunctions[f]:
+			return f
 		}
 	}
 	return ""

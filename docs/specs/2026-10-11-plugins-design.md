@@ -162,8 +162,12 @@ never look like a path.
   URL naming an absolute URL (`http:`, `https:`, any scheme, `//`, a
   leading `/`), or a path that resolves outside the plugin directory (`..`,
   an absolute path, a symlink leading out), is an error. So is `@import`,
-  and so is `var()` or another substitution as a direct argument of a URL
-  function, since the URL it supplies cannot be checked. The stylesheet is
+  and so is `var()` or another substitution anywhere inside a URL
+  function, since the URL it supplies cannot be checked, unless a function
+  between them is one known to yield no URL: a gradient, a colour or math
+  function, or `type()`. That list is an allowlist, so a function that
+  passes its argument through, such as `light-dark()`, `random-item()` or
+  one added later, is refused rather than trusted. The stylesheet is
   checked again once its files are joined, since a file ending inside an
   open function changes what the next one means. The same containment
   applies to every path in the manifest, `css` entries and the manifest

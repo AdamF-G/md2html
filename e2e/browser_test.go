@@ -2649,6 +2649,13 @@ func TestBrowserPluginCSSFetchesNothing(t *testing.T) {
 		{"image-set", `body{background-image:image-set("http://` + h + `/evil/d.png" 1x)}`, true},
 		{"webkit-image-set", `body{background-image:-webkit-image-set("http://` + h + `/evil/d2.png" 1x)}`, true},
 		{"image-set-var", `body{--u:"http://` + h + `/evil/d3.png";background-image:image-set(var(--u) 1x)}`, true},
+		// A function that passes its argument through, as light-dark() and
+		// random-item() do, hands a substitution to the image-set() around it.
+		{"light-dark-var", `html{--u:"http://` + h + `/evil/m1.png";background-image:image-set(light-dark(var(--u), var(--u)) 1x)}`, true},
+		{"random-item-var", `html{--u:"http://` + h + `/evil/m2.png";background-image:image-set(random-item(--k, var(--u)) 1x)}`, true},
+		{"random-item-var-webkit", `html{--u:"http://` + h + `/evil/m2w.png";background-image:-webkit-image-set(random-item(--k, var(--u)) 1x)}`, true},
+		{"random-item-if-var", `html{--u:"http://` + h + `/evil/m3.png";background-image:image-set(random-item(--k, if(else: var(--u))) 1x)}`, true},
+		{"light-dark-nested-var", `html{--u:"http://` + h + `/evil/m4.png";background-image:image-set(light-dark(light-dark(var(--u), x), x) 1x)}`, true},
 		{"cr-string", "body{content:\"x\r;background-image:url(http://" + h + "/evil/e.png)}\n", true},
 		{"ff-string", "body{content:\"x\f;background-image:url(http://" + h + "/evil/e2.png)}\n", true},
 		{"cdo-url", `<!--url(http://` + h + `/evil/e3.png)`, true},
@@ -2656,6 +2663,7 @@ func TestBrowserPluginCSSFetchesNothing(t *testing.T) {
 		{"frag-inject", `body{background-image:url('i.svg#"),url(//` + h + `/evil/f.png)/*')} /**/}`, false},
 		{"image-set-local", `body{background-image:image-set("a.png" 1x, url(i.svg) 2x)}`, false},
 		{"fragment-ref", `body{filter:url(#nothing)}`, false},
+		{"gradient-var", `body{--c:red;background-image:image-set(light-dark(linear-gradient(var(--c), red), red) 1x)}`, false},
 	} {
 		dir := t.TempDir()
 		writeFiles(t, dir, map[string][]byte{
