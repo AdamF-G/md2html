@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "name": "claude-artifact",
+  "description": "Looks from pages Claude publishes as Artifacts",
+  "styles": {
+    "claude-artifact": {
+      "description": "The rules every Artifact follows, in a cool paper and ink-blue palette",
+      "css": ["artifact.css"]
+    }
+  }
+}

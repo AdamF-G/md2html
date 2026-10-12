@@ -2541,3 +2541,52 @@ func TestBrowserSourceToolsHiddenInPrint(t *testing.T) {
 		}
 	}
 }
+
+// The claude-artifact style promises what every Artifact does: at phone
+// width the page never scrolls sideways, in either theme, and the gutter
+// is at least 16px. Only a live layout can say so.
+func TestBrowserClaudeArtifactFitsAPhone(t *testing.T) {
+	// The authoring guide, not the conformance fixture: the fixture carries
+	// its own <style> setting tokens, which would test that instead.
+	src, err := os.ReadFile("../docs/authoring.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := md2html.Convert(src, md2html.Options{Styles: []string{"claude-artifact"}})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"page.html": page})
+	ctx := newBrowserCtx(t)
+
+	const probe = `(() => ({
+		overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+		gutter: parseFloat(getComputedStyle(document.body).paddingLeft),
+		font: getComputedStyle(document.body).fontFamily,
+	}))()`
+	type sample struct {
+		Overflow, Gutter float64
+		Font             string
+	}
+	for _, theme := range []string{"light", "dark"} {
+		var s sample
+		if err := chromedp.Run(ctx,
+			chromedp.EmulateViewport(390, 800),
+			chromedp.Navigate(baseURL+"/page.html"),
+			chromedp.WaitVisible("main", chromedp.ByQuery),
+			figSetTheme(theme),
+			chromedp.Evaluate(probe, &s),
+		); err != nil {
+			t.Fatalf("%s: browser run: %v", theme, err)
+		}
+		if s.Overflow > 0 {
+			t.Errorf("%s: page scrolls sideways by %vpx at 390px", theme, s.Overflow)
+		}
+		if s.Gutter < 16 {
+			t.Errorf("%s: body gutter %vpx, want at least 16", theme, s.Gutter)
+		}
+		if !strings.Contains(s.Font, "IBM Plex Sans") {
+			t.Errorf("%s: body font %q", theme, s.Font)
+		}
+	}
+}

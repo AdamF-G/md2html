@@ -2,7 +2,10 @@ package md2html
 
 import (
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -276,5 +279,95 @@ func TestConvertFragmentCarriesTheStyle(t *testing.T) {
 		Plugins: []string{filepath.Join(root, "run")}, Styles: []string{"r"}})
 	if err != nil || !strings.Contains(string(out), "/*run*/") {
 		t.Errorf("fragment lost the style (err %v)", err)
+	}
+}
+
+// themeBlock returns the custom properties one block defines, by the
+// block's exact selector, or nil if the CSS has no such block.
+func themeBlock(css, selector string) map[string]bool {
+	i := strings.Index(css, selector+" {")
+	if i < 0 {
+		return nil
+	}
+	body := css[i+len(selector)+2:]
+	body = body[:strings.Index(body, "}")]
+	got := map[string]bool{}
+	for _, m := range regexp.MustCompile(`(--[a-z0-9-]+)\s*:`).FindAllStringSubmatch(body, -1) {
+		got[m[1]] = true
+	}
+	return got
+}
+
+// Every built-in style must load without a warning, fit its budget, and
+// keep the three theme states consistent. That means the two dark blocks
+// and the explicit light block define the same tokens, each first defined
+// on bare :root.
+//
+// The light block is the trap (Review Focus 1): the default stylesheet
+// has :root[data-theme="light"], which outranks bare :root, so a style
+// layered on it that set its light palette on :root alone would show the
+// default's palette on any page stamped light.
+func TestEveryBuiltinStyleIsWellFormed(t *testing.T) {
+	for _, p := range BuiltinPlugins() {
+		for _, n := range p.StyleNames() {
+			t.Run(p.Name+"/"+n, func(t *testing.T) {
+				var warnings []string
+				sheet, err := NewPluginCache().Stylesheet([]string{p.Name + "/" + n}, nil,
+					func(w string) { warnings = append(warnings, w) })
+				if err != nil || len(warnings) > 0 {
+					t.Fatalf("err %v, warnings %q", err, warnings)
+				}
+				if len(sheet) > maxStylesheet {
+					t.Errorf("stylesheet is %d bytes", len(sheet))
+				}
+				var own strings.Builder
+				for _, f := range p.Styles[n].css {
+					b, err := p.readFile(f)
+					if err != nil {
+						t.Fatal(err)
+					}
+					own.Write(b)
+				}
+				css := own.String()
+				root := themeBlock(css, ":root")
+				media := themeBlock(css, `  :root:not([data-theme="light"])`)
+				dark := themeBlock(css, `:root[data-theme="dark"]`)
+				light := themeBlock(css, `:root[data-theme="light"]`)
+				if root == nil || media == nil || dark == nil || light == nil {
+					t.Fatalf("want :root, the dark media block, [data-theme=dark] and [data-theme=light]; got %v %v %v %v",
+						root != nil, media != nil, dark != nil, light != nil)
+				}
+				for name, set := range map[string]map[string]bool{"dark media": media, "dark": dark, "light": light} {
+					if !reflect.DeepEqual(set, dark) {
+						t.Errorf("%s block defines %v, [data-theme=dark] defines %v", name, keys(set), keys(dark))
+					}
+					for tok := range set {
+						if !root[tok] {
+							t.Errorf("%s is set in the %s block but not first on bare :root", tok, name)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
+func keys(m map[string]bool) []string { return sortedJSONKeys(m) }
+
+func TestClaudeArtifactFontBudget(t *testing.T) {
+	p := findPlugin(BuiltinPlugins(), "claude-artifact")
+	if p == nil {
+		t.Fatal("no claude-artifact plugin")
+	}
+	total := 0
+	fs.WalkDir(p.fsys, "fonts", func(path string, d fs.DirEntry, err error) error {
+		if err == nil && strings.HasSuffix(path, ".woff2") {
+			b, _ := fs.ReadFile(p.fsys, path)
+			total += len(b)
+		}
+		return nil
+	})
+	if total == 0 || total > 150*1024 {
+		t.Errorf("fonts total %d bytes, want 1..%d", total, 150*1024)
 	}
 }

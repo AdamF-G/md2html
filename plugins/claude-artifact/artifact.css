@@ -1,0 +1,153 @@
+/* claude-artifact: the rules every page Claude publishes as an Artifact
+   follows (a token palette for all three theme states, a 16px gutter at
+   every width, a ~65ch measure, embedded faces with real fallbacks, cards
+   only where an element is a thing in its own right), plus one identity of
+   its own. It is layered on the default stylesheet, so it only says what
+   differs.
+
+   Layout: one 65ch column on a cool paper ground, ink-blue accent,
+   grotesque display headings over a humanist sans body. */
+
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/bricolage-grotesque-600.woff2") format("woff2");
+}
+/* One variable file carries both upright weights, so it is declared once
+   with a weight range: two faces naming the same file would inline it
+   twice. */
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("fonts/ibm-plex-sans-400-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-sans-400-italic.woff2") format("woff2");
+}
+
+:root {
+  --bg: #f6f7f5;
+  --fg: #1c201e;
+  --muted: #5b645f;
+  --accent: #2c5a85;
+  --rule: #dde1dd;
+  --code-bg: #eceeea;
+  --surface: #ffffff;
+  --warn: #a8540d;
+  --ok: #2c6b45;
+  --measure: 65ch;
+  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121514;
+    --fg: #e4e8e5;
+    --muted: #98a29c;
+    --accent: #8db6df;
+    --rule: #2a302d;
+    --code-bg: #1b1f1d;
+    --surface: #181c1a;
+    --warn: #eb9a55;
+    --ok: #71c08f;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #121514;
+  --fg: #e4e8e5;
+  --muted: #98a29c;
+  --accent: #8db6df;
+  --rule: #2a302d;
+  --code-bg: #1b1f1d;
+  --surface: #181c1a;
+  --warn: #eb9a55;
+  --ok: #71c08f;
+  color-scheme: dark;
+}
+
+/* Restated because the default stylesheet's own light block outranks bare
+   :root: without this, a page stamped light would get the default palette. */
+:root[data-theme="light"] {
+  --bg: #f6f7f5;
+  --fg: #1c201e;
+  --muted: #5b645f;
+  --accent: #2c5a85;
+  --rule: #dde1dd;
+  --code-bg: #eceeea;
+  --surface: #ffffff;
+  --warn: #a8540d;
+  --ok: #2c6b45;
+  color-scheme: light;
+}
+
+/* The gutter is never under 16px, and on a notched phone in landscape it
+   also clears the safe area, so text never sits under the notch. */
+body {
+  font: 16px/1.6 var(--font-body);
+  padding-inline: max(16px, 1.25rem, env(safe-area-inset-left, 0px))
+    max(16px, 1.25rem, env(safe-area-inset-right, 0px));
+  padding-block: 3rem 6rem;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 2.25rem; line-height: 1.1; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.2rem; }
+
+code, pre { font-family: var(--font-mono); }
+
+p.subtitle { font-size: 1.15rem; color: var(--muted); }
+
+th {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+/* Cards by role: a callout, a card, a collapsible container, a figure and
+   a code block are objects in their own right, so they get a surface and
+   an edge; running text does not. */
+.callout {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+}
+.card {
+  background: var(--surface);
+  border-radius: 10px;
+}
+details.container { background: var(--surface); border-radius: 8px; }
+figure.fig {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+pre { border: 1px solid var(--rule); border-radius: 8px; }
+
+/* The contents list is navigation, not running text: underlining every
+   entry turns it into a wall of rules, so the underline waits for hover. */
+nav.toc a { text-decoration: none; }
+nav.toc a:hover { text-decoration: underline; }
+
+a { text-underline-offset: 0.15em; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
