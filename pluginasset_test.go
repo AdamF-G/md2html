@@ -79,3 +79,50 @@ func TestInlineAssetsLeavesDefaultCSSUnchanged(t *testing.T) {
 		t.Errorf("default.css changed (err %v)", err)
 	}
 }
+
+// A ")" inside a quoted url() argument must not end the token, and a
+// quoted or escaped character must not open a string the scan never closes:
+// either desync would let a later remote url() or @import pass unrefused.
+func TestInlineAssetsQuotesAndEscapes(t *testing.T) {
+	files := map[string]string{"img/b.svg": "<svg/>"}
+	enc := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	for _, c := range []struct{ name, in, want, wantErr string }{
+		{"svg data uri with parens in double quotes passes through",
+			`a{background:url("data:image/svg+xml,<svg fill='rgb(0,0,0)'/>")}`,
+			`a{background:url("data:image/svg+xml,<svg fill='rgb(0,0,0)'/>")}`, ""},
+		{"svg data uri with parens in double quotes, then remote url",
+			`a{background:url("data:image/svg+xml,<svg fill='rgb(0,0,0)'/>")} b{src:url(https://x/y.woff2)}`,
+			"", "is not a relative path inside the plugin"},
+		{"svg data uri with parens in single quotes passes through",
+			`a{background:url('data:image/svg+xml,<svg fill="rgb(0,0,0)"/>')}`,
+			`a{background:url('data:image/svg+xml,<svg fill="rgb(0,0,0)"/>')}`, ""},
+		{"svg data uri with parens in single quotes, then remote url",
+			`a{background:url('data:image/svg+xml,<svg fill="rgb(0,0,0)"/>')} b{src:url(https://x/y.woff2)}`,
+			"", "is not a relative path inside the plugin"},
+		{"escaped quote in a selector, then remote url",
+			`.a-\'x{} b{src:url(http://x)}`,
+			"", "is not a relative path inside the plugin"},
+		{"unterminated string ends at newline, then remote url",
+			"a{content:\"abc\n}\nb{src:url(http://x)}",
+			"", "is not a relative path inside the plugin"},
+		{"fragment with a paren inside quotes inlines the file",
+			`background: url("img/b.svg#a)b")`,
+			`background: url("data:image/svg+xml;base64,` + enc("<svg/>") + `#a)b")`, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := inlineAssets(c.in, "style.css", fakeRead(files))
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Errorf("err = %v, want it to contain %q", err, c.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != c.want {
+				t.Errorf("got  %s\nwant %s", got, c.want)
+			}
+		})
+	}
+}

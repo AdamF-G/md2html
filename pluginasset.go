@@ -51,34 +51,62 @@ func inlineAssets(css, cssPath string, read func(rel string) ([]byte, error)) (s
 			b.WriteString(rest[:n])
 			i += n
 		case rest[0] == '"' || rest[0] == '\'':
-			n := stringEnd(rest)
+			n, _ := stringEnd(rest)
 			b.WriteString(rest[:n])
 			i += n
 		case hasPrefixFold(rest, "@import"):
 			return "", fmt.Errorf("%s: @import is not allowed; add the file to the style's css list instead", cssPath)
 		case hasPrefixFold(rest, "url(") && (i == 0 || !isIdentByte(css[i-1])):
-			end := strings.IndexByte(rest, ')')
-			if end < 0 {
-				return "", fmt.Errorf("%s: unclosed url(", cssPath)
+			ref, end, err := urlArg(rest, cssPath)
+			if err != nil {
+				return "", err
 			}
-			raw := strings.TrimSpace(rest[4:end])
-			ref := strings.Trim(raw, `"'`)
 			out, err := inlineURL(ref, cssPath, read)
 			if err != nil {
 				return "", err
 			}
 			if out == "" {
-				b.WriteString(rest[:end+1])
+				b.WriteString(rest[:end])
 			} else {
 				b.WriteString(`url("` + out + `")`)
 			}
-			i += end + 1
+			i += end
+		case css[i] == '\\' && i+1 < len(css):
+			// An escaped character is opaque here: an escaped quote in a
+			// selector such as `.a-\'x` must not open a string.
+			b.WriteString(rest[:2])
+			i += 2
 		default:
 			b.WriteByte(css[i])
 			i++
 		}
 	}
 	return b.String(), nil
+}
+
+// urlArg parses the url( token at the start of s and returns its reference
+// and the length of the whole token, through the closing parenthesis. A
+// quoted argument ends at its closing quote, so a ")" inside the quotes,
+// as in an inline SVG's rgb(0,0,0), does not end the token early.
+func urlArg(s, cssPath string) (ref string, end int, err error) {
+	arg := s[len("url("):]
+	body := strings.TrimLeft(arg, " \t\r\n\f")
+	if body != "" && (body[0] == '"' || body[0] == '\'') {
+		n, closed := stringEnd(body)
+		if !closed {
+			return "", 0, fmt.Errorf("%s: unclosed url(", cssPath)
+		}
+		after := strings.TrimLeft(body[n:], " \t\r\n\f")
+		if !strings.HasPrefix(after, ")") {
+			return "", 0, fmt.Errorf("%s: unclosed url(", cssPath)
+		}
+		return body[1 : n-1], len(s) - len(after) + 1, nil
+	}
+	k := strings.IndexByte(s, ')')
+	if k < 0 {
+		return "", 0, fmt.Errorf("%s: unclosed url(", cssPath)
+	}
+	return strings.TrimSpace(s[len("url("):k]), k + 1, nil
 }
 
 // inlineURL returns the data: URI for one url() reference, or "" for a
@@ -112,18 +140,22 @@ func inlineURL(ref, cssPath string, read func(string) ([]byte, error)) (string, 
 }
 
 // stringEnd returns the length of the CSS string literal s starts with,
-// including both quotes, or len(s) if it never closes.
-func stringEnd(s string) int {
+// including both quotes, and whether it closed. An unterminated string ends
+// at a newline, as CSS does, so one missing quote cannot swallow the rules
+// after it.
+func stringEnd(s string) (int, bool) {
 	q := s[0]
 	for i := 1; i < len(s); i++ {
 		switch s[i] {
 		case '\\':
 			i++
+		case '\n':
+			return i, false
 		case q:
-			return i + 1
+			return i + 1, true
 		}
 	}
-	return len(s)
+	return len(s), false
 }
 
 func hasPrefixFold(s, prefix string) bool {
