@@ -145,8 +145,9 @@ never look like a path.
   capabilities still loads in this one, minus the parts this release doesn't
   know. A later format that changes the meaning of an existing key bumps
   `format`.
-- **Assets are inlined.** Every `url(...)` in a style's CSS that names a
-  relative path is replaced with a `data:` URI of that file, with its media
+- **Assets are inlined.** Every URL in a style's CSS that names a relative
+  path, in `url()`, `src()` or a string in `image-set()`, is replaced with a
+  `data:` URI of that file, with its media
   type taken from the extension (`woff2`, `woff`, `ttf`, `otf`, `svg`, `png`,
   `jpg`/`jpeg`, `gif`, `webp`; anything else is an error). A relative `url()`
   resolves against the CSS file it appears in. Pages therefore stay single
@@ -154,13 +155,28 @@ never look like a path.
   is the only thing a page can fetch, and keeps `--fragment` output
   publishable, since an Artifact allows no stylesheet or asset host but
   Google Fonts.
-- **No reaching out.** A `url()` naming an absolute URL (`http:`, `https:`,
-  `//`), or a path that resolves outside the plugin directory (`..`, an
-  absolute path, a symlink leading out), is an error. So is `@import`. The
-  same containment applies to every path in the manifest, `css` entries
-  included. A plugin cannot fetch at view time, and cannot pull arbitrary
-  files from disk into a page. `data:` URLs already in the CSS pass through
-  untouched.
+- **No reaching out.** The rule covers any construct that makes the browser
+  fetch: `url()`, `src()`, `image-set()` and `-webkit-image-set()`, and
+  `@import`, in any spelling CSS accepts, escapes included (`\75 rl(` is
+  `url(`). The CSS is tokenized as a browser tokenizes it to find them. A
+  URL naming an absolute URL (`http:`, `https:`, any scheme, `//`, a
+  leading `/`), or a path that resolves outside the plugin directory (`..`,
+  an absolute path, a symlink leading out), is an error. So is `@import`,
+  and so is `var()` or another substitution as a direct argument of a URL
+  function, since the URL it supplies cannot be checked. The stylesheet is
+  checked again once its files are joined, since a file ending inside an
+  open function changes what the next one means. The same containment
+  applies to every path in the manifest, `css` entries and the manifest
+  itself included. A plugin cannot fetch at view time, and cannot pull
+  arbitrary files from disk into a page. `data:` URLs and `#id` references
+  already in the CSS pass through untouched.
+- **No closing the style element.** Plugin CSS containing `</style`
+  anywhere, in any case and inside comments and strings too, is an error.
+  The page writes its stylesheet raw into a `<style>` element, and the
+  HTML parser ends that element at `</style` whatever CSS makes of it, so
+  the rest would be markup, a script included. This applies to every
+  plugin style, built-ins included. A stylesheet given with `--css` is the
+  user's own file and is not checked.
 - **Size.** A page whose assembled stylesheet exceeds 1 MB is converted with
   a warning. Every page carries its stylesheet, and an Artifact page is
   capped at 16 MB.
@@ -245,7 +261,7 @@ usage error.
 ### Failures
 
 - A bad **`--plugin`** or **`--style`** (missing directory, invalid manifest,
-  forbidden `url()`, name clash, unknown or ambiguous style name, misplaced
+  forbidden URL in any of its styles, name clash, unknown or ambiguous style name, misplaced
   `base: "none"`) fails the run before any document is converted, exit 2.
   This matches how a bad `--lang` is refused up front.
 - A bad **front matter `plugins:` or `style:`** produces a per-page warning
@@ -451,7 +467,12 @@ the asset rules. Keeping it there serves people and agents from one source.
 - **Assets:** relative `url()` inlined with the correct media type, resolved
   against its own CSS file; quoted and unquoted `url()` forms; `..`, absolute
   paths, symlinks out, `http(s):`, `//`, `@import` and unknown extensions are
-  all refused; `data:` passes through.
+  all refused; `data:` passes through. Each fetch in every spelling the
+  tokenizer must catch (escaped names, `image-set()` and `src()` strings,
+  strings ended by `\r` or `\f`, fragments that would close their own
+  `url()`, `</style`) is refused or neutralised, and a browser test
+  asserts that a page styled by any accepted payload requests nothing from
+  another host.
 - **Loading:** `--plugin` relative to the working directory, front matter
   `plugins:` relative to the page; a name clash between two plugins, or with a
   built-in, is refused; one directory loaded twice is one plugin.
@@ -465,7 +486,8 @@ the asset rules. Keeping it there serves people and agents from one source.
   `style: default` opts out; front matter `plugins:` adds to `--plugin` for
   that page only.
 - **Failures:** a bad `--plugin` or `--style` exits 2 before writing
-  anything; a bad front matter `plugins:` or `style:` warns and the page uses
+  anything, including a `--plugin` whose fault is in a style the run does
+  not select, and `--list-styles` exits 2 on the same faults; a bad front matter `plugins:` or `style:` warns and the page uses
   the run's whole style list.
 - **Cache:** a plugin read and a stylesheet assembled once across many
   concurrent conversions (run the test with `-race`).

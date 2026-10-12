@@ -871,14 +871,23 @@ allowed for the first style a page lists.
 
 Fonts and images the CSS names with `url(fonts/x.woff2)` are copied into
 every page as `data:` URIs, so the page stays one file that loads nothing.
+The same goes for a file named in `src()` or as a string in `image-set()`.
 Only these file types can be inlined: `woff2`, `woff`, `ttf`, `otf`, `svg`,
-`png`, `jpg` or `jpeg`, `gif` and `webp`. Any other extension in a `url()`
-is an error. A `url(#id)` reference and a `data:` URL already in the CSS
-are left as written.
+`png`, `jpg` or `jpeg`, `gif` and `webp`. Any other extension is an error.
+A `url(#id)` reference and a `data:` URL already in the CSS are left as
+written.
 
 For the same reason a plugin cannot use `@import`, a web address, or a
 file outside its own directory: each is an error naming the file. A symlink
-that leads outside the plugin counts as outside.
+that leads outside the plugin counts as outside. md2html reads the CSS as a
+browser does, so writing one with escapes, as `\75 rl(` for `url(`, is
+caught the same way. `var()`, or another function whose value comes later,
+directly inside `url()`, `src()` or `image-set()` is an error too, since
+the URL it supplies cannot be checked.
+Write the file's path itself.
+
+CSS containing `</style`, even in a comment or a string, is an error: it
+would end the page's `<style>` element early.
 
 ### What a style can change
 
@@ -900,11 +909,22 @@ Set each colour four times: on `:root`, in the
 `:root:not([data-theme="light"])`, on `:root[data-theme="dark"]`, and on
 `:root[data-theme="light"]`. The example above shows the shape.
 
+Figures have two more. `--fig-weight` is written by md2html onto each
+figure panel from its item's `weight`, and sets the panel's share of the
+row; a style can read it but should not set it. `--fig-surface` is the fill
+of the card drawn around a figure panel, and an accent ring inside the card
+paints its gap in the same colour. To change the card's fill, set
+`--fig-surface` on `.fig-panel:not(.fig-panel-arrow)`, the selector the
+default uses, rather than `background`, so the ring still matches.
+
 Classes you can style, beyond plain elements: `callout`, `card`, `group`,
 `stats`, `defs`, `details.container`, `chip` and `chip-*`, `xref`,
 `nav.toc`, `subtitle`, `docdate`, `code-figure`, `fig` and `fig-*`,
 `table-scroll`, `anchor`, `source-tools`. A class you add to your own
 Markdown is inert until a style names it.
+
+These class and custom property names are what a style is written against.
+They change only with a note in the CHANGELOG.
 
 ### What a plugin cannot do yet
 
@@ -914,8 +934,8 @@ write it in the Markdown as raw HTML, or say it isn't possible yet.
 
 ### Checking a style
 
-Run `md2html --plugin ./_style --list-styles` to check a plugin loads; a
-broken one exits with the reason. Then build a page and look at it at 400px
+Run `md2html --plugin ./_style --list-styles` to check a plugin loads and
+every style in it builds; a broken one exits with the reason. Then build a page and look at it at 400px
 wide and in both themes. A front matter `style:` that fails warns and the
 page falls back to the run's style, so read the warnings.
 
@@ -995,8 +1015,9 @@ use a `caption:` key in the body.
 
 **front matter style: … ; using the run's style** — a page's `style:`
 names a style that is not available, or one that cannot be stacked where
-it is. The message says which; fix the name or load its plugin with
-`plugins:`.
+it is, or a plugin it loads has the same name as another.
+The message says which; fix the name, load its plugin with `plugins:`, or
+rename one of the clashing plugins.
 
 **front matter plugins: … ; using the run's style** — a page's
 `plugins:` names a directory that is not a plugin. Fix the path; it is
