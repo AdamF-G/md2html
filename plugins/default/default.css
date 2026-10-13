@@ -233,6 +233,12 @@ details.container.example { border-left: 3px solid var(--accent); }
 }
 .chip-proven, .chip-verified { color: var(--ok); border-color: var(--ok); }
 .chip-deprecated { color: var(--warn); border-color: var(--warn); }
+/* Tones for a chip outside the status vocabulary, written as
+   [shipped]{.chip .chip-ok}. Each reuses a status colour, so a style that
+   sets --ok, --warn and --accent colours these too. */
+.chip-ok { color: var(--ok); border-color: var(--ok); }
+.chip-warn { color: var(--warn); border-color: var(--warn); }
+.chip-info { color: var(--accent); border-color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

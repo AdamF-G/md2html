@@ -614,6 +614,10 @@ Any other badge uses Pandoc's bracketed span syntax with the `chip` class:
 [shipped]{.chip .chip-ok}  ->  <span class="chip chip-ok">shipped</span>
 ```
 
+A chip takes a tone: `.chip-ok` and `.chip-warn` use the status colours of
+`[proven]` and `[deprecated]`, and `.chip-info` the accent. Without one it
+is neutral.
+
 The span syntax takes any class: `[lead in]{.lead}` is a
 `<span class="lead">`, unstyled unless your stylesheet names it. The label
 must be plain text, since `[**x**]{.chip}` stays literal, and only classes

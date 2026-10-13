@@ -1,6 +1,9 @@
 package md2html
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -202,5 +205,25 @@ func TestStripChipTokensRemovesBracketedSpan(t *testing.T) {
 func TestStripChipTokensKeepsNonChipSpanLabel(t *testing.T) {
 	if got := stripChipTokens("Rollback [in depth]{.lead}"); got != "Rollback in depth" {
 		t.Errorf("stripChipTokens = %q, want %q", got, "Rollback in depth")
+	}
+}
+
+// Every chip-* class the guide shows an author writing must be one the
+// default stylesheet colours: the guide once showed [shipped]{.chip
+// .chip-ok} while no rule named chip-ok, so the example rendered as a
+// plain grey chip with no warning.
+func TestGuideChipClassesAreStyled(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := regexp.MustCompile(`\.(chip-[a-z]+)`).FindAllStringSubmatch(string(b), -1)
+	if len(named) == 0 {
+		t.Fatal("the guide names no chip-* class")
+	}
+	for _, m := range named {
+		if !regexp.MustCompile(`\.` + m[1] + `\b[^{]*\{[^}]*color:`).MatchString(defaultCSS) {
+			t.Errorf("the guide names .%s but no default stylesheet rule colours it", m[1])
+		}
 	}
 }

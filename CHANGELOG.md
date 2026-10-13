@@ -39,6 +39,14 @@ major version instead.
   box of its own, where it would run off an off-centre page. A style that
   names a bare `main` should name `main.md2html`.
 
+### Fixed
+
+- `.chip-ok`, which the guide's badge example used, was styled by no
+  stylesheet, so `[shipped]{.chip .chip-ok}` rendered as a plain grey
+  chip. The default stylesheet now gives a chip three tones, `.chip-ok`,
+  `.chip-warn` and `.chip-info`, from the status colours and the accent,
+  and every style built on it inherits them.
+
 ## v0.9.0 — 2026-09-28
 
 ### Changed
