@@ -22,11 +22,36 @@ major version instead.
   write a plugin.
 - The built-in `claude-artifact` style follows the rules every page Claude
   publishes as an Artifact does.
+- Charts: a `vega-lite` fence holds a Vega-Lite spec in YAML or JSON, with
+  its data inline or in a local CSV, TSV or JSON file inside the run's
+  base (`Options.DataRoot` in the library). md2html draws it when it builds
+  the page, as SVG in the style's colours and face that follows the
+  theme, with tooltip boxes, nearest-point hover, keyboard focus and
+  legend highlighting made of CSS, and a collapsed table of its data. The
+  page gains no script and fetches nothing. Dates show the same in any
+  time zone: as written when they name no zone, and in UTC when they name
+  an instant. A spec that fails warns
+  and stays a code block. Vega 5.30.0 and Vega-Lite 5.21.0 run embedded.
+  `md2html --guide charts` documents it.
+- **`--no-charts`** (`Options.NoCharts`) leaves `vega-lite` fences as code
+  blocks.
+- **`--licenses`** prints the licences of the third-party software built
+  into md2html.
+- A style's manifest takes a `charts` block: the font chart text is
+  measured in (`font`, or `metrics: builtin:system-sans` with a `pad`), the
+  CSS `font-family` it renders in, and the `width` charts are laid out at.
+- Chart tokens a style can set: `--series-1` to `--series-8`,
+  `--status-good`, `--status-warning`, `--status-serious`,
+  `--status-critical`, `--chart-surface`, `--chart-grid` and
+  `--chart-axis`. `claude-artifact` defines them all, and charts use its
+  embedded IBM Plex Sans metrics.
 
 ### Changed
 
 - The default stylesheet is now the built-in `default` plugin's style. Its
   content and the output are unchanged.
+- The binary is larger: the chart engine and the Vega bundles take a
+  stripped darwin/arm64 build from 5.1 MB to 17.2 MB.
 - A diagram on a full page takes its colours from the page's style: nodes
   from the code background and accent, text from the text colour, lines
   from the muted colour, and gantt bars from tints of the accent, warning

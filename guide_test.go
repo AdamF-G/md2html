@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/AdamF-G/md2html/internal/charts"
 )
 
 // guide returns docs/authoring.md, the text `md2html --guide` prints.
@@ -20,6 +22,10 @@ func guide(t *testing.T) string {
 	}
 	return string(b)
 }
+
+// artifactStyle converts with the claude-artifact style, which defines
+// every chart token, so its charts are drawn in var() colours.
+var artifactStyle = Options{Styles: []string{"claude-artifact"}}
 
 // The guide says every claim in it was checked against the binary. These
 // are its claims about behaviour a reader cannot see coming, the silent
@@ -295,6 +301,54 @@ func TestGuideClaims(t *testing.T) {
 			src:   "[c:" + strings.Repeat("x", 60) + "] [c:" + strings.Repeat("y", 61) + "]\n",
 			want:  []string{`<span class="chip">` + strings.Repeat("x", 60), "[c:" + strings.Repeat("y", 61) + "]"},
 		},
+		{
+			name:  "a chart told apart only by opacity has no legend highlighting",
+			quote: "tells its categories apart only by\n    opacity has a weak legend",
+			src:   "```vega-lite\ndata: {values: [{k: a, v: 1}, {k: b, v: 2}]}\nmark: bar\nencoding:\n  x: {field: k, type: nominal}\n  y: {field: v, type: quantitative}\n  opacity: {field: k, type: ordinal}\n```\n",
+			opts:  artifactStyle,
+			want:  []string{`<figure class="md2html-chart"`, "role-legend-symbol"},
+			not:   []string{`class="md2html-legend-s1"`},
+		},
+		{
+			name:  "a literal colour draws the chart twice, with no warning",
+			quote: "A literal colour in a chart's spec doubles its size",
+			src:   "```vega-lite\ndata: {values: [{k: a, v: 1}]}\nmark: {type: bar, color: \"#1f5fa8\"}\nencoding:\n  x: {field: k, type: nominal}\n  y: {field: v, type: quantitative}\n```\n",
+			opts:  artifactStyle,
+			want:  []string{`class="md2html-chart-light"`, `class="md2html-chart-dark"`},
+		},
+		{
+			name:  "a token colour follows the theme in one copy",
+			quote: "`token:status-critical`",
+			src:   "```vega-lite\ndata: {values: [{k: a, v: 1}]}\nmark: {type: bar, color: \"token:status-critical\"}\nencoding:\n  x: {field: k, type: nominal}\n  y: {field: v, type: quantitative}\n```\n",
+			opts:  artifactStyle,
+			want:  []string{"var(--status-critical)"},
+			not:   []string{`class="md2html-chart-dark"`},
+		},
+		{
+			name:  "a reserved colour warns",
+			quote: "Colours of the form `#0a0bNN` are reserved",
+			src:   "```vega-lite\ndata: {values: [{k: a, v: 1}]}\nmark: {type: bar, color: \"#0a0b03\"}\nencoding:\n  x: {field: k, type: nominal}\n  y: {field: v, type: quantitative}\n```\n",
+			opts:  artifactStyle,
+			want:  []string{"var(--muted)"},
+			warns: true,
+		},
+		{
+			name:  "a data url with a host is refused",
+			quote: "A `url` with a scheme or host is refused",
+			src:   "```vega-lite\ndata: {url: \"https://example.com/d.csv\"}\nmark: bar\n```\n",
+			opts:  Options{SourcePath: filepath.Join(t.TempDir(), "page.md")},
+			want:  []string{`class="language-vega-lite"`},
+			not:   []string{"md2html-chart"},
+			warns: true,
+		},
+		{
+			name:  "--no-charts leaves the fence as code",
+			quote: "`--no-charts` leaves every `vega-lite` fence as a code block",
+			src:   "```vega-lite\nmark: bar\n```\n",
+			opts:  Options{NoCharts: true},
+			want:  []string{`class="language-vega-lite"`},
+			not:   []string{"md2html-chart"},
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if !strings.Contains(text, c.quote) {
@@ -302,7 +356,11 @@ func TestGuideClaims(t *testing.T) {
 			}
 			var warnings []string
 			opt := c.opts
-			opt.CSS = "/**/"
+			// A claim that names styles is about how a style draws it,
+			// so it keeps that style's stylesheet.
+			if len(opt.Styles) == 0 {
+				opt.CSS = "/**/"
+			}
 			opt.Warn = func(w string) { warnings = append(warnings, w) }
 			// Front matter claims concern the page shell's <title>, so
 			// they need a full page too.
@@ -383,15 +441,16 @@ func TestGuideWideNeedsMain(t *testing.T) {
 	}
 }
 
-// messageText returns every string literal in the package's and the
-// CLI's non-test sources, with literals joined by + read as one, and
-// format verbs read as "…" (%q as a quoted "…"). Comments are not
-// included, so a message that survives only in a comment does not count.
+// messageText returns every string literal in the package's, the CLI's
+// and the chart renderer's non-test sources, with literals joined by +
+// read as one, and format verbs read as "…" (%q as a quoted "…"). Comments
+// are not included, so a message that survives only in a comment does not
+// count.
 func messageText(t *testing.T) string {
 	t.Helper()
 	var out strings.Builder
 	verbs := strings.NewReplacer(`%q`, `"…"`, `%s`, `…`, `%d`, `…`, `%v`, `…`, `%w`, `…`)
-	for _, dir := range []string{".", filepath.Join("cmd", "md2html")} {
+	for _, dir := range []string{".", filepath.Join("cmd", "md2html"), filepath.Join("internal", "charts")} {
 		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
 		if err != nil {
 			t.Fatal(err)
@@ -675,6 +734,87 @@ func TestGuideStylesNamesRealFlags(t *testing.T) {
 	}
 	for _, s := range []string{"--list-styles", "--style", "--plugin", "style:", "plugins:", "claude-artifact", ManifestName, "woff2", "starting with a letter", "reserved"} {
 		if !strings.Contains(string(sec), s) {
+			t.Errorf("the styles section does not mention %s", s)
+		}
+	}
+}
+
+// The charts section's example must render as it stands: copied into a
+// page, it draws a chart with its caption and no warning, under both
+// built-in styles.
+func TestGuideChartsExampleRenders(t *testing.T) {
+	sec, err := GuideSection("charts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile("(?s)````markdown\n(```vega-lite \\{caption=\"([^\"]+)\"\\}\n.*?```\n)````").FindStringSubmatch(string(sec))
+	if m == nil {
+		t.Fatal("the charts section has no vega-lite example in a markdown block")
+	}
+	for _, style := range []string{"default", "claude-artifact"} {
+		var warnings []string
+		out, err := Convert([]byte("---\nstyle: "+style+"\n---\n\n"+m[1]), Options{
+			Warn: func(w string) { warnings = append(warnings, w) }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(warnings) > 0 {
+			t.Errorf("%s: the example warns: %q", style, warnings)
+		}
+		for _, want := range []string{`<figure class="md2html-chart"`, "<figcaption>" + m[2] + "</figcaption>", "<summary>" + m[2] + "</summary>"} {
+			if !strings.Contains(string(out), want) {
+				t.Errorf("%s: output lacks %s", style, want)
+			}
+		}
+		// Until the default style defines its chart tokens, its charts
+		// keep a placeholder for each token it lacks; the check starts
+		// holding the default to it once it has them.
+		if style != "default" || strings.Contains(defaultCSS, "--series-1:") {
+			if regexp.MustCompile(`(?i)#0a0b[0-9a-f]{2}`).Match(out) {
+				t.Errorf("%s: a placeholder colour survives in the chart", style)
+			}
+		}
+	}
+}
+
+// The charts section names flags, options, manifest keys and every chart
+// token; each must be real. A flag is real when the CLI's sources hold
+// its name as a string, as flag.Bool needs.
+func TestGuideChartsNamesRealThings(t *testing.T) {
+	sec, err := GuideSection("charts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(sec)
+	code := messageText(t)
+	flags := regexp.MustCompile("`--([a-z-]+)").FindAllStringSubmatch(text, -1)
+	if len(flags) < 2 {
+		t.Fatalf("found only %d flags in the charts section", len(flags))
+	}
+	for _, f := range flags {
+		if !strings.Contains(code, "\x00"+f[1]+"\x00") {
+			t.Errorf("the charts section names --%s, which the CLI does not define", f[1])
+		}
+	}
+	for _, tok := range charts.Tokens {
+		if strings.HasPrefix(tok, "series-") && tok != "series-1" && tok != "series-8" {
+			continue
+		}
+		if !strings.Contains(text, "`"+tok+"`") {
+			t.Errorf("the charts section does not list the token %s", tok)
+		}
+	}
+	for _, s := range []string{"Options.DataRoot", "Options.NoCharts", "https://vega.github.io/vega-lite/docs/", "--licenses", "--guide styles"} {
+		if !strings.Contains(text, s) {
+			t.Errorf("the charts section does not mention %s", s)
+		}
+	}
+	styles, err := GuideSection("styles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{`"charts"`, "`font`", "`metrics`", "`builtin:system-sans`", "`pad`", "`width`", "`font-family`", "`--series-1`", "`--chart-surface`", "`md2html-chart`"} {
+		if !strings.Contains(string(styles), s) {
 			t.Errorf("the styles section does not mention %s", s)
 		}
 	}

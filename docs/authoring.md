@@ -34,6 +34,8 @@ construct has other spellings, they are under
 | Stat tiles, term grid, titled panel | `::: stats`, `::: defs`, `::: group Title` … `:::` |
 | Navigation block | `::: nav {aria-label="Section"}` … `:::` |
 | Hand-laid-out figure | a ```` ```fig ```` fence with a YAML body |
+| Chart | a ```` ```vega-lite {caption="…"} ```` fence holding a Vega-Lite spec in YAML |
+| Chart colour by meaning | `color: {value: "token:status-good"}`, or `-warning`, `-serious`, `-critical`; see [Colours](#colours) |
 | Page language | `lang: de` in front matter |
 | Page look | `style: claude-artifact` in front matter, or `--style`; `--list-styles` lists them |
 | Output for a host that supplies the page (a Claude Artifact) | `--fragment` |
@@ -94,6 +96,14 @@ before you finish.
     switched to light then shows the default's colours. Set each colour on
     `:root[data-theme="light"]` too. See
     [What a style can change](#what-a-style-can-change).
+21. **A chart that tells its categories apart only by
+    opacity has a weak legend.** Shades of one colour are hard to match to
+    their legend entries, more so where overlapping marks add up, and
+    hovering the legend highlights nothing. Give each category its own
+    colour with a `color` encoding.
+22. **A literal colour in a chart's spec doubles its size.** It cannot
+    follow the theme, so the chart is drawn twice, once per theme. Use a
+    `token:` colour. See [Colours](#colours).
 
 ## Page structure
 
@@ -595,6 +605,168 @@ naming the item and the fault. Line numbers count from the first line of
 the fence body. The figure's caption is the `caption:` key; `caption=` on
 the fence line warns.
 
+## Charts
+
+A ```` ```vega-lite ```` fence is a chart, drawn when md2html builds the
+page. Its body is a Vega-Lite spec, in YAML or in JSON, which YAML also
+reads. The [Vega-Lite documentation](https://vega.github.io/vega-lite/docs/)
+describes the grammar: marks, encodings, scales and transforms.
+
+````markdown
+```vega-lite {caption="Median response time by region"}
+data:
+  values:
+    - {region: North, ms: 182}
+    - {region: South, ms: 240}
+    - {region: East, ms: 205}
+    - {region: West, ms: 167}
+mark: bar
+encoding:
+  y: {field: region, type: nominal, sort: null}
+  x: {field: ms, type: quantitative, title: Milliseconds}
+  tooltip: {field: ms}
+```
+````
+
+The chart is SVG in the page, in the style's colours and face, and follows
+the reader's light or dark theme. The page gains no script and fetches
+nothing for it, and `--fragment` output carries it the same way.
+
+The caption goes in the info string, as on a code block, and sits under
+the chart. Classes there, such as `{.wide caption="…"}`, go on the
+chart's `<figure>` after its own `md2html-chart`. The body is Vega-Lite's
+alone: md2html adds no keys to it, and a spec's own `title` still draws
+inside the chart.
+
+A spec that does not parse, compile or render warns, naming the fence by
+its number on the page, and shows as a code block of its source; see
+[Warnings](#warnings).
+`--no-charts` leaves every `vega-lite` fence as a code block, as does
+`Options.NoCharts` in the library.
+
+### Data
+
+`data: {values: […]}` holds the data in the spec.
+`data: {url: ./results.csv}` reads a CSV, TSV or JSON file when the page
+is built, relative to the page's source. The file must stay inside the
+run's base: for the command, the common ancestor of its entry points; in
+the library, `Options.DataRoot`, or the page's own directory when that is
+empty. A `Convert` call with no `SourcePath` reads no files.
+A `url` with a scheme or host is refused: md2html never fetches. So is
+one with a query or a fragment, such as `results.csv?v=2`, since a file
+has neither. The data is fixed when the page is built, so rebuild the
+page to update a chart.
+
+Dates show the same on every machine that builds the page. There is no
+time-zone setting; the rule is:
+
+- A value with no zone shows exactly as written. `2024-01-01` is 1
+  January, and `2024-01-01T09:30` is 09:30.
+- A value that names an instant shows in UTC. `2024-01-01T09:30+02:00`
+  shows as 07:30, and an epoch number, in milliseconds, as its UTC time.
+
+An `image` mark draws only a `data:` URL. Any other `url` would make the
+page fetch the image, so the chart is refused.
+
+### Colours
+
+A colour written as `token:<name>` is the style's colour for that role,
+and follows the theme. `token:status-critical` marks a value as critical:
+
+```yaml
+mark: {type: bar, color: "token:status-critical"}
+```
+
+| Token | Use |
+|---|---|
+| `series-1` … `series-8` | Categories, in this order; a `color` encoding takes them unless its scale names others |
+| `status-good`, `status-warning`, `status-serious`, `status-critical` | Status meanings only, never a series |
+| `chart-surface` | The surface a chart sits on, which rings and gaps between marks show |
+| `chart-grid`, `chart-axis` | Gridlines, and the axis or baseline |
+| `fg`, `muted` | Chart text, as on the page |
+
+A name outside this list warns. `token:` is read only in the spec's
+settings, never in its data: a data value that reads `token:fg` stays text.
+Colours of the form `#0a0bNN` are reserved: md2html draws each token in
+one while it builds a chart, so a spec that names one warns and gets that
+token's colour.
+
+A literal colour, such as `"#1f5fa8"`, cannot follow the theme, so the
+chart is drawn twice, once in each theme's colours, and the page shows the
+copy that matches. That doubles the chart's size. For a lighter step of a
+colour, keep the token and set `opacity`, but tell categories apart by
+colour, not by opacity alone.
+
+### Width
+
+A chart is laid out at its style's chart width, 640 pixels in both built-in
+styles, unless the spec sets `width`. A spec that places views side by side
+(`hconcat`, `facet` and the like) gets no width from the style.
+`width: container` takes the style's width too, since a build has no
+container to measure, and `height: container` is Vega-Lite's default
+height, as if the spec set none. The chart scales down with its column
+and never makes the page scroll sideways; its text scales with it, so a
+wide chart on a phone has small text.
+
+### The table view
+
+Under each chart, a collapsed block titled with the caption, or "Chart
+data" without one, holds the data the chart drew as a table: one row per
+datum each mark drew, one column per field the spec encodes, in encoding
+order. A field a transform makes, such as a `fold`'s `key` and `value` or
+a `calculate`, is there as the chart drew it. An aggregate's column takes
+the name Vega-Lite gives it, such as `sum_v`, and a count's is `count`.
+A `timeUnit`'s column does too, such as `yearmonth_date`, and holds the
+value the chart drew: the date cut to that unit, so `2024-03-17` under
+`yearmonth` is written `2024-03-01`. A unit with no year, such as
+`month`, puts every date in 2012, as Vega-Lite does: `2012-03-01`. A
+layer drawn from the same data as an earlier one adds no rows, nor do a
+line's points, however many series it has. A layer that draws other
+rows, such as a rule at a mean, adds its own, with blanks in the columns
+it does not encode. Values are as the data holds them, not as the axis
+formats them; a date is written in ISO form, `2024-01-01`, or
+`2024-01-01T09:30:00Z` with a time. The table is there for a reader who
+cannot see the chart, and for one whose browser cannot show the hover
+boxes.
+
+### Hover
+
+- **Tooltips.** Each mark a `tooltip` encoding covers gets a box, shown
+  above the mark while it is hovered. Where there is no room the box flips
+  below, and it shifts sideways to stay inside the chart. A line or an
+  area is one shape for all its data, so each of its data points gets a
+  box instead, above the point, shown by its nearest-point region.
+- **Nearest point.** On a chart whose tooltip marks are all points, lines
+  and areas, hovering anywhere nearer one point, or one data point of a
+  line or an area, than any other shows that point's box, up to 500
+  points. A line or an area with a tooltip beside a tooltip mark of
+  another kind, such as a bar, or in a chart of several views, such as a
+  `concat` or a `facet`, gets no regions, so its boxes never show and the
+  build warns; give the line `point: true`, and its points carry the
+  boxes.
+- **Keyboard.** Tab reaches each mark with a tooltip, and focus shows its
+  box. A chart with more than 50 such marks is one tab stop instead, and
+  its table view holds the values. The data points of a line or an area
+  are not tab stops, since no element of the chart is theirs; the table
+  view holds their values.
+- **Legend.** Hovering or focusing an entry of a colour legend dims the
+  marks of every other series.
+
+The box sits at one place per mark: it does not follow the cursor, so on a
+long bar it is at the bar's centre. There is no zoom, pan, brushing or
+click-to-filter, and no live data. The boxes need CSS `:has()`, in every
+major browser since late 2023; without it a chart shows no boxes and is
+otherwise unchanged.
+
+### Credits
+
+Charts are drawn by Vega and Vega-Lite, from the University of Washington
+Interactive Data Lab, which md2html embeds under their BSD 3-Clause
+licence. md2html is not affiliated with or endorsed by their authors.
+`md2html --licenses` prints the licences of everything md2html embeds.
+`md2html --guide styles` covers how a style sets a chart's colours, face
+and width.
+
 ## Inline marks
 
 ### Status badges and spans
@@ -727,6 +899,7 @@ Where a construct has several spellings, write the default:
   `# Title` heading for the title.
 - **Reference:** `§4.2` for numbered headings, `[text](#anchor)` otherwise.
 - **Diagram:** mermaid, or `fig` when you need to place things yourself.
+  A chart of data is a `vega-lite` fence.
 - **Stat tiles, term grid, panel:** the container, unless the item sits in
   a `fig` diagram.
 
@@ -867,6 +1040,7 @@ accent colour and the text column's width:
 | `description` | One line for `--list-styles`. |
 | `styles` | Each style by name: its `description`, its `css` files in order, and `base`. |
 | `base` | Per style. `default`, the default, adds the style to the default stylesheet. `none` starts from nothing. |
+| `charts` | Per style, optional. How its charts are drawn; see [Chart settings](#chart-settings). |
 
 Style names follow the same rules as plugin names. `default` is reserved
 for the built-in plugin and its style, so a plugin or style named `default`
@@ -941,11 +1115,63 @@ the host's own `<main>` too.
 Classes you can style, beyond plain elements: `md2html`, `callout`, `card`, `group`,
 `stats`, `defs`, `details.container`, `chip` and `chip-*`, `xref`,
 `nav.toc`, `subtitle`, `docdate`, `code-figure`, `fig` and `fig-*`,
-`table-scroll`, `anchor`, `source-tools`. A class you add to your own
+`table-scroll`, `anchor`, `source-tools`, and `md2html-chart` on a
+chart's `<figure>`. A class you add to your own
 Markdown is inert until a style names it.
 
 These class and custom property names are what a style is written against.
 They change only with a note in the CHANGELOG.
+
+### Chart settings
+
+Charts take their colours from these properties, set four times like the
+others:
+
+| Property | Used for |
+|---|---|
+| `--series-1` … `--series-8` | Categorical colours, in order |
+| `--status-good`, `--status-warning`, `--status-serious`, `--status-critical` | Status meanings |
+| `--chart-surface` | The surface under a chart, shown in rings and gaps between marks |
+| `--chart-grid`, `--chart-axis` | Gridlines, and the axis or baseline |
+
+Chart text uses `--fg` and `--muted`. A stylesheet that defines all
+seventeen gets charts whose colours follow the theme. A style built on the
+default inherits the default's, so it needs to set only those it changes.
+On a stylesheet that lacks any of them, charts are drawn in fixed colours:
+its own light values where it has them, the default's for the rest.
+
+A style's optional `charts` block sets the face chart text is measured in
+and the width charts are laid out at:
+
+```json
+"styles": {
+  "house": {
+    "css": ["house.css"],
+    "charts": {
+      "font": "fonts/house-sans.woff2",
+      "font-family": "\"House Sans\", sans-serif",
+      "width": 600
+    }
+  }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `font` | A woff2, ttf or otf file in the plugin, usually one the stylesheet embeds. Chart text is measured with its exact widths. |
+| `metrics` | `builtin:system-sans`, the one built-in: widths close to the common system sans faces, for a style whose text is the reader's system font, which md2html cannot measure. Not with `font`. |
+| `pad` | 0 to 1: how much room to add to text measured by `metrics`, for a system face wider than the estimate. The default style's is 0.1; `0` adds none. Not with `font`, whose widths are exact: the pair warns. |
+| `width` | The plot width in pixels, 100 to 2000, for a spec that sets none. |
+| `font-family` | The CSS font stack chart text renders in. Put the face `font` measures first. |
+
+Each key a style's block leaves out comes from the style below it, and
+every page starts from the default style's block: system-sans metrics, a
+0.1 pad, a 640-pixel width. A block naming `font` or `metrics` replaces
+how text is measured, padding included. A `pad` applies only while text
+is measured by `metrics`: stacked over a style whose block names `font`,
+it does nothing. `claude-artifact` measures its
+embedded IBM Plex Sans. A `font` that is missing, or is not a font, fails
+the plugin's load; an unknown key warns.
 
 ### What a plugin cannot do yet
 
@@ -1033,6 +1259,57 @@ its YAML source. The rest of the message names the fault:
 
 **fig fence: a caption in the info string is not part of a figure** —
 use a `caption:` key in the body.
+
+**vega-lite fence …: …; showing its source** — the chart is shown as its
+source. The fence's number counts charts from the top of the page. The
+rest of the message names the fault:
+
+- *the spec is not YAML or JSON* — fix the syntax; the message says where.
+- *the fence is empty; it needs a Vega-Lite spec*, *the spec is not a
+  mapping of Vega-Lite keys* — the body is a mapping such as `mark: bar`.
+- *md2html reads only files beside the page, never the network* — a data
+  `url` with a scheme or host. Save the file beside the page.
+- *a file has no query or fragment* — a data `url` such as
+  `results.csv?v=2` or `results.csv#top`. Remove the part from the `?` or
+  `#`.
+- *it is outside …*, *an absolute path is outside the pages* — the data
+  file leaves the run's base. Move it inside. See [Data](#data).
+- *charts read no data files here* — a `Convert` call with no
+  `SourcePath`. Set it, or put the data in `values`.
+- *ran past its … time budget* — the chart took too long. Give it less
+  data.
+- *an image mark's url … would make the page fetch it* — an `image` mark
+  draws only a `data:` URL. Embed the image as one, or leave the mark out.
+- Anything else is Vega-Lite's or Vega's own error. Check the spec against
+  the [Vega-Lite documentation](https://vega.github.io/vega-lite/docs/).
+
+**vega-lite fence …: … names no chart token** — a `token:` name outside
+the list in [Colours](#colours). The message lists the names.
+
+**vega-lite fence …: … is reserved by md2html for a chart token** — a
+`#0a0bNN` colour. Use a `token:` name, or another colour.
+
+**vega-lite fence …: … tooltip marks could not be matched to the SVG** —
+the chart renders without hover boxes; its table view still holds its
+values.
+
+**vega-lite fence …: … line or area tooltips have no hover** — the chart
+gets no nearest-point regions to show them. The message says why:
+
+- *all points, lines and areas* — a line or an area has a tooltip beside
+  a tooltip mark of another kind, such as a bar. Give the line
+  `point: true`, so its points carry the boxes, or move the tooltip to the
+  other mark.
+- *tooltip points, over the … that get nearest-point regions* — the chart
+  has over 500. Give it less data.
+- *no single plot area* — the chart is several views, such as a `concat`,
+  `facet` or `repeat`. Give the line `point: true`.
+
+The table view still holds the values.
+
+Vega-Lite's own warnings, such as an encoding it will ignore, also arrive
+as **vega-lite fence …:** warnings. The chart still renders; read the
+message, since what it ignores is missing from the chart.
 
 **front matter style: … ; using the run's style** — a page's `style:`
 names a style that is not available, or one that cannot be stacked where

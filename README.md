@@ -124,6 +124,14 @@ with no page shell, ready to drop into a Claude Artifact.
 - **Diagrams.** `mermaid` fences render as diagrams, and a `fig` fence
   describes hand-laid-out boxes, arrows and panels in YAML, for layouts a
   mermaid graph cannot express.
+- **Charts.** A `vega-lite` fence holds a
+  [Vega-Lite](https://vega.github.io/vega-lite/docs/) spec in YAML or
+  JSON, with its data inline or in a CSV, TSV or JSON file inside the
+  run's base. md2html draws it when it builds the page, as SVG in the style's
+  colours and face that follows the reader's light or dark theme, with
+  hover boxes and keyboard focus made of CSS and a table of the data under
+  it. The page gains no script and fetches nothing for it. Vega and
+  Vega-Lite run inside md2html, so this needs no Node and no network.
 - **Callouts and containers.** GitHub alerts (`> [!NOTE]`,
   `> [!WARNING]`) for notes and warnings, and fenced containers
   (`::: callout Title` … `:::`) for titled callouts, cards, collapsible
@@ -374,6 +382,7 @@ recipient's agent anyway.
 | `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
 | `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
 | `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
+| `--no-charts` | leave `vega-lite` fences as code blocks instead of drawing charts |
 | `--css FILE` | replace the stylesheet; not with `--style` |
 | `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
 | `--plugin DIR` | load a local plugin for its styles (repeatable) |
@@ -388,6 +397,7 @@ recipient's agent anyway.
 | `--no-assets` | do not rewrite asset links |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries |
+| `--licenses` | print the licences of the third-party software built into md2html, and exit |
 | `--guide` | print the Markdown authoring guide's quick reference, its silent traps and an index of its other sections, and exit; the reference the skill points to. `--guide diagrams` prints one section instead, and `--guide all` the whole guide. On a terminal it opens in `$PAGER` (`less` if unset; `PAGER=cat` for none); piped or redirected, it is written unchanged |
 | `--install-skill DIR` | install the authoring skill into `DIR`, an existing skills directory any agent reads, and exit |
 | `--install-skill-user` | install it for Claude Code, under `~/.claude/skills`, instead |
@@ -419,6 +429,11 @@ arrive whatever `Transforms` holds — a builtin that reports is rebuilt
 against this sink before it runs, so appending to `Builtins()` costs you no
 diagnostics. `Convert` never writes to stderr itself; the callback runs
 synchronously on the calling goroutine.
+
+`Options.NoCharts` leaves `vega-lite` fences as code blocks, so the chart
+engine never starts. A chart's data file must stay inside
+`Options.DataRoot`, or the page's own directory when that is empty; the
+command sets it to the common ancestor of its entry points.
 
 `Options.MermaidURL` names the ES module a page with a diagram imports at
 view time, for a docs build that must not reach a CDN. Empty keeps the
@@ -490,4 +505,8 @@ records what has changed.
 MIT — see [LICENSE](./LICENSE). `internal/fences` is vendored from
 `goldmark-fences` and keeps its own MIT licence; `testdata/vendor` holds a
 test-only copy of MermaidJS under its MIT licence, with the notices of the
-libraries it bundles left in place.
+libraries it bundles left in place. `internal/charts/vendor` holds Vega and
+Vega-Lite, which md2html embeds to draw charts, under the BSD 3-Clause
+licence; [THIRD_PARTY_NOTICES](./THIRD_PARTY_NOTICES) carries their
+notices and those of everything else built into the binary, and
+`md2html --licenses` prints it.
