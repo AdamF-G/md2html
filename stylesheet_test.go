@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/AdamF-G/md2html/internal/charts"
 )
 
 // twoPlugins builds plugins "acme" (styles "plain", "shared", "blank") and
@@ -419,5 +421,46 @@ func TestStylesheetChecksTheJoinedFiles(t *testing.T) {
 				t.Errorf("err = %v, want it to contain %q", err, c.want)
 			}
 		})
+	}
+}
+
+// claude-artifact defines every chart token for light and dark, so a page
+// in that style renders charts with var(--token) styles in every theme.
+func TestClaudeArtifactDefinesEveryChartToken(t *testing.T) {
+	css, err := NewPluginCache().Stylesheet([]string{"claude-artifact"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	light, dark, ok := charts.TokenValues(css)
+	if !ok {
+		t.Fatal("claude-artifact defines no chart tokens")
+	}
+	for _, tok := range charts.Tokens {
+		if light[tok] == "" || dark[tok] == "" {
+			t.Errorf("--%s missing in light (%q) or dark (%q)", tok, light[tok], dark[tok])
+		}
+	}
+}
+
+// The chart rules live in default.css, so every style built on it has them.
+func TestDefaultCSSHasTheChartRules(t *testing.T) {
+	css, err := NewPluginCache().Stylesheet([]string{"default"}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"figure.md2html-chart {", ".md2html-tip {", ".md2html-chart-dark {",
+		`[class*="md2html-legend-s"] * { pointer-events: auto; }`,
+		`[class*="md2html-legend-s"]:focus-visible { outline`,
+	} {
+		if !strings.Contains(css, want) {
+			t.Errorf("default stylesheet lacks %q", want)
+		}
+	}
+	for n := 1; n <= 8; n++ {
+		want := fmt.Sprintf("figure.md2html-chart:has(.md2html-legend-s%[1]d:hover, .md2html-legend-s%[1]d:focus-visible) .md2html-mark:not(.md2html-s%[1]d) { opacity: 0.25; }", n)
+		if !strings.Contains(css, want) {
+			t.Errorf("default stylesheet lacks the dimming rule for series %d", n)
+		}
 	}
 }

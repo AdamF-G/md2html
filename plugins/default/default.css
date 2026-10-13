@@ -705,3 +705,40 @@ body > main.md2html > figure.fig-wide {
   .fig-chain > .fig-arrow::before { content: "\2193"; }
   body > main.md2html > figure.fig-wide { width: 100%; left: auto; translate: none; }
 }
+
+/* Charts: static SVG rendered when the page was built. Every colour in one
+   is a token; the hover layer is CSS. */
+figure.md2html-chart { margin: 1.5rem 0; display: grid; gap: 0.5rem; }
+figure.md2html-chart svg { display: block; max-width: 100%; height: auto; }
+figure.md2html-chart > figcaption { color: var(--muted); font-size: 0.9rem; }
+.md2html-tip { opacity: 0; transition: opacity 80ms; }
+.md2html-mark:focus { outline: none; }
+.md2html-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+figure.md2html-chart:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.md2html-chart-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .md2html-chart-light { display: none; }
+  :root:not([data-theme="light"]) .md2html-chart-dark { display: block; }
+}
+:root[data-theme="dark"] .md2html-chart-light { display: none; }
+:root[data-theme="dark"] .md2html-chart-dark { display: block; }
+:root[data-theme="light"] .md2html-chart-light { display: block; }
+:root[data-theme="light"] .md2html-chart-dark { display: none; }
+@media (prefers-reduced-motion: reduce) { .md2html-tip { transition: none; } }
+
+/* Vega writes pointer-events="none" on every part of a legend entry, which
+   would stop :hover ever matching; each entry is a focusable group. */
+figure.md2html-chart [class*="md2html-legend-s"],
+figure.md2html-chart [class*="md2html-legend-s"] * { pointer-events: auto; }
+[class*="md2html-legend-s"]:focus { outline: none; }
+[class*="md2html-legend-s"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Hovering or focusing a legend entry dims every mark outside its series. */
+figure.md2html-chart:has(.md2html-legend-s1:hover, .md2html-legend-s1:focus-visible) .md2html-mark:not(.md2html-s1) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s2:hover, .md2html-legend-s2:focus-visible) .md2html-mark:not(.md2html-s2) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s3:hover, .md2html-legend-s3:focus-visible) .md2html-mark:not(.md2html-s3) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s4:hover, .md2html-legend-s4:focus-visible) .md2html-mark:not(.md2html-s4) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s5:hover, .md2html-legend-s5:focus-visible) .md2html-mark:not(.md2html-s5) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s6:hover, .md2html-legend-s6:focus-visible) .md2html-mark:not(.md2html-s6) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s7:hover, .md2html-legend-s7:focus-visible) .md2html-mark:not(.md2html-s7) { opacity: 0.25; }
+figure.md2html-chart:has(.md2html-legend-s8:hover, .md2html-legend-s8:focus-visible) .md2html-mark:not(.md2html-s8) { opacity: 0.25; }
