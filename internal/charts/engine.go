@@ -93,6 +93,7 @@ type engine struct {
 	clock   time.Duration
 	measure Measurer
 	load    func(string) (string, error)
+	loadErr error // the first read this chart failed, which fails the chart
 }
 
 type timer struct {
@@ -126,10 +127,19 @@ func newEngine() (*engine, error) {
 	vm.Set("console", map[string]any{"log": noop, "warn": noop, "error": noop, "info": noop, "debug": noop})
 	vm.Set("goMeasure", func(s string, size, weight float64) float64 { return e.measure.Width(s, size, weight) })
 	vm.Set("goLoad", func(u string) (string, error) {
+		var s string
+		var err error
 		if e.load == nil {
-			return "", fmt.Errorf("data url %q: charts read no data files here", u)
+			err = fmt.Errorf("data url %q: charts read no data files here", u)
+		} else {
+			s, err = e.load(u)
 		}
-		return e.load(u)
+		// Vega only logs a failed load and draws the chart empty, so it is
+		// kept and fails the render instead.
+		if err != nil && e.loadErr == nil {
+			e.loadErr = err
+		}
+		return s, err
 	})
 	prelude := `
 		globalThis.structuredClone = function (v) { return v === undefined ? v : JSON.parse(JSON.stringify(v)); };
@@ -190,7 +200,7 @@ func renderSpec(specJSON []byte, m Measurer, load func(string) (string, error)) 
 		cur = e
 	}
 	e := cur
-	e.measure, e.load, e.timers, e.clock = m, load, nil, 0
+	e.measure, e.load, e.loadErr, e.timers, e.clock = m, load, nil, nil, 0
 	e.vm.Set("__seed", 1)
 	var interrupted atomic.Bool
 	stop := time.AfterFunc(budget, func() { interrupted.Store(true); e.vm.Interrupt("time budget") })
@@ -217,6 +227,9 @@ func renderSpec(specJSON []byte, m Measurer, load func(string) (string, error)) 
 	}
 	if err := e.runTimers(); err != nil {
 		return fail(err)
+	}
+	if e.loadErr != nil {
+		return rendered{}, e.loadErr
 	}
 	p, ok := pv.Export().(*goja.Promise)
 	if !ok {
