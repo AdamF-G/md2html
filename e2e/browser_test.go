@@ -1374,6 +1374,67 @@ func TestBrowserFigWideBreaksOutOfTheMeasure(t *testing.T) {
 	}
 }
 
+// A fragment's host decides where its content sits. Published as an
+// Artifact, the fragment is the page: its <main> is a direct child of the
+// host's <body>, centred, and a wide figure may break out of the measure.
+// Embedded in some box of the host's own, possibly off-centre, the width
+// clamp would bound the figure's size but not its position, so the
+// breakout must not apply and the figure stays an ordinary one.
+func TestBrowserFragmentWideFollowsItsHost(t *testing.T) {
+	frag, err := md2html.Convert([]byte(
+		"Body text.\n\n```fig\nwide: true\nitems:\n  - box: Wide\n```\n\n"+
+			"```fig\nitems:\n  - box: Normal\n```\n"),
+		md2html.Options{Fragment: true})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	head := "<!doctype html><html><head><meta charset=\"utf-8\"></head><body>\n"
+	files := map[string][]byte{
+		"artifact.html": []byte(head + string(frag) + "\n</body></html>\n"),
+		"embedded.html": []byte(head + `<div id="host" style="margin-left:55vw;width:40vw">` + "\n" +
+			string(frag) + "\n</div></body></html>\n"),
+	}
+	baseURL := serveGenerated(t, files)
+	ctx := newBrowserCtx(t)
+
+	const probe = `(() => {
+		const w = document.querySelector("figure.fig-wide").getBoundingClientRect();
+		const n = document.querySelector("figure.fig:not(.fig-wide)").getBoundingClientRect();
+		const host = document.getElementById("host");
+		return {wide: w.width, normal: n.width, left: w.left, right: w.right,
+			viewport: document.documentElement.clientWidth,
+			hostRight: host ? host.getBoundingClientRect().right : 0};
+	})()`
+	type sample struct{ Wide, Normal, Left, Right, Viewport, HostRight float64 }
+	for _, name := range []string{"artifact.html", "embedded.html"} {
+		var s sample
+		if err := chromedp.Run(ctx,
+			chromedp.EmulateViewport(1200, 800),
+			chromedp.Navigate(baseURL+"/"+name),
+			chromedp.WaitVisible("figure.fig-wide", chromedp.ByQuery),
+			chromedp.Evaluate(probe, &s),
+		); err != nil {
+			t.Fatalf("%s: browser run: %v", name, err)
+		}
+		if s.Left < 0 || s.Right > s.Viewport {
+			t.Errorf("%s: the wide figure runs off the viewport: left=%v right=%v viewport=%v", name, s.Left, s.Right, s.Viewport)
+		}
+		switch name {
+		case "artifact.html":
+			if s.Wide <= s.Normal {
+				t.Errorf("%s: a wide figure should break out when the fragment is the page, got %v vs %v", name, s.Wide, s.Normal)
+			}
+		case "embedded.html":
+			if math.Abs(s.Wide-s.Normal) > 0.5 {
+				t.Errorf("%s: a wide figure broke out of an embedding host's box, got %v vs %v", name, s.Wide, s.Normal)
+			}
+			if s.Right > s.HostRight+0.5 {
+				t.Errorf("%s: the wide figure overhangs the host's box: right=%v hostRight=%v", name, s.Right, s.HostRight)
+			}
+		}
+	}
+}
+
 // The fig tests below assert what markup cannot: that a note actually reads
 // as secondary, that the accent ring is not clipped away by an ancestor, and
 // that a tree's indentation and per-line emphasis survive the cascade.
@@ -2615,6 +2676,32 @@ func TestBrowserClaudeArtifactFitsAPhone(t *testing.T) {
 				t.Errorf("%s %s: body font %q", name, theme, s.Font)
 			}
 		}
+	}
+}
+
+// A fragment is published inside a host's own document, which supplies a
+// body but no column. Its running text must still keep the style's
+// measure rather than run the full width of the host.
+func TestBrowserFragmentKeepsTheMeasure(t *testing.T) {
+	frag, err := md2html.Convert([]byte("# Title\n\n"+strings.Repeat("A sentence of running text. ", 60)+"\n"),
+		md2html.Options{Fragment: true, Styles: []string{"claude-artifact"}})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	host := []byte("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>\n" + string(frag) + "\n</body></html>\n")
+	baseURL := serveGenerated(t, map[string][]byte{"host.html": host})
+	ctx := newBrowserCtx(t)
+	var got struct{ Para, Viewport float64 }
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1600, 900),
+		chromedp.Navigate(baseURL+"/host.html"),
+		chromedp.WaitVisible("p", chromedp.ByQuery),
+		chromedp.Evaluate(`({para: document.querySelector("p").getBoundingClientRect().width, viewport: innerWidth})`, &got),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	if got.Para > 800 {
+		t.Errorf("fragment paragraph is %vpx wide in a %vpx host; the measure did not apply", got.Para, got.Viewport)
 	}
 }
 

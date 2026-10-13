@@ -48,6 +48,16 @@ func TestFragmentShellOmitsDocumentWrapper(t *testing.T) {
 	}
 }
 
+// The host supplies the document, not a column: an Artifact's body is the
+// whole viewport. The content sits in <main>, as on a full page, so every
+// stylesheet rule scoped to main (the measure, wide figures) holds in both.
+func TestFragmentWrapsBodyInMain(t *testing.T) {
+	got := string(renderFragment([]byte(`<p>hi</p>`), "T", "body{}"))
+	if !strings.Contains(got, "</style>\n<main class=\"md2html\">\n<p>hi</p>\n</main>\n") {
+		t.Errorf("fragment body is not wrapped in <main> after the style\ngot: %s", got)
+	}
+}
+
 func TestBothShellsStartWithMarker(t *testing.T) {
 	for name, got := range map[string][]byte{
 		"page":     renderPage([]byte(`<p>x</p>`), "T", "en", "", mermaidCDN, nil),

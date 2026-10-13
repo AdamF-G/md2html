@@ -567,7 +567,8 @@ A figure whose only item is a `cols` or `split` item is an error; write
 except one holding an arrow.
 
 `wide: true` at the top level lets the figure extend past the text column.
-It has no effect inside a container or in `--fragment` output.
+It has no effect inside a container, or in `--fragment` output that its
+host places inside a box of its own rather than directly in `<body>`.
 
 #### Trees
 
@@ -770,9 +771,11 @@ between pages yourself.
 
 ### Fragment output
 
-`--fragment` emits the provenance marker, `<title>`, `<style>` and body
-only, for a host that
-supplies the page, such as a Claude Artifact. A fragment has no script: no
+`--fragment` emits the provenance marker, `<title>`, `<style>` and the
+body in a `<main class="md2html">`, for a host that supplies the page,
+such as a Claude Artifact. The host supplies the document but not a text
+column, so the `<main>` keeps the column's width, and the stylesheet styles
+only that element, never the host's own `<main>`. A fragment has no script: no
 mermaid runtime, no floating contents list, no click-to-expand, and no
 embedded source. A mermaid fence arrives as `<pre class="mermaid">`, which
 an Artifact draws and other hosts show as text.
@@ -925,7 +928,12 @@ setting `background`, so the ring still matches. The extra `:not()` leaves
 accented panels their tint: without it the rule ties with the default's
 accent rule and, coming later, wins.
 
-Classes you can style, beyond plain elements: `callout`, `card`, `group`,
+The page's content is a `<main class="md2html">` in both full pages and
+fragments. Name it as `main.md2html`, not a bare `main`: a fragment
+carries its stylesheet into its host, and a bare selector would restyle
+the host's own `<main>` too.
+
+Classes you can style, beyond plain elements: `md2html`, `callout`, `card`, `group`,
 `stats`, `defs`, `details.container`, `chip` and `chip-*`, `xref`,
 `nav.toc`, `subtitle`, `docdate`, `code-figure`, `fig` and `fig-*`,
 `table-scroll`, `anchor`, `source-tools`. A class you add to your own

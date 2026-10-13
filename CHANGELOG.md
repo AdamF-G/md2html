@@ -27,6 +27,17 @@ major version instead.
 
 - The default stylesheet is now the built-in `default` plugin's style. Its
   content and the output are unchanged.
+- Both shells wrap the content in `<main class="md2html">`, and the
+  default stylesheet's `main` rules are scoped to that class. `--fragment`
+  output had no `<main>`, so a host such as a Claude Artifact, which
+  supplies the document but not a text column, showed running text at the
+  full width of the page. A fragment's stylesheet travels into its host,
+  and the bare `main` selector it carried could only ever have matched
+  the host's own `<main>`. A wide figure breaks out of the measure only
+  when its `<main>` is a direct child of `<body>`: on a full page, or a
+  fragment published as an Artifact, but not a fragment a host places in a
+  box of its own, where it would run off an off-centre page. A style that
+  names a bare `main` should name `main.md2html`.
 
 ## v0.9.0 — 2026-09-28
 

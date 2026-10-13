@@ -266,7 +266,7 @@ func renderPage(body []byte, title, lang, css, mermaidURL string, source []byte)
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
 	b.WriteString("<style>\n")
 	b.WriteString(css)
-	b.WriteString("\n</style>\n</head>\n<body>\n<main>\n")
+	b.WriteString("\n</style>\n</head>\n<body>\n<main class=\"md2html\">\n")
 	b.Write(body)
 	b.WriteString("\n</main>\n")
 	if source != nil {
@@ -290,6 +290,12 @@ func renderPage(body []byte, title, lang, css, mermaidURL string, source []byte)
 // content, with no doctype, html, head or body tags. The Artifact tool
 // supplies those itself and scans the first 8 KB for the title, so the
 // leading marker comment is harmless.
+//
+// The content still sits in <main class="md2html">, as on a full page. A
+// host supplies the document but not a column (an Artifact's body is the
+// whole viewport), so the measure must apply here too. The class keeps the
+// stylesheet, which a fragment carries into its host, off the host's own
+// <main>.
 func renderFragment(body []byte, title, css string) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
@@ -297,9 +303,9 @@ func renderFragment(body []byte, title, css string) []byte {
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
 	b.WriteString("<style>\n")
 	b.WriteString(css)
-	b.WriteString("\n</style>\n")
+	b.WriteString("\n</style>\n<main class=\"md2html\">\n")
 	b.Write(body)
-	b.WriteString("\n")
+	b.WriteString("\n</main>\n")
 	return []byte(b.String())
 }
 

@@ -129,8 +129,8 @@ func TestCodeFenceOverrideLeavesMermaidAlone(t *testing.T) {
 func TestCodeFenceBracedAttributeIsParsed(t *testing.T) {
 	got := convert(t, "```go {.wide}\nfoo()\n```\n", nil)
 	want := Marker() + "\n" +
-		"<title>Untitled</title>\n<style>\n/**/\n</style>\n" +
-		"<pre><code class=\"language-go wide\">foo()\n</code></pre>\n\n"
+		"<title>Untitled</title>\n<style>\n/**/\n</style>\n<main class=\"md2html\">\n" +
+		"<pre><code class=\"language-go wide\">foo()\n</code></pre>\n\n</main>\n"
 	if got != want {
 		t.Errorf("braced-attribute fence rendering changed\ngot:  %q\nwant: %q", got, want)
 	}
