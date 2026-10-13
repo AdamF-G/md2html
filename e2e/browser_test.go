@@ -28,6 +28,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,6 +39,8 @@ import (
 
 	"github.com/AdamF-G/md2html"
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/input"
+	cdpruntime "github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 )
 
@@ -2937,5 +2941,694 @@ func TestBrowserTableCodeStaysWhole(t *testing.T) {
 		if lines != 1 {
 			t.Errorf("%s: the table's code span wraps onto %d lines", style, lines)
 		}
+	}
+}
+
+// The chart tests below hold what only a browser can show: that the text
+// widths md2html lays a chart out with match the browser's, that every
+// colour a chart paints is one of its style's tokens, and that the hover,
+// focus and legend layer (CSS only, with no script) responds to a real
+// pointer and a real keyboard.
+
+// chartDotPlot is a five-point dot plot with long-ish labels, the shape of
+// the spec's spike evidence.
+var chartDotPlot = map[string]any{
+	"width": 480, "padding": 5,
+	"data": map[string]any{"values": []any{
+		map[string]any{"run": "Initial baseline", "speed": 1.0},
+		map[string]any{"run": "Cache warmed first", "speed": 1.4},
+		map[string]any{"run": "Reference at 200 W", "speed": 1.8},
+		map[string]any{"run": "Batch size doubled", "speed": 2.2},
+		map[string]any{"run": "Half the workers", "speed": 0.7},
+	}},
+	"mark": map[string]any{"type": "point", "tooltip": true},
+	"encoding": map[string]any{
+		"y": map[string]any{"field": "run", "type": "nominal", "title": nil, "axis": map[string]any{"labelPadding": 10}},
+		"x": map[string]any{"field": "speed", "type": "quantitative", "title": "Relative speed"},
+	},
+}
+
+// chartTimeline is a 28-interval timeline over seven lanes, coloured by an
+// eight-entry legend, the other shape of the spike's evidence.
+var chartTimeline = func() map[string]any {
+	lanes := []string{"Fetch queue", "Parse stage", "Index build", "Render pass", "Upload step", "Verify step", "Cleanup run"}
+	phases := []string{"Warm-up", "Steady", "Burst", "Drain", "Idle", "Retry", "Backoff", "Finish"}
+	var values []any
+	for k := range 28 {
+		lane := k / 4
+		start := (k%4)*15 + lane*2
+		values = append(values, map[string]any{
+			"lane": lanes[lane], "phase": phases[k%8], "start": start, "end": start + 10 + (k%3)*2,
+		})
+	}
+	return map[string]any{
+		"width": 480, "padding": 5,
+		"data": map[string]any{"values": values},
+		"mark": map[string]any{"type": "bar", "tooltip": true},
+		"encoding": map[string]any{
+			"y":     map[string]any{"field": "lane", "type": "nominal", "title": nil, "sort": nil},
+			"x":     map[string]any{"field": "start", "type": "quantitative", "title": "Minutes"},
+			"x2":    map[string]any{"field": "end"},
+			"color": map[string]any{"field": "phase", "type": "nominal", "title": "Phase", "sort": phases},
+		},
+	}
+}()
+
+// chartFence writes spec as a vega-lite fence. JSON is YAML, so the fence
+// takes it as it is.
+func chartFence(t *testing.T, spec map[string]any, caption string) string {
+	t.Helper()
+	b, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := "vega-lite"
+	if caption != "" {
+		info += ` {caption="` + caption + `"}`
+	}
+	return "```" + info + "\n" + string(b) + "\n```\n"
+}
+
+// chartFontFamily reads the CSS stack a built-in style's charts render in
+// from its manifest, so the browser lays the comparison chart out in the
+// same face md2html measured.
+func chartFontFamily(t *testing.T, style string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "plugins", style, "md2html-plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Styles map[string]struct {
+			Charts struct {
+				FontFamily string `json:"font-family"`
+			} `json:"charts"`
+		} `json:"styles"`
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	f := m.Styles[style].Charts.FontFamily
+	if f == "" {
+		t.Fatalf("%s: the manifest names no chart font-family", style)
+	}
+	return f
+}
+
+// chartLayoutConfig is the part of md2html's chart theme (themeConfig in
+// internal/charts/tokens.go) that changes layout: the face, the text sizes
+// and weights, and the strokes that widen a mark's bounds. Colours are left
+// out; they move nothing. Keep it in step with themeConfig.
+func chartLayoutConfig(font string) map[string]any {
+	return map[string]any{
+		"background": nil, "font": font, "view": map[string]any{"stroke": nil},
+		"axis":   map[string]any{"gridWidth": 1, "labelFontSize": 12, "titleFontSize": 12, "titleFontWeight": 500},
+		"legend": map[string]any{"labelFontSize": 12},
+		"text":   map[string]any{"fontSize": 12},
+		"point":  map[string]any{"filled": true, "size": 100, "strokeWidth": 2, "stroke": "#fff"},
+		"bar":    map[string]any{"cornerRadiusEnd": 4, "stroke": "#fff", "strokeWidth": 2},
+		"line":   map[string]any{"strokeWidth": 2, "strokeCap": "round", "strokeJoin": "round"},
+	}
+}
+
+// serveChartBundles copies Vega, Vega-Lite and the test-only vega-embed into
+// dir under charts/, so a page can lay a chart out in the browser with
+// nothing fetched from the network.
+func serveChartBundles(t *testing.T, dir string) {
+	t.Helper()
+	files := map[string][]byte{}
+	for name, path := range map[string]string{
+		"charts/vega.min.js":       filepath.Join("..", "internal", "charts", "vendor", "vega.min.js"),
+		"charts/vega-lite.min.js":  filepath.Join("..", "internal", "charts", "vendor", "vega-lite.min.js"),
+		"charts/vega-embed.min.js": filepath.Join("testdata", "vega-embed.min.js"),
+	} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = b
+	}
+	writeFiles(t, dir, files)
+}
+
+// The metrics measure is the spec's: the label column is the x of the
+// first translate in the SVG's outer group, the offset Vega gives the plot
+// once the axis labels on its left are laid out.
+var chartLabelColumn = regexp.MustCompile(`<g [^>]*transform="translate\(([0-9.]+),`)
+var chartSVGWidth = regexp.MustCompile(`^<svg [^>]*\bwidth="([0-9.]+)"`)
+
+func chartMetrics(t *testing.T, svg string) (column, width float64) {
+	t.Helper()
+	c := chartLabelColumn.FindStringSubmatch(svg)
+	w := chartSVGWidth.FindStringSubmatch(svg)
+	if c == nil || w == nil {
+		t.Fatalf("no label column or width in %.300s", svg)
+	}
+	column, _ = strconv.ParseFloat(c[1], 64)
+	width, _ = strconv.ParseFloat(w[1], 64)
+	return column, width
+}
+
+// md2html measures chart text at build time; the browser measures it with
+// the face itself. Under claude-artifact, which embeds the face md2html
+// reads, the two must agree: the label column within 1 px and the SVG's
+// width within 2. Under default the face is the reader's system sans, which
+// md2html measures by a proxy and pads, so its label column must be at
+// least as wide as the browser's.
+//
+// The browser side is Vega itself, through vega-embed, laying out the same
+// spec with md2html's layout config on the md2html page, so the page's
+// @font-face rules supply the face.
+func TestBrowserChartMetricsMatchVega(t *testing.T) {
+	dir, baseURL := serveDir(t)
+	serveChartBundles(t, dir)
+	charts := []struct {
+		name string
+		spec map[string]any
+	}{{"dot plot", chartDotPlot}, {"timeline", chartTimeline}}
+	styles := []string{"claude-artifact", "default"}
+	for _, style := range styles {
+		font := chartFontFamily(t, style)
+		for i, c := range charts {
+			page, err := md2html.Convert([]byte(chartFence(t, c.spec, "")), md2html.Options{Styles: []string{style}})
+			if err != nil {
+				t.Fatalf("%s %s: Convert: %v", style, c.name, err)
+			}
+			browserSpec := map[string]any{}
+			for k, v := range c.spec {
+				browserSpec[k] = v
+			}
+			browserSpec["config"] = chartLayoutConfig(font)
+			specJSON, err := json.Marshal(browserSpec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fontJSON, _ := json.Marshal(font)
+			probe := `<div id="vega-probe"></div>
+<script src="charts/vega.min.js"></script>
+<script src="charts/vega-lite.min.js"></script>
+<script src="charts/vega-embed.min.js"></script>
+<script>
+window.vegaProbe = (async () => {
+  const font = ` + string(fontJSON) + `;
+  await Promise.all([document.fonts.load("12px " + font), document.fonts.load("500 12px " + font)]);
+  await document.fonts.ready;
+  await vegaEmbed("#vega-probe", ` + string(specJSON) + `, {renderer: "svg", actions: false});
+  return document.querySelector("#vega-probe svg").outerHTML;
+})();
+</script>
+</body>`
+			page = bytes.Replace(page, []byte("</body>"), []byte(probe), 1)
+			writeFiles(t, dir, map[string][]byte{fmt.Sprintf("%s-%d.html", style, i): page})
+		}
+	}
+
+	ctx := newBrowserCtx(t)
+	await := func(p *cdpruntime.EvaluateParams) *cdpruntime.EvaluateParams { return p.WithAwaitPromise(true) }
+	for _, style := range styles {
+		for i, c := range charts {
+			var ours, theirs string
+			var foreign []string
+			if err := chromedp.Run(ctx,
+				chromedp.EmulateViewport(1400, 900),
+				chromedp.Navigate(fmt.Sprintf("%s/%s-%d.html", baseURL, style, i)),
+				chromedp.Evaluate(`window.vegaProbe`, &theirs, await),
+				chromedp.Evaluate(`document.querySelector("figure.md2html-chart svg").outerHTML`, &ours),
+				chromedp.Evaluate(fmt.Sprintf(`performance.getEntriesByType("resource").map(e => e.name).filter(n => !n.startsWith(%q) && !n.startsWith("data:"))`, baseURL), &foreign),
+			); err != nil {
+				t.Fatalf("%s %s: browser run: %v", style, c.name, err)
+			}
+			if len(foreign) > 0 {
+				t.Errorf("%s %s: the page fetched from elsewhere: %v", style, c.name, foreign)
+			}
+			oc, ow := chartMetrics(t, ours)
+			bc, bw := chartMetrics(t, theirs)
+			t.Logf("%s %s: label column md2html %v, browser %v; SVG width md2html %v, browser %v", style, c.name, oc, bc, ow, bw)
+			if style == "claude-artifact" {
+				if math.Abs(oc-bc) > 1 {
+					t.Errorf("%s %s: label column %v px, browser %v px; want within 1 px", style, c.name, oc, bc)
+				}
+				if math.Abs(ow-bw) > 2 {
+					t.Errorf("%s %s: SVG width %v px, browser %v px; want within 2 px", style, c.name, ow, bw)
+				}
+			} else if oc < bc {
+				t.Errorf("%s %s: label column %v px is narrower than the browser's %v px; the padding should make room for a wider system face", style, c.name, oc, bc)
+			}
+		}
+	}
+}
+
+// chartPage converts a page holding the dot plot (chart 1) and the
+// timeline (chart 2) in style.
+func chartPage(t *testing.T, style string) []byte {
+	t.Helper()
+	page, err := md2html.Convert([]byte(chartFence(t, chartDotPlot, "Five runs")+"\n"+chartFence(t, chartTimeline, "Seven lanes")),
+		md2html.Options{Styles: []string{style}})
+	if err != nil {
+		t.Fatalf("%s: Convert: %v", style, err)
+	}
+	return page
+}
+
+// Every colour a chart paints must be one of its style's tokens, resolved
+// by the browser in each theme, so the chart follows light, dark and the
+// theme toggle. Black is called out on its own: it is what an SVG paints
+// when a colour fails to resolve.
+func TestBrowserChartColoursAreTokens(t *testing.T) {
+	styles := []string{"default", "claude-artifact"}
+	files := map[string][]byte{}
+	for _, style := range styles {
+		page := chartPage(t, style)
+		if bytes.Contains(page, []byte(`class="md2html-chart-light"`)) {
+			t.Fatalf("%s: the fixture charts were drawn in literal colours; they should use tokens", style)
+		}
+		files[style+".html"] = page
+	}
+	baseURL := serveGenerated(t, files)
+	ctx := newBrowserCtx(t)
+
+	tokens := []string{"chart-surface", "fg", "muted", "chart-grid", "chart-axis",
+		"series-1", "series-2", "series-3", "series-4", "series-5", "series-6", "series-7", "series-8",
+		"status-good", "status-warning", "status-serious", "status-critical", "rule"}
+	tokensJSON, _ := json.Marshal(tokens)
+	probe := figResolveVar + `
+	(() => {
+		const tokens = {};
+		for (const n of ` + string(tokensJSON) + `) tokens[n] = resolveVar("--" + n);
+		const paints = [];
+		const shapes = document.querySelectorAll("figure.md2html-chart svg :is(path, line, rect, circle, ellipse, polygon, polyline, text, tspan)");
+		for (const el of shapes) {
+			if (el.closest("clipPath, defs, mask, pattern")) continue;
+			const cs = getComputedStyle(el);
+			for (const prop of ["fill", "stroke"]) {
+				const v = cs[prop];
+				if (v === "none") continue;
+				if (prop === "fill" && el.classList.contains("md2html-hit") && v === "rgba(0, 0, 0, 0)") continue;
+				paints.push({prop, value: v, el: el.tagName + (el.id ? "#" + el.id : "") + " " + (el.getAttribute("class") || el.parentNode.getAttribute("class") || "")});
+			}
+		}
+		return {tokens, paints, count: shapes.length};
+	})()`
+	type paint struct{ Prop, Value, El string }
+	type sample struct {
+		Tokens map[string]string
+		Paints []paint
+		Count  int
+	}
+	modes := []struct {
+		name, scheme, stamp string
+	}{
+		{"light", "light", ""},
+		{"dark", "dark", ""},
+		// Each stamp under the opposite preference, so it is the stamp
+		// that decides.
+		{`data-theme="light"`, "dark", "light"},
+		{`data-theme="dark"`, "light", "dark"},
+	}
+	for _, style := range styles {
+		var fgs []string
+		for _, m := range modes {
+			var s sample
+			actions := []chromedp.Action{
+				emulation.SetEmulatedMedia().WithFeatures([]*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: m.scheme}}),
+				chromedp.Navigate(baseURL + "/" + style + ".html"),
+				chromedp.WaitVisible("figure.md2html-chart svg", chromedp.ByQuery),
+			}
+			if m.stamp != "" {
+				actions = append(actions, figSetTheme(m.stamp))
+			}
+			actions = append(actions, chromedp.Evaluate(probe, &s))
+			if err := chromedp.Run(ctx, actions...); err != nil {
+				t.Fatalf("%s %s: browser run: %v", style, m.name, err)
+			}
+			if s.Count < 50 || len(s.Paints) == 0 {
+				t.Fatalf("%s %s: only %d shapes and %d paints found; the probe is not seeing the charts", style, m.name, s.Count, len(s.Paints))
+			}
+			allowed := map[string]bool{}
+			for _, v := range s.Tokens {
+				allowed[v] = true
+			}
+			bad := map[string]bool{}
+			for _, p := range s.Paints {
+				if p.Value == "rgb(0, 0, 0)" && s.Tokens["fg"] != p.Value {
+					t.Errorf("%s %s: %s %s is black", style, m.name, p.El, p.Prop)
+				} else if !allowed[p.Value] && !bad[p.Value] {
+					bad[p.Value] = true
+					t.Errorf("%s %s: %s %s is %s, which is none of the style's tokens %v", style, m.name, p.El, p.Prop, p.Value, s.Tokens)
+				}
+			}
+			fgs = append(fgs, s.Tokens["fg"])
+		}
+		// light, dark, stamped light, stamped dark: the stamps must win.
+		if fgs[0] == fgs[1] || fgs[2] != fgs[0] || fgs[3] != fgs[1] {
+			t.Errorf("%s: --fg across light, dark and the two stamps is %v; the themes are not taking effect", style, fgs)
+		}
+	}
+}
+
+// pointerAt moves the real pointer to (x, y) in the viewport. CSS :hover
+// follows only the browser's own pointer, so a synthetic DOM event would
+// not do.
+func pointerAt(x, y float64) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		return input.DispatchMouseEvent(input.MouseMoved, x, y).Do(ctx)
+	})
+}
+
+// chartCentre scrolls the element sel names into the middle of the viewport
+// and returns its centre.
+func chartCentre(t *testing.T, ctx context.Context, sel string) (x, y float64) {
+	t.Helper()
+	var c struct{ X, Y float64 }
+	if err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`(() => {
+		const el = document.querySelector(%q);
+		el.scrollIntoView({block: "center", inline: "center"});
+		const r = el.getBoundingClientRect();
+		return {x: r.x + r.width / 2, y: r.y + r.height / 2};
+	})()`, sel), &c)); err != nil {
+		t.Fatalf("centre of %s: %v", sel, err)
+	}
+	return c.X, c.Y
+}
+
+// opacityOf polls the computed opacity of the element sel names until it
+// is expect or a second has passed, and returns the last value read. A box
+// fades over 80 ms, so a single read could catch it part way.
+func opacityOf(t *testing.T, ctx context.Context, sel, expect string) string {
+	t.Helper()
+	var op string
+	deadline := time.Now().Add(time.Second)
+	for {
+		if err := chromedp.Run(ctx,
+			chromedp.Evaluate(fmt.Sprintf(`getComputedStyle(document.querySelector(%q)).opacity`, sel), &op),
+		); err != nil {
+			t.Fatal(err)
+		}
+		if op == expect || time.Now().After(deadline) {
+			return op
+		}
+		if err := chromedp.Run(ctx, chromedp.Sleep(20*time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// opacityAfter moves the real pointer to (x, y) and returns the computed
+// opacity of the element want names, once it is expect or a second has
+// passed.
+func opacityAfter(t *testing.T, ctx context.Context, x, y float64, want, expect string) string {
+	t.Helper()
+	if err := chromedp.Run(ctx, pointerAt(x, y)); err != nil {
+		t.Fatal(err)
+	}
+	return opacityOf(t, ctx, want, expect)
+}
+
+// elementAt returns the id of the topmost element at (x, y): the one the
+// pointer hovers there.
+func elementAt(t *testing.T, ctx context.Context, x, y float64) string {
+	t.Helper()
+	var id string
+	if err := chromedp.Run(ctx, chromedp.Evaluate(fmt.Sprintf(`document.elementFromPoint(%v, %v).id`, x, y), &id)); err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+// hover moves the real pointer to the centre of the element sel names and
+// returns the opacity of the element want names, once it is expect or a
+// second has passed.
+func hover(t *testing.T, ctx context.Context, sel, want, expect string) string {
+	t.Helper()
+	x, y := chartCentre(t, ctx, sel)
+	return opacityAfter(t, ctx, x, y, want, expect)
+}
+
+// The hover layer is CSS alone, so only a real pointer and a real keyboard
+// prove it: a bar shows its box under the pointer, through the mark's own
+// :hover; a dot shows its box through its nearest-point region, both at its
+// centre and 15 px away; Tab to the first mark shows its box; and a legend
+// entry dims every other series.
+func TestBrowserChartHoverFocusAndLegend(t *testing.T) {
+	baseURL := serveGenerated(t, map[string][]byte{"index.html": chartPage(t, "default")})
+	ctx := newBrowserCtx(t)
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1400, 900),
+		// A headless page has no window focus, so :focus would never
+		// match without this.
+		emulation.SetFocusEmulationEnabled(true),
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.WaitVisible("#md2html-c1 svg", chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	away := func(want, expect string) string { return opacityAfter(t, ctx, 1, 1, want, expect) }
+
+	if op := away("#md2html-c1-t2", "0"); op != "0" {
+		t.Fatalf("a box shows with the pointer away from the chart: opacity %s", op)
+	}
+
+	// A bar has no nearest-point region over it, so the pointer at its
+	// centre hovers the mark itself: this is the #…-mN:hover half of the
+	// rule, which every chart that is not all points depends on.
+	x, y := chartCentre(t, ctx, "#md2html-c2-m0")
+	if under := elementAt(t, ctx, x, y); under != "md2html-c2-m0" {
+		t.Fatalf("the pointer at the bar's centre would be over %q, not the bar", under)
+	}
+	if op := opacityAfter(t, ctx, x, y, "#md2html-c2-t0", "1"); op != "1" {
+		t.Errorf("hovering a bar: its box has opacity %s, want 1", op)
+	}
+	if op := away("#md2html-c2-t0", "0"); op != "0" {
+		t.Errorf("the bar's box stays after the pointer leaves: opacity %s", op)
+	}
+
+	// A point chart's regions lie above its dots, so even at a dot's
+	// centre the pointer hovers the dot's region, not the dot.
+	x, y = chartCentre(t, ctx, "#md2html-c1-m2")
+	if under := elementAt(t, ctx, x, y); under != "md2html-c1-v2" {
+		t.Fatalf("the pointer at the dot's centre would be over %q, not its region md2html-c1-v2", under)
+	}
+	if op := opacityAfter(t, ctx, x, y, "#md2html-c1-t2", "1"); op != "1" {
+		t.Errorf("hovering a dot's centre, through its region: its box has opacity %s, want 1", op)
+	}
+	if op := away("#md2html-c1-t2", "0"); op != "0" {
+		t.Errorf("the dot's box stays after the pointer leaves: opacity %s", op)
+	}
+
+	// 15 px beside the dot, in its own region. Rows are 20 px apart, so a
+	// point 15 px across from a dot is nearer it than any dot in another
+	// row; which side depends on where the dot sits, so the region under
+	// the point is checked rather than assumed.
+	var under string
+	found := false
+	for _, dx := range []float64{15, -15} {
+		if under = elementAt(t, ctx, x+dx, y); under == "md2html-c1-v2" {
+			x += dx
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("neither point 15 px beside the dot is in its region (last found %q)", under)
+	}
+	if op := opacityAfter(t, ctx, x, y, "#md2html-c1-t2", "1"); op != "1" {
+		t.Errorf("hovering 15 px from a dot, inside its region: its box has opacity %s, want 1", op)
+	}
+	away("#md2html-c1-t2", "0")
+
+	// Tab from the top of the page to the first tab stop that is a mark.
+	// The page is loaded afresh first: the pointer moves above leave
+	// Chrome's focus navigation starting point beside the dot they
+	// hovered, and Tab would start from there.
+	if err := chromedp.Run(ctx,
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.WaitVisible("#md2html-c1 svg", chromedp.ByQuery),
+	); err != nil {
+		t.Fatal(err)
+	}
+	var active string
+	for range 30 {
+		if err := chromedp.Run(ctx,
+			chromedp.KeyEvent("\t"),
+			chromedp.Evaluate(`document.activeElement.classList.contains("md2html-mark") ? document.activeElement.id : ""`, &active),
+		); err != nil {
+			t.Fatal(err)
+		}
+
+		if active != "" {
+			break
+		}
+	}
+	if active != "md2html-c1-m0" {
+		t.Fatalf("Tab reached mark %q first, want md2html-c1-m0", active)
+	}
+	if op := opacityOf(t, ctx, "#md2html-c1-t0", "1"); op != "1" {
+		t.Errorf("Tab to the first mark: its box has opacity %s, want 1", op)
+	}
+	if err := chromedp.Run(ctx, chromedp.Evaluate(`document.activeElement.blur(), true`, nil)); err != nil {
+		t.Fatal(err)
+	}
+
+	// The label's text is what the pointer can land on: the entry group
+	// paints nothing between its symbol and its label. Both series' marks
+	// are read before, during and after, so a mark stuck dimmed fails.
+	const own, other = "#md2html-c2 .md2html-mark.md2html-s1", "#md2html-c2 .md2html-mark.md2html-s2"
+	if op := away(other, "1"); op != "1" {
+		t.Fatalf("before any legend hover, a series 2 mark has opacity %s, want 1", op)
+	}
+	if op := hover(t, ctx, "#md2html-c2 .md2html-legend-s1 text", other, "0.25"); op != "0.25" {
+		t.Errorf("hovering series 1's legend entry: a series 2 mark has opacity %s, want 0.25", op)
+	}
+	if op := opacityOf(t, ctx, own, "1"); op != "1" {
+		t.Errorf("hovering series 1's legend entry: its own mark has opacity %s, want 1", op)
+	}
+	if op := away(other, "1"); op != "1" {
+		t.Errorf("after the pointer leaves the legend, a series 2 mark has opacity %s, want 1", op)
+	}
+}
+
+func TestChartsAddNoScript(t *testing.T) {
+	// The second chart is an image mark whose url another origin would
+	// serve: it is refused and shown as code, so the page fetches nothing.
+	src := []byte("```vega-lite\nmark: point\ndata: {values: [{v: 1}]}\nencoding: {x: {field: v, type: quantitative}}\n```\n\n" +
+		"```vega-lite\nmark: {type: image, width: 10, height: 10}\ndata: {values: [{x: 1, u: \"https://example.com/a.png\"}]}\nencoding: {x: {field: x, type: quantitative}, url: {field: u}}\n```\n")
+	frag, err := md2html.Convert(src, md2html.Options{Fragment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(frag), "md2html-chart") {
+		t.Fatal("the fixture did not render a chart, so the checks below prove nothing")
+	}
+	if strings.Contains(string(frag), "<script") {
+		t.Error("a fragment with a chart carries a script")
+	}
+	// A full page already carries inline scripts of its own, so the chart
+	// page is held against the same page with the chart left as code: the
+	// chart must add no script and nothing to fetch.
+	page, err := md2html.Convert(src, md2html.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `<figure class="md2html-chart"`) {
+		t.Fatal("the full page did not render a chart, so the checks below prove nothing")
+	}
+	bare, err := md2html.Convert(src, md2html.Options{NoCharts: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(bare), `<figure class="md2html-chart"`) {
+		t.Fatal("NoCharts still rendered a chart, so the comparison below proves nothing")
+	}
+	if strings.Contains(string(page), "<image") {
+		t.Error("an image mark with a url to fetch was drawn")
+	}
+	if a, b := strings.Count(string(page), "<script"), strings.Count(string(bare), "<script"); a != b {
+		t.Errorf("the page with a chart has %d <script> tags, without it %d", a, b)
+	}
+	if a, b := fetchedURLs(page), fetchedURLs(bare); !slices.Equal(a, b) {
+		t.Errorf("the page with a chart references %v to fetch, without it %v", a, b)
+	}
+}
+
+// fetchRef finds what a page could fetch: a src, an href to another origin,
+// a CSS url() or @import to one, and a module import, static or dynamic.
+var fetchRef = regexp.MustCompile(`\bsrc\s*=\s*["']?[^"'\s>]+|\bhref\s*=\s*["']?(?:[a-z]+:)?//[^"'\s>]+|url\(\s*["']?(?:[a-z]+:)?//[^)"']+|@import\s+["'][^"']+|\bimport\s*\(\s*["'][^"']+|\bimport\s[^;]*?\bfrom\s*["'][^"']+|\bimport\s*["'][^"']+`)
+
+// fetchedURLs returns the distinct fetch references in page, sorted.
+func fetchedURLs(page []byte) []string {
+	seen := map[string]bool{}
+	for _, m := range fetchRef.FindAllString(string(page), -1) {
+		seen[m] = true
+	}
+	out := make([]string, 0, len(seen))
+	for m := range seen {
+		out = append(out, m)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Chart ids are numbered per page, so many charts, and charts inside a
+// container, a list item and beside a fig figure, must still give every id
+// on the page once, and a chart inside a details container must still show
+// its box once the container is open.
+func TestBrowserManyChartsAndContainers(t *testing.T) {
+	small := func(i int, mark string) map[string]any {
+		return map[string]any{
+			"data": map[string]any{"values": []any{
+				map[string]any{"k": "a", "v": i}, map[string]any{"k": "b", "v": i + 1},
+			}},
+			"mark":     map[string]any{"type": mark, "tooltip": true},
+			"encoding": map[string]any{"y": map[string]any{"field": "k", "type": "nominal"}, "x": map[string]any{"field": "v", "type": "quantitative"}},
+		}
+	}
+	var src strings.Builder
+	for i := range 10 {
+		src.WriteString(chartFence(t, small(i, "point"), fmt.Sprintf("Chart %d", i+1)) + "\n")
+	}
+	src.WriteString("::: details Inside\n\n" + chartFence(t, small(10, "bar"), "In details") + "\n:::\n\n")
+	src.WriteString("- An item with a chart\n\n")
+	for _, line := range strings.SplitAfter(chartFence(t, small(11, "point"), "In a list"), "\n") {
+		if line != "" {
+			src.WriteString("  " + line)
+		}
+	}
+	src.WriteString("\n```fig\nitems:\n  - box: Client\n  - box: Server\n```\n")
+	page, err := md2html.Convert([]byte(src.String()), md2html.Options{Transforms: md2html.Builtins()})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	baseURL := serveGenerated(t, map[string][]byte{"index.html": page})
+	ctx := newBrowserCtx(t)
+
+	var shape struct {
+		Charts, InDetails, InList, Fig int
+		Dupes                          []string
+		Ids                            int
+		DetailsChart                   string
+	}
+	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1400, 900),
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.WaitVisible("figure.md2html-chart", chromedp.ByQuery),
+		chromedp.Evaluate(`(() => {
+			const seen = new Set(), dupes = [];
+			const all = document.querySelectorAll("[id]");
+			for (const el of all) { if (seen.has(el.id)) dupes.push(el.id); seen.add(el.id); }
+			const inDetails = document.querySelectorAll("details.container:not(.md2html-chart-data) figure.md2html-chart");
+			return {
+				charts: document.querySelectorAll("figure.md2html-chart").length,
+				inDetails: inDetails.length,
+				inList: document.querySelectorAll("li figure.md2html-chart").length,
+				fig: document.querySelectorAll(".fig-box").length,
+				dupes, ids: all.length,
+				detailsChart: inDetails.length ? inDetails[0].id : "",
+			};
+		})()`, &shape),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	if shape.Charts != 12 || shape.InDetails != 1 || shape.InList != 1 || shape.Fig != 2 {
+		t.Fatalf("page has %d charts (%d in details, %d in a list item) and %d fig boxes; want 12, 1, 1 and 2", shape.Charts, shape.InDetails, shape.InList, shape.Fig)
+	}
+	t.Logf("%d ids on the page", shape.Ids)
+	if len(shape.Dupes) > 0 {
+		t.Errorf("ids on the page more than once: %v", shape.Dupes)
+	}
+
+	c := shape.DetailsChart
+	if err := chromedp.Run(ctx,
+		chromedp.Click(fmt.Sprintf(`details.container:has(#%s) > summary`, c), chromedp.ByQuery),
+	); err != nil {
+		t.Fatalf("opening the details: %v", err)
+	}
+	// The chart in the details is a bar chart, so the pointer is over the
+	// mark itself, not a nearest-point region.
+	x, y := chartCentre(t, ctx, "#"+c+"-m0")
+	if under := elementAt(t, ctx, x, y); under != c+"-m0" {
+		t.Fatalf("the pointer at the bar's centre would be over %q, not the bar", under)
+	}
+	if op := opacityAfter(t, ctx, x, y, "#"+c+"-t0", "1"); op != "1" {
+		t.Errorf("hovering a mark of the chart in the opened details: its box has opacity %s, want 1", op)
 	}
 }
