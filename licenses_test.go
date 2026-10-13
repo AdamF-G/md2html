@@ -13,7 +13,7 @@ func TestThirdPartyNoticesNameEveryBundledComponent(t *testing.T) {
 		"robust-predicates", "json-stringify-pretty-compact", "topojson-client", "internmap",
 		"d3-geo-projection", "d3-path", "d3-scale ", "d3-scale-chromatic", "d3-shape",
 		"github.com/dop251/goja ", "github.com/dlclark/regexp2/v2 ", "github.com/go-sourcemap/sourcemap ",
-		"github.com/google/pprof ", "golang.org/x/text "} {
+		"github.com/google/pprof ", "golang.org/x/text ", "github.com/andybalholm/brotli ", "github.com/golang/freetype ", "github.com/tdewolff/font ", "github.com/tdewolff/parse/v2 ", "golang.org/x/image "} {
 		if !strings.Contains(got, "== "+name) {
 			t.Errorf("notices do not name %s", name)
 		}
