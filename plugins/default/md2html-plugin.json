@@ -6,7 +6,13 @@
     "default": {
       "description": "Warm neutrals, system fonts, both themes",
       "base": "none",
-      "css": ["default.css"]
+      "css": ["default.css"],
+      "charts": {
+        "metrics": "builtin:system-sans",
+        "pad": 0.1,
+        "width": 640,
+        "font-family": "ui-sans-serif, system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      }
     }
   }
 }

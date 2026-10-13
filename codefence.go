@@ -1,9 +1,11 @@
 package md2html
 
 import (
+	"fmt"
 	gohtml "html"
 	"strings"
 
+	"github.com/AdamF-G/md2html/internal/charts"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	goldhtml "github.com/yuin/goldmark/renderer/html"
@@ -161,13 +163,16 @@ func fenceTokens(s string) []string {
 // (CodeAttributeFilter is wired up for inline code spans, not fenced
 // blocks). Handling it in the same place as the caption keeps one parser
 // for one grammar — see parseCodeFenceInfo.
-type codeFenceRenderer struct{ warn func(string) }
+type codeFenceRenderer struct {
+	warn   func(string)
+	charts chartContext
+}
 
-func newCodeFenceRenderer(warn func(string)) renderer.NodeRenderer {
+func newCodeFenceRenderer(warn func(string), charts chartContext) renderer.NodeRenderer {
 	if warn == nil {
 		warn = func(string) {}
 	}
-	return &codeFenceRenderer{warn: warn}
+	return &codeFenceRenderer{warn: warn, charts: charts}
 }
 
 func (r *codeFenceRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
@@ -211,17 +216,33 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 			r.warn(`fig fence: a caption in the info string is not part of a figure; ` +
 				`use a caption: key in the fence body instead`)
 		}
-		var body strings.Builder
-		lines := n.Lines()
-		for i := 0; i < lines.Len(); i++ {
-			line := lines.At(i)
-			body.Write(line.Value(source))
-		}
-		if markup, ok := renderFig([]byte(body.String()), r.warn); ok {
+		if markup, ok := renderFig(fenceBody(n, source), r.warn); ok {
 			w.WriteString(markup)
 			w.WriteByte('\n')
 			return ast.WalkSkipChildren, nil
 		}
+	}
+
+	// A `vega-lite` fence is a chart. Like a figure, one that does not
+	// render is one warning and falls through to the code block, so the
+	// author sees their own source. Unlike a figure, its caption is the
+	// info string's: the body is Vega-Lite's, and md2html adds no keys to
+	// it. The info string's other classes reach the chart's figure, as
+	// they would the code block's element.
+	if lang == "vega-lite" && !r.charts.off {
+		*r.charts.n++
+		idx := *r.charts.n
+		html, warns, err := charts.Render(charts.Request{Body: fenceBody(n, source), Caption: caption,
+			Classes: f.classes, Index: idx, Style: r.charts.style(), Load: r.charts.load})
+		for _, w := range warns {
+			r.warn(fmt.Sprintf("vega-lite fence %d: %s", idx, w))
+		}
+		if err == nil {
+			w.WriteString(html)
+			w.WriteByte('\n')
+			return ast.WalkSkipChildren, nil
+		}
+		r.warn(fmt.Sprintf("vega-lite fence %d: %v; showing its source", idx, err))
 	}
 
 	if caption != "" {
@@ -266,6 +287,17 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 	// A fenced code block's content is raw lines, not child nodes; skipping
 	// children matches what goldmark's own renderer does with it.
 	return ast.WalkSkipChildren, nil
+}
+
+// fenceBody is a fenced block's content, its lines joined as written.
+func fenceBody(n *ast.FencedCodeBlock, source []byte) []byte {
+	var body []byte
+	lines := n.Lines()
+	for i := 0; i < lines.Len(); i++ {
+		line := lines.At(i)
+		body = append(body, line.Value(source)...)
+	}
+	return body
 }
 
 // codeClasses renders the <code> element's class attribute: the language

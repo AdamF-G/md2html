@@ -5,7 +5,12 @@
   "styles": {
     "claude-artifact": {
       "description": "The rules every Artifact follows, in a cool paper and ink-blue palette",
-      "css": ["artifact.css"]
+      "css": ["artifact.css"],
+      "charts": {
+        "font": "fonts/ibm-plex-sans-400-600.woff2",
+        "width": 640,
+        "font-family": "\"IBM Plex Sans\", ui-sans-serif, system-ui, sans-serif"
+      }
     }
   }
 }

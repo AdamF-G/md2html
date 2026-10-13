@@ -2,6 +2,7 @@ package md2html
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"regexp"
@@ -45,6 +46,9 @@ type Style struct {
 	// BaseNone means the style starts from nothing rather than from the
 	// default stylesheet. Only the first style a page selects may.
 	BaseNone bool
+	// Charts is the style's charts block: the face chart text is measured
+	// in and the width charts are laid out at. Nil when it has none.
+	Charts *chartSettings
 
 	css []string // CSS files, relative to the plugin directory, in order
 }
@@ -135,6 +139,22 @@ func parseManifest(data []byte, where string, builtin bool, warn func(string)) (
 		if len(s.css) == 0 {
 			return fail("style %q has no css files", name)
 		}
+		if block, ok := raw["charts"]; ok {
+			delete(raw, "charts")
+			cs, err := parseCharts(block, func(k string) {
+				if warn != nil {
+					warn(fmt.Sprintf("plugin %s: unknown key %q in style %q's charts; ignoring it", where, k, name))
+				}
+			}, func(msg string) {
+				if warn != nil {
+					warn(fmt.Sprintf("plugin %s: style %q's charts: %s", where, name, msg))
+				}
+			})
+			if err != nil {
+				return fail("style %q: charts: %v", name, err)
+			}
+			s.Charts = cs
+		}
 		for _, k := range sortedJSONKeys(raw) {
 			if warn != nil {
 				warn(fmt.Sprintf("plugin %s: unknown key %q in style %q; ignoring it", where, k, name))
@@ -143,6 +163,48 @@ func parseManifest(data []byte, where string, builtin bool, warn func(string)) (
 		p.Styles[name] = s
 	}
 	return p, nil
+}
+
+// parseCharts reads a style's charts block. unknown is called with each
+// key it does not know, in sorted order, and note with each key it knows
+// but that has no effect.
+func parseCharts(data json.RawMessage, unknown, note func(string)) (*chartSettings, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	cs := &chartSettings{}
+	for _, f := range []struct {
+		key string
+		dst any
+	}{{"font", &cs.Font}, {"metrics", &cs.Metrics}, {"pad", &cs.Pad}, {"width", &cs.Width}, {"font-family", &cs.FontFamily}} {
+		ok, err := take(raw, f.key, f.dst)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", f.key, err)
+		}
+		if f.key == "pad" {
+			cs.padSet = ok
+		}
+		switch {
+		case !ok:
+		case f.key == "metrics" && cs.Metrics != systemSansMetrics:
+			return nil, fmt.Errorf("metrics %q is not %s, the one built-in", cs.Metrics, systemSansMetrics)
+		case f.key == "pad" && (cs.Pad < 0 || cs.Pad > 1):
+			return nil, fmt.Errorf("pad %v is not between 0 and 1", cs.Pad)
+		case f.key == "width" && (cs.Width < 100 || cs.Width > 2000):
+			return nil, fmt.Errorf("width %d is not between 100 and 2000", cs.Width)
+		}
+	}
+	if cs.Font != "" && cs.Metrics != "" {
+		return nil, errors.New("font and metrics are both set; name one, since a font's widths are exact")
+	}
+	if cs.Font != "" && cs.padSet {
+		note("pad has no effect beside font, whose widths are exact; ignoring it")
+	}
+	for _, k := range sortedJSONKeys(raw) {
+		unknown(k)
+	}
+	return cs, nil
 }
 
 // checkName holds a plugin or style name to pluginName, and keeps the

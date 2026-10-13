@@ -15,16 +15,18 @@ import (
 // the syntax, and rewriting it would make the syntax undocumentable. Links
 // are skipped because every inline rewriter here produces either a link or
 // a badge, and neither may nest inside an <a>. Script and style are skipped
-// because their text is not prose at all.
+// because their text is not prose at all. So is an SVG's, and HTML put
+// inside an SVG <text> is not drawn; a chart's data table holds data
+// values, which are quoted as the data holds them.
 func inlineSkip(n *html.Node) bool {
 	if n.Type != html.ElementNode {
 		return false
 	}
 	switch n.DataAtom {
-	case atom.Code, atom.Pre, atom.A, atom.Script, atom.Style, atom.Kbd, atom.Samp:
+	case atom.Code, atom.Pre, atom.A, atom.Script, atom.Style, atom.Kbd, atom.Samp, atom.Svg:
 		return true
 	}
-	return hasClass(n, "chip")
+	return hasClass(n, "chip") || hasClass(n, "md2html-chart-data")
 }
 
 // rewriteText offers every prose text node under root to fn, replacing the

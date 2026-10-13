@@ -265,7 +265,7 @@ function wireExpand(el) {
 }
 
 document.querySelectorAll("img, svg").forEach((el) => {
-  if (el.closest("a") || el.closest("pre.mermaid")) return;
+  if (el.closest("a") || el.closest("pre.mermaid") || el.closest("figure.md2html-chart")) return;
   if (el.tagName === "IMG" && !el.complete) {
     el.addEventListener("load", () => wireExpand(el));
   } else {
@@ -279,8 +279,45 @@ document.querySelectorAll("img, svg").forEach((el) => {
 // <img> or a hand-authored inline <svg>. A mermaid diagram doesn't count:
 // at this point its <pre class="mermaid"> still holds raw diagram text —
 // MermaidJS only inserts an <svg> client-side, after this check has run.
+// Nor does a chart: its <svg> sits inside a figure.md2html-chart, which
+// holds no other figure, and a chart must not bring a script with it.
 func hasExpandableMedia(body []byte) bool {
-	return bytes.Contains(body, []byte("<img")) || bytes.Contains(body, []byte("<svg"))
+	if bytes.Contains(body, []byte("<img")) {
+		return true
+	}
+	// The chart's own class comes first, and an author's classes may follow it.
+	const chartOpen, chartClose = `<figure class="md2html-chart`, "</figure>"
+	for {
+		i := chartFigure(body, chartOpen)
+		if i < 0 {
+			return bytes.Contains(body, []byte("<svg"))
+		}
+		if bytes.Contains(body[:i], []byte("<svg")) {
+			return true
+		}
+		j := bytes.Index(body[i:], []byte(chartClose))
+		if j < 0 {
+			return false
+		}
+		body = body[i+j+len(chartClose):]
+	}
+}
+
+// chartFigure returns the index of the first chartOpen in body that ends
+// the class name md2html-chart, followed by the attribute's closing quote
+// or another class, or -1 when there is none.
+func chartFigure(body []byte, chartOpen string) int {
+	for off := 0; ; {
+		i := bytes.Index(body[off:], []byte(chartOpen))
+		if i < 0 {
+			return -1
+		}
+		end := off + i + len(chartOpen)
+		if end < len(body) && (body[end] == '"' || body[end] == ' ') {
+			return off + i
+		}
+		off = end
+	}
 }
 
 // tocSideRuntime gives a floating contents list its side control: a small

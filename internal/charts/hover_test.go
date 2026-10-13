@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -323,5 +324,137 @@ func TestTwoLegendsAreClassedSeparately(t *testing.T) {
 	}
 	if strings.Contains(size, "md2html-legend-s") {
 		t.Error("the size legend's entries were classed")
+	}
+}
+
+// A line or an area is one path for all its points, so each datum's box is
+// shown by its nearest-point region alone, anchored at its point. There is
+// no element per datum, so no mark id and no tab stop: the table view is
+// the keyboard's way to the values.
+func TestLineAndAreaTooltipsGetNearestPointBoxes(t *testing.T) {
+	for _, mk := range []string{"line", "area", `{"type":"line","interpolate":"monotone"}`} {
+		if mk[0] != '{' {
+			mk = `"` + mk + `"`
+		}
+		spec := `{"data":{"values":[{"t":1,"v":2,"k":"a"},{"t":2,"v":4,"k":"a"},{"t":3,"v":3,"k":"a"},{"t":1,"v":1,"k":"b"},{"t":2,"v":2,"k":"b"},{"t":3,"v":1,"k":"b"}]},"mark":` + mk + `,
+		 "encoding":{"x":{"field":"t","type":"quantitative"},"y":{"field":"v","type":"quantitative"},"color":{"field":"k","type":"nominal"},"tooltip":{"field":"v"}}}`
+		tok, r := themed(t, spec)
+		if len(r.Marks) != 6 {
+			t.Fatalf("%s: %d tooltip marks, want one per datum", mk, len(r.Marks))
+		}
+		out, css := hoverLayer(tok, r, "md2html-c1", fixed{})
+		if n := strings.Count(out, `class="md2html-hit"`); n != 6 {
+			t.Errorf("%s: %d hit regions for 6 datums", mk, n)
+		}
+		for i := range r.Marks {
+			if !strings.Contains(out, fmt.Sprintf(`id="md2html-c1-t%d"`, i)) || !strings.Contains(css, fmt.Sprintf("#md2html-c1-v%d:hover) #md2html-c1-t%d ", i, i)) {
+				t.Errorf("%s: datum %d has no box its region shows", mk, i)
+			}
+		}
+		if strings.Contains(out, `id="md2html-c1-m`) || strings.Contains(css, "-m0") || strings.Contains(out, `tabindex="0" id`) {
+			t.Errorf("%s: a datum of a line was tagged as an element", mk)
+		}
+		// The box sits centred over its datum's point.
+		box := placeBoxes(r, fixed{})[0]
+		if m := r.Marks[0]; math.Abs(box.X+box.W/2-m.X1) > 0.5 || box.Y+box.H > m.Y1 {
+			t.Errorf("%s: box %+v is not above its point (%v,%v)", mk, box, m.X1, m.Y1)
+		}
+	}
+}
+
+// A line drawn with its points carries one box per datum, on the point.
+func TestALinesPointsAreNotDoubled(t *testing.T) {
+	_, r := themed(t, goldenSpecs[2].spec) // line with point: true
+	if len(r.Marks) != 3 {
+		t.Fatalf("%d tooltip marks for 3 points", len(r.Marks))
+	}
+	for i, m := range r.Marks {
+		if !m.Symbol || m.Datum {
+			t.Errorf("mark %d: %+v, want its point", i, m)
+		}
+	}
+}
+
+// Beside a bar, a line's datums get no regions (they would cover the
+// bars' own hover), so their boxes could never show: the chart warns, and
+// the bar keeps its boxes.
+func TestALineBesideABarWarnsItsTooltipsHaveNoHover(t *testing.T) {
+	spec := `{"data":{"values":[{"k":"a","v":1},{"k":"b","v":3}]},"encoding":{"x":{"field":"k","type":"nominal"},"y":{"field":"v","type":"quantitative"},"tooltip":{"field":"v"}},
+	 "layer":[{"mark":"bar"},{"mark":"line"}]}`
+	html, warns, err := Render(Request{Body: []byte(spec), Index: 1, Style: Style{Measurer: fixed{}, Width: 300}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "2 line or area tooltips") {
+		t.Errorf("want one warning about the line's tooltips, got %v", warns)
+	}
+	if !strings.Contains(html, `id="md2html-c1-t0"`) || !strings.Contains(html, "#md2html-c1-m0:hover") || strings.Contains(html, `id="md2html-c1-t2"`) {
+		t.Errorf("want the bars' boxes and none for the line: %s", html)
+	}
+}
+
+// The warning names why a line's tooltips have no regions: a mark of
+// another kind beside them, too many points, or a layout of several views,
+// whose plot area md2html does not find.
+func TestLostTooltipsWarningNamesItsCause(t *testing.T) {
+	line := `"mark":"line","encoding":{"x":{"field":"t","type":"quantitative"},"y":{"field":"v","type":"quantitative"},"tooltip":{"field":"v"}}`
+	for _, c := range []struct{ name, spec, want, notWant string }{
+		{"beside a bar", `{"data":{"values":[{"k":"a","v":1},{"k":"b","v":3}]},"encoding":{"x":{"field":"k","type":"nominal"},"y":{"field":"v","type":"quantitative"},"tooltip":{"field":"v"}},"layer":[{"mark":"bar"},{"mark":"line"}]}`,
+			"all points, lines and areas", "plot area"},
+		{"too many", `{"data":{"sequence":{"start":0,"stop":501,"as":"t"}},"transform":[{"calculate":"datum.t","as":"v"}],` + line + `}`,
+			"501 tooltip points, over the 500", "all points"},
+		{"concat", `{"data":{"values":[{"t":1,"v":2},{"t":2,"v":4}]},"hconcat":[{` + line + `},{` + line + `}]}`,
+			"plot area", "all points"},
+	} {
+		_, warns, err := Render(Request{Body: []byte(c.spec), Index: 1, Style: Style{Measurer: fixed{}, Width: 300}})
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if len(warns) != 1 || !strings.Contains(warns[0], "line or area tooltips have no hover") || !strings.Contains(warns[0], c.want) || strings.Contains(warns[0], c.notWant) {
+			t.Errorf("%s: want one warning naming %q, got %v", c.name, c.want, warns)
+		}
+	}
+}
+
+// A line's datum loses its own box only to its own point. Where another
+// series' point sits on the same spot, the datum keeps its box; where two
+// series drawn with their points meet, each datum is its own point's.
+func TestADatumUnderAnotherSeriesPointKeepsItsBox(t *testing.T) {
+	enc := `"encoding":{"x":{"field":"t","type":"quantitative"},"y":{"field":"v","type":"quantitative"},"tooltip":{"field":"v"}}`
+	// Series a is points alone, series b a line alone; both pass (2, 4).
+	spec := `{"data":{"values":[{"t":1,"v":2,"k":"a"},{"t":2,"v":4,"k":"a"},{"t":3,"v":3,"k":"a"},{"t":1,"v":1,"k":"b"},{"t":2,"v":4,"k":"b"},{"t":3,"v":1,"k":"b"}]},
+	 "layer":[{"transform":[{"filter":"datum.k == 'a'"}],"mark":"point",` + enc + `},{"transform":[{"filter":"datum.k == 'b'"}],"mark":"line",` + enc + `}]}`
+	_, r := themed(t, spec)
+	datums := 0
+	for _, m := range r.Marks {
+		if m.Datum {
+			datums++
+		}
+	}
+	if len(r.Marks) != 6 || datums != 3 {
+		t.Errorf("%d tooltip marks, %d of them datums; want a's 3 points and b's 3 datums", len(r.Marks), datums)
+	}
+	// Both series drawn with their points, meeting at (2, 4).
+	both := `{"data":{"values":[{"t":1,"v":2,"k":"a"},{"t":2,"v":4,"k":"a"},{"t":3,"v":3,"k":"a"},{"t":1,"v":1,"k":"b"},{"t":2,"v":4,"k":"b"},{"t":3,"v":1,"k":"b"}]},
+	 "mark":{"type":"line","point":true},"encoding":{"x":{"field":"t","type":"quantitative"},"y":{"field":"v","type":"quantitative"},"color":{"field":"k","type":"nominal"},"tooltip":{"field":"v"}}}`
+	_, r = themed(t, both)
+	for i, m := range r.Marks {
+		if !m.Symbol || m.Datum {
+			t.Errorf("mark %d: %+v, want its point", i, m)
+		}
+	}
+	if len(r.Marks) != 6 {
+		t.Errorf("%d tooltip marks for 6 points", len(r.Marks))
+	}
+	// An area's points are drawn from copies of its data, which Vega makes
+	// to stack it: a copy with the same fields is the same datum.
+	_, r = themed(t, `{"data":{"values":[{"t":1,"v":2},{"t":2,"v":4},{"t":3,"v":3}]},"mark":{"type":"area","point":true},`+enc+`}`)
+	for i, m := range r.Marks {
+		if !m.Symbol || m.Datum {
+			t.Errorf("area: mark %d: %+v, want its point", i, m)
+		}
+	}
+	if len(r.Marks) != 3 {
+		t.Errorf("area: %d tooltip marks for 3 points", len(r.Marks))
 	}
 }

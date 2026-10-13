@@ -1,5 +1,10 @@
 // The glue between md2html and Vega. render() is called once per chart and
 // resolves to the object Go reads back as `rendered`.
+// tipLines writes a tooltip as the lines of its box.
+function tipLines(tip) {
+  return typeof tip === "object" ? Object.keys(tip).map(function (k) { return k + ": " + tip[k]; }) : [String(tip)];
+}
+
 function render(specJSON) {
   // Vega numbers clip paths and gradients from process-wide counters.
   vega.resetSVGClipId();
@@ -19,6 +24,8 @@ function render(specJSON) {
   view.logger({ warn: function (m) { warnings.push(String(m)); }, info: function () {}, debug: function () {}, error: function (m) { warnings.push(String(m)); } });
   return view.toSVG().then(function (svg) {
     var marks = [], untipped = [], drawn = 0, fetch = null, drawnData = [], byName = {};
+    // The datum each mark drew, by its place in marks; never sent to Go.
+    var markData = [];
     // Vega translates the whole scene by its padding plus its origin.
     var pad = view.padding(), offset = [pad.left + view.origin()[0], pad.top + view.origin()[1]];
     (function walk(node, ox, oy) {
@@ -31,21 +38,26 @@ function render(specJSON) {
           var u = it.url == null ? "" : String(it.url);
           if (!/^\s*data:/i.test(u)) fetch = u;
         }
-        // Data marks Vega draws as one element per item. A line or an area
-        // is one path for all its items, so the i-th item would not be the
-        // i-th element; its point overlay, when it has one, carries the tooltips.
-        // Every such item counts, tooltip or not, so Go can find each
-        // tooltip mark's element by its place among them.
+        // Data marks Vega draws as one element per item. Every such item
+        // counts, tooltip or not, so Go can find each tooltip mark's
+        // element by its place among them.
         if (it.mark.role === "mark" && (type === "symbol" || type === "rect" || type === "arc" || type === "rule" || type === "text")) {
           if (it.tooltip != null && it.bounds) {
-            var tip = it.tooltip;
-            var lines = typeof tip === "object" ? Object.keys(tip).map(function (k) { return k + ": " + tip[k]; }) : [String(tip)];
-            marks.push({ tooltip: lines, label: it.description == null ? "" : String(it.description),
+            marks.push({ tooltip: tipLines(it.tooltip), label: it.description == null ? "" : String(it.description),
               X1: ox + it.bounds.x1, Y1: oy + it.bounds.y1, X2: ox + it.bounds.x2, Y2: oy + it.bounds.y2, symbol: type === "symbol" });
+            markData.push(it.datum);
           } else {
             untipped.push(drawn);
           }
           drawn++;
+        }
+        // A line or an area is one path for all its items, so no item has
+        // an element of its own. Each datum with a tooltip is its point,
+        // whose box only a nearest-point region shows.
+        if (it.mark.role === "mark" && (type === "line" || type === "area") && it.tooltip != null && isFinite(it.x) && isFinite(it.y)) {
+          marks.push({ tooltip: tipLines(it.tooltip), label: it.description == null ? "" : String(it.description),
+            X1: ox + it.x, Y1: oy + it.y, X2: ox + it.x, Y2: oy + it.y, datum: true });
+          markData.push(it.datum);
         }
         // The data the chart drew, for the table, mark by mark.
         if (it.mark.role === "mark" && type !== "group" && it.datum && typeof it.datum === "object") drew.push(it.datum);
@@ -63,6 +75,27 @@ function render(specJSON) {
         }
       }
     })(view.scenegraph().root, offset[0], offset[1]);
+    // A line drawn with its points has a point on each datum, which
+    // carries its box; the datum's own is dropped. Only a point drawn
+    // from the same datum counts: the same object, or, where Vega copied
+    // it (a stacked area's points), one with the same fields and the same
+    // tooltip. Another series' or layer's point at the same spot carries
+    // another box, and the datum keeps its own.
+    function same(a, b) {
+      if (a.d === b.d) return true;
+      try { return a.tip === b.tip && JSON.stringify(a.d) === JSON.stringify(b.d); } catch (e) { return false; }
+    }
+    var onPoint = {};
+    function at(x, y) { return Math.round(x * 2) + "," + Math.round(y * 2); }
+    marks.forEach(function (m, i) {
+      if (!m.symbol) return;
+      var k = at((m.X1 + m.X2) / 2, (m.Y1 + m.Y2) / 2);
+      (onPoint[k] = onPoint[k] || []).push({ d: markData[i], tip: m.tooltip.join("\n") });
+    });
+    marks = marks.filter(function (m, i) {
+      var here = m.datum && onPoint[at(m.X1, m.Y1)], me = { d: markData[i], tip: m.tooltip.join("\n") };
+      return !here || !here.some(function (p) { return same(p, me); });
+    });
     // The table's columns: one per field the spec encodes, in encoding
     // order, each read from the drawn data under the name Vega-Lite gives
     // it there (sum_v for an aggregate, month_d for a timeUnit).

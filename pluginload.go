@@ -112,6 +112,9 @@ func loadDir(real, where string, warn func(string)) (*Plugin, error) {
 		return nil, err
 	}
 	p.key, p.fsys, p.dir = real, fsys, real
+	if err := p.loadChartFonts(); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -183,6 +186,9 @@ var builtinPlugins = sync.OnceValues(func() ([]*Plugin, error) {
 			return nil, err
 		}
 		p.key, p.fsys = "builtin:"+p.Name, sub
+		if err := p.loadChartFonts(); err != nil {
+			return nil, fmt.Errorf("built-in %w", err)
+		}
 		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

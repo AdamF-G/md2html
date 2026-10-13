@@ -99,6 +99,18 @@ type Options struct {
 	// should not travel with it, such as a front matter key the page does
 	// not use. Fragment output never carries the source.
 	NoSource bool
+	// NoCharts leaves a vega-lite fence as a code block. By default each
+	// one renders as a chart: static SVG drawn when the page is built, in
+	// the page style's colours and face, with a hover layer in CSS and a
+	// table of its data. Turn it off when a caller does not want the chart
+	// engine started.
+	NoCharts bool
+	// DataRoot is the directory a chart's data files must stay inside. A
+	// chart's data url resolves against the source document's directory,
+	// and one that leads outside DataRoot is refused. Empty means the
+	// source document's directory. Without a SourcePath there is no
+	// directory to read from, and a chart's data url is refused.
+	DataRoot string
 	// Transforms to run. Nil means the default list.
 	//
 	// A list supplied here is used as given, except that any builtin in it
@@ -126,8 +138,9 @@ type Options struct {
 	// while converting this document. Things that report so far: a front
 	// matter block that is not flat key: value, a language that is not a
 	// language tag, a container naming a kind that does not exist or
-	// missing the definition list it is defined to hold, and a fig fence
-	// whose body does not parse or does not validate.
+	// missing the definition list it is defined to hold, a fig fence
+	// whose body does not parse or does not validate, and a vega-lite fence
+	// that does not render or that Vega-Lite warns about.
 	//
 	// Convert never writes to stderr itself: it is a library, and the CLI
 	// emits every document's output in parallel, so a transform printing
@@ -146,9 +159,11 @@ type Options struct {
 // by the conformance fixture; see docs/specs.
 //
 // warn is handed to the fenced-code renderer, which needs it for the `fig`
-// language: a malformed figure degrades to a code block and says why. It
-// may be nil.
-func newParser(warn func(string)) goldmark.Markdown {
+// and `vega-lite` languages: a malformed figure or chart degrades to a code
+// block and says why. It may be nil. charts is how that renderer draws
+// charts; its zero value, with off unset and no style, is not usable, so a
+// caller that wants none sets off.
+func newParser(warn func(string), charts chartContext) goldmark.Markdown {
 	return goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,
@@ -165,7 +180,7 @@ func newParser(warn func(string)) goldmark.Markdown {
 			// Priority below goldmark's own (1000) so this wins for
 			// fenced code blocks; every other node keeps the default
 			// renderer.
-			renderer.WithNodeRenderers(util.Prioritized(newCodeFenceRenderer(warn), 100)),
+			renderer.WithNodeRenderers(util.Prioritized(newCodeFenceRenderer(warn, charts), 100)),
 		),
 	)
 }
@@ -194,8 +209,14 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		opt.Warn("front matter block is not flat key: value; rendering it as body text")
 	}
 
+	// The style comes before rendering: a chart is drawn in the page's
+	// face and colours.
+	style, err := choosePageStyle(opt, meta)
+	if err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
-	if err := newParser(opt.Warn).Convert(src, &buf); err != nil {
+	if err := newParser(opt.Warn, newChartContext(opt, style)).Convert(src, &buf); err != nil {
 		return nil, err
 	}
 	root, err := parseFragment(buf.Bytes())
@@ -284,10 +305,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	css, err := pageCSS(opt, meta)
-	if err != nil {
-		return nil, err
-	}
+	css := style.css
 	if opt.Fragment {
 		return renderFragment(body, title, css), nil
 	}

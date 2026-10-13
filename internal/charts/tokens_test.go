@@ -121,3 +121,11 @@ func TestTokenNamesInDataAreLeftAlone(t *testing.T) {
 		t.Errorf("want three warnings, for zz-a, zz-b and zz-c in that order, got %v", warns)
 	}
 }
+
+// --rule is read for the tooltip box border, but is not a chart token.
+func TestTokenValuesReadsTheBoxBorder(t *testing.T) {
+	light, dark, ok := TokenValues(`:root[data-theme="light"] { --rule: #aaaaaa } :root[data-theme="dark"] { --rule: #222222 }`)
+	if ok || light["rule"] != "#aaaaaa" || dark["rule"] != "#222222" {
+		t.Errorf("ok %v light %v dark %v", ok, light, dark)
+	}
+}

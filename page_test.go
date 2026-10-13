@@ -184,6 +184,45 @@ func TestMediaExpandRuntimeInjectedOnlyForPagesThatNeedIt(t *testing.T) {
 	}
 }
 
+// A chart's SVG is not media to expand, and a chart must add no script: a
+// page whose only SVG is a chart gets no media-expand runtime, while a page
+// with any other inline SVG still does, chart or not.
+func TestChartSVGIsNotExpandableMedia(t *testing.T) {
+	chart := "```vega-lite\nmark: point\ndata: {values: [{v: 1}]}\nencoding: {x: {field: v, type: quantitative}}\n```\n"
+	plain := `<svg viewBox="0 0 800 600" style="width:100px"><rect width="800" height="600"/></svg>` + "\n"
+	for _, c := range []struct {
+		name, src string
+		want      bool
+	}{
+		{"chart only", chart, false},
+		{"plain svg", plain, true},
+		{"chart then plain svg", chart + "\n" + plain, true},
+		{"plain svg then chart", plain + "\n" + chart, true},
+		{"chart with a class", strings.Replace(chart, "vega-lite", "vega-lite {.wide}", 1), false},
+	} {
+		page, err := Convert([]byte(c.src), Options{})
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", c.name, err)
+		}
+		s := string(page)
+		if strings.Contains(c.src, "vega-lite") && !strings.Contains(s, `<figure class="md2html-chart`) {
+			t.Fatalf("%s: no chart rendered, so the check proves nothing", c.name)
+		}
+		if got := strings.Contains(s, "const mediaLightbox"); got != c.want {
+			t.Errorf("%s: media-expand runtime present = %v, want %v", c.name, got, c.want)
+		}
+	}
+	// On a page that has the runtime for another reason, it must still
+	// leave the chart's SVG alone.
+	page, err := Convert([]byte(chart+"\n"+plain), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), `closest("figure.md2html-chart")`) {
+		t.Error("the media-expand runtime does not skip SVGs inside a chart")
+	}
+}
+
 // An image or inline SVG must be clickable into a native <dialog>, and only
 // when it's actually being scaled down — an icon rendered at its own size
 // has nothing to zoom into. The click must skip elements already wrapped in

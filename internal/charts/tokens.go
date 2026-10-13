@@ -152,12 +152,17 @@ var themeBlock = regexp.MustCompile(`:root\[data-theme="(light|dark)"\]\s*\{([^}
 var declRe = regexp.MustCompile(`--([a-z0-9-]+)\s*:\s*([^;}]+)(?:;|$)`)
 var varRef = regexp.MustCompile(`^var\(\s*--([a-z0-9-]+)\s*\)$`)
 
+// boxBorder is the page colour a tooltip box's border is drawn in. It is
+// not a chart token, but a chart written in literal colours needs its value.
+const boxBorder = "rule"
+
 // TokenValues reads each token's light and dark value from an assembled
-// stylesheet. ok is false when the stylesheet defines none of them. A value
-// of var(--x) becomes --x's value from the same block.
+// stylesheet, and --rule's, for the tooltip box border. ok is false when
+// the stylesheet defines none of the tokens. A value of var(--x) becomes
+// --x's value from the same block.
 func TokenValues(css string) (light, dark map[string]string, ok bool) {
 	light, dark = map[string]string{}, map[string]string{}
-	want := map[string]bool{}
+	want := map[string]bool{boxBorder: true}
 	for _, t := range Tokens {
 		want[t] = true
 	}
@@ -175,7 +180,7 @@ func TokenValues(css string) (light, dark map[string]string, ok bool) {
 			decls[d[1]] = v // later blocks win, as the cascade does
 			if want[d[1]] {
 				dst[d[1]] = v
-				ok = true
+				ok = ok || d[1] != boxBorder
 			}
 		}
 	}

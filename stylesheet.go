@@ -33,19 +33,32 @@ func (s selected) qualified() string { return s.plugin.Name + "/" + s.style.Name
 // discard styles the same list asked to keep. Selecting one style twice
 // keeps the first and warns, since the second adds nothing but bytes.
 func (c *PluginCache) Stylesheet(names []string, plugins []*Plugin, warn func(string)) (string, error) {
+	ps, err := c.style(names, plugins, warn)
+	return ps.css, err
+}
+
+// pageStyle is what a page's style list resolves to: its stylesheet and
+// the settings its charts are drawn with.
+type pageStyle struct {
+	css    string
+	charts chartSettings
+}
+
+// style is Stylesheet, plus the chart settings of the same list.
+func (c *PluginCache) style(names []string, plugins []*Plugin, warn func(string)) (pageStyle, error) {
 	if len(names) == 0 {
-		return defaultCSS, nil
+		return pageStyle{defaultCSS, c.chartStyle(nil)}, nil
 	}
 	avail, err := AvailablePlugins(plugins)
 	if err != nil {
-		return "", err
+		return pageStyle{}, err
 	}
 	var picks []selected
 	seen := map[string]bool{}
 	for _, n := range names {
 		s, err := resolveStyle(n, avail)
 		if err != nil {
-			return "", err
+			return pageStyle{}, err
 		}
 		if seen[s.plugin.key+"/"+s.style.Name] {
 			if warn != nil {
@@ -55,7 +68,7 @@ func (c *PluginCache) Stylesheet(names []string, plugins []*Plugin, warn func(st
 		}
 		seen[s.plugin.key+"/"+s.style.Name] = true
 		if len(picks) > 0 && s.style.BaseNone {
-			return "", fmt.Errorf("style %s starts from nothing (base: none), so it can only come first", s.qualified())
+			return pageStyle{}, fmt.Errorf("style %s starts from nothing (base: none), so it can only come first", s.qualified())
 		}
 		picks = append(picks, s)
 	}
@@ -73,7 +86,7 @@ func (c *PluginCache) Stylesheet(names []string, plugins []*Plugin, warn func(st
 	}
 	c.mu.Unlock()
 	e.once.Do(func() { e.css, e.err = assemble(picks) })
-	return e.css, e.err
+	return pageStyle{e.css, c.chartStyle(picks)}, e.err
 }
 
 // assemble concatenates the default stylesheet, unless the first pick
@@ -168,44 +181,46 @@ func splitList(s string) []string {
 // 16 MB, fonts and all.
 const maxStylesheet = 1 << 20
 
-// pageCSS chooses one page's stylesheet: its front matter "style:" if it
-// has one, otherwise the run's CSS or Styles, otherwise the default.
+// choosePageStyle chooses one page's stylesheet and chart settings: its front
+// matter "style:" if it has one, otherwise the run's CSS or Styles,
+// otherwise the default. A run's CSS draws charts with the default style's
+// settings.
 //
 // A front matter choice that fails is warned about and the page falls back
 // to the run's whole style list, not to the list minus the bad entry: a
 // page that loses one of three stacked styles renders as a look nobody
 // chose. The run's own choice failing is an error, since a caller that
 // asked for a style and silently got another would ship the wrong look.
-func pageCSS(opt Options, meta map[string]string) (string, error) {
+func choosePageStyle(opt Options, meta map[string]string) (pageStyle, error) {
 	warn := func(s string) {
 		if opt.Warn != nil {
 			opt.Warn(s)
 		}
 	}
 	if opt.CSS != "" && len(opt.Styles) > 0 {
-		return "", errors.New("Options.CSS and Styles are both set; choose one")
+		return pageStyle{}, errors.New("Options.CSS and Styles are both set; choose one")
 	}
 	cache := opt.PluginCache
 	if cache == nil {
 		cache = NewPluginCache()
 	}
-	run := func() (string, error) {
+	run := func() (pageStyle, error) {
 		if opt.CSS != "" {
-			return opt.CSS, nil
+			return pageStyle{opt.CSS, cache.chartStyle(nil)}, nil
 		}
 		if len(opt.Styles) == 0 {
-			return defaultCSS, nil
+			return cache.style(nil, nil, nil)
 		}
 		ps, err := cache.LoadAll(opt.Plugins, "", nil)
 		if err != nil {
-			return "", err
+			return pageStyle{}, err
 		}
-		return cache.Stylesheet(opt.Styles, ps, nil)
+		return cache.style(opt.Styles, ps, nil)
 	}
 
 	names := splitList(meta["style"])
 	pageDirs := splitList(meta["plugins"])
-	var css string
+	var st pageStyle
 	var err error
 	switch {
 	case len(names) == 0:
@@ -215,30 +230,30 @@ func pageCSS(opt Options, meta map[string]string) (string, error) {
 		if len(pageDirs) > 0 {
 			warn("front matter plugins has no effect without style; ignoring it")
 		}
-		css, err = run()
+		st, err = run()
 	default:
-		css, err = frontMatterCSS(cache, opt, names, pageDirs, warn)
+		st, err = frontMatterStyle(cache, opt, names, pageDirs, warn)
 		if err != nil {
 			warn(err.Error() + "; using the run's style")
-			css, err = run()
+			st, err = run()
 		}
 	}
 	if err != nil {
-		return "", err
+		return pageStyle{}, err
 	}
-	if len(css) > maxStylesheet {
-		warn(fmt.Sprintf("stylesheet is %d KB, over 1 MB; every page carries it", len(css)/1024))
+	if len(st.css) > maxStylesheet {
+		warn(fmt.Sprintf("stylesheet is %d KB, over 1 MB; every page carries it", len(st.css)/1024))
 	}
-	return css, nil
+	return st, nil
 }
 
-// frontMatterCSS assembles a page's own style list from the run's plugins
+// frontMatterStyle assembles a page's own style list from the run's plugins
 // and the page's, the page's resolved against its own directory. The error
-// says which key was at fault, for the warning pageCSS raises.
-func frontMatterCSS(cache *PluginCache, opt Options, names, pageDirs []string, warn func(string)) (string, error) {
+// says which key was at fault, for the warning choosePageStyle raises.
+func frontMatterStyle(cache *PluginCache, opt Options, names, pageDirs []string, warn func(string)) (pageStyle, error) {
 	ps, err := cache.LoadAll(opt.Plugins, "", nil)
 	if err != nil {
-		return "", fmt.Errorf("front matter style: %w", err)
+		return pageStyle{}, fmt.Errorf("front matter style: %w", err)
 	}
 	baseDir := ""
 	if opt.SourcePath != "" {
@@ -246,11 +261,11 @@ func frontMatterCSS(cache *PluginCache, opt Options, names, pageDirs []string, w
 	}
 	own, err := cache.LoadAll(pageDirs, baseDir, warn)
 	if err != nil {
-		return "", fmt.Errorf("front matter plugins: %w", err)
+		return pageStyle{}, fmt.Errorf("front matter plugins: %w", err)
 	}
-	css, err := cache.Stylesheet(names, append(ps, own...), warn)
+	st, err := cache.style(names, append(ps, own...), warn)
 	if err != nil {
-		return "", fmt.Errorf("front matter style: %w", err)
+		return pageStyle{}, fmt.Errorf("front matter style: %w", err)
 	}
-	return css, nil
+	return st, nil
 }

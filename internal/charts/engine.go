@@ -285,4 +285,19 @@ type mark struct {
 	Label          string   `json:"label"`
 	X1, Y1, X2, Y2 float64  // absolute bounds in SVG px
 	Symbol         bool     `json:"symbol"` // a point mark (gets a nearest-point cell)
+	// Datum marks a datum of a line or an area: a point (X1 = X2, Y1 = Y2)
+	// with no element of its own, whose box only its nearest-point cell shows.
+	Datum bool `json:"datum"`
+}
+
+// elements counts the tooltip marks drawn as elements of their own, each
+// a tab stop up to maxTabStops.
+func (r rendered) elements() int {
+	n := 0
+	for _, m := range r.Marks {
+		if !m.Datum {
+			n++
+		}
+	}
+	return n
 }

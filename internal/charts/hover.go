@@ -101,11 +101,11 @@ func tooltipGroup(class string) bool {
 }
 
 // tagMarks walks the elements of data marks drawn one per item, in SVG
-// order, skips those whose place is in untipped, and gives the i-th of the
-// rest the id <prefix>-m<i> and, if tabStops, a tab stop. (Its classes
-// come from classifyMarks.) It returns how many elements it tagged and how
-// many it walked.
-func tagMarks(svg, prefix string, untipped []int, tabStops bool) (string, int, int) {
+// order, skips those whose place is in untipped, and gives the k-th of the
+// rest the id <prefix>-m<ids[k]> and, if tabStops, a tab stop. (Its
+// classes come from classifyMarks.) It returns how many elements it
+// tagged and how many it walked.
+func tagMarks(svg, prefix string, untipped, ids []int, tabStops bool) (string, int, int) {
 	skip := make(map[int]bool, len(untipped))
 	for _, u := range untipped {
 		skip[u] = true
@@ -145,7 +145,11 @@ func tagMarks(svg, prefix string, untipped []int, tabStops bool) (string, int, i
 		if skip[seen-1] {
 			continue
 		}
-		attrs := fmt.Sprintf(` id="%s-m%d"`, prefix, n)
+		if n == len(ids) {
+			n++ // more elements than marks: the caller sees the mismatch
+			continue
+		}
+		attrs := fmt.Sprintf(` id="%s-m%d"`, prefix, ids[n])
 		if tabStops {
 			attrs += ` tabindex="0"`
 		}
@@ -166,25 +170,52 @@ const (
 	maxHitRegions = 500
 )
 
-// hoverLayer namespaces Vega's ids, classes every data mark and legend
-// entry for legend highlighting (with or without tooltips), tags each
-// tooltip mark, and appends a box per tooltip mark that css shows while the
-// mark is hovered or focused. When every tooltip mark is a point it also
-// draws each point's nearest-point region, which shows the same box. If the
-// tooltip marks in the SVG do not match r.Marks it returns the SVG with no
-// ids, boxes or css, since wrong ids would show the wrong boxes.
+// hover is one copy of a chart with its hover layer.
+type hover struct {
+	svg, css string
+	// matched is false when the tooltip marks in the SVG did not match
+	// r.Marks, and the copy has no hover at all.
+	matched bool
+	// lost counts the line and area datums whose boxes were left out,
+	// since the chart got no nearest-point regions to show them, and why
+	// says why it got none.
+	lost int
+	why  string
+}
+
+// hoverLayer returns buildHover's SVG and css.
 func hoverLayer(svg string, r rendered, prefix string, m Measurer) (out string, css string) {
+	h := buildHover(svg, r, prefix, m)
+	return h.svg, h.css
+}
+
+// buildHover namespaces Vega's ids, classes every data mark and legend
+// entry for legend highlighting (with or without tooltips), tags each
+// tooltip mark's element, and appends a box per tooltip mark that css
+// shows while the mark is hovered or focused. When every tooltip mark is a
+// point or a line or area datum it also draws each one's nearest-point
+// region, which shows the same box; a datum, having no element, is shown
+// by its region alone. If the tooltip marks in the SVG do not match
+// r.Marks it returns the SVG with no ids, boxes or css, since wrong ids
+// would show the wrong boxes.
+func buildHover(svg string, r rendered, prefix string, m Measurer) hover {
 	svg = tagLegend(classifyMarks(namespaceIDs(svg, prefix)))
 	if len(r.Marks) == 0 {
-		return svg, ""
+		return hover{svg: svg, matched: true}
 	}
-	tagged, n, seen := tagMarks(svg, prefix, r.Untipped, len(r.Marks) <= maxTabStops)
-	if n != len(r.Marks) || seen != len(r.Marks)+len(r.Untipped) {
-		return svg, ""
+	var ids []int // the marks drawn as elements of their own
+	for i, mk := range r.Marks {
+		if !mk.Datum {
+			ids = append(ids, i)
+		}
+	}
+	tagged, n, seen := tagMarks(svg, prefix, r.Untipped, ids, len(ids) <= maxTabStops)
+	if n != len(ids) || seen != len(ids)+len(r.Untipped) {
+		return hover{svg: svg}
 	}
 	end := strings.LastIndex(tagged, "</svg>")
 	if end < 0 {
-		return svg, ""
+		return hover{svg: svg}
 	}
 	var g, c strings.Builder
 	g.WriteString(`<g class="md2html-tips" aria-hidden="true" pointer-events="none" font-size="12px"`)
@@ -192,50 +223,62 @@ func hoverLayer(svg string, r rendered, prefix string, m Measurer) (out string, 
 		g.WriteString(` font-family="` + f[1] + `"`)
 	}
 	g.WriteString(">")
-	cells := hitCells(tagged, r)
+	cells, why := hitCells(tagged, r)
 	for i, cell := range cells {
 		if len(cell) < 3 {
 			continue
 		}
 		fmt.Fprintf(&g, `<path class="md2html-hit" id="%s-v%d" d="%s" style="fill: transparent" pointer-events="all"/>`, prefix, i, polygonPath(cell))
 	}
+	lost := 0
 	for i, b := range placeBoxes(r, m) {
+		var shownBy []string
+		if !r.Marks[i].Datum {
+			shownBy = append(shownBy, fmt.Sprintf("#%[1]s-m%[2]d:hover, #%[1]s-m%[2]d:focus", prefix, i))
+		}
+		if cells != nil && len(cells[i]) >= 3 {
+			shownBy = append(shownBy, fmt.Sprintf("#%s-v%d:hover", prefix, i))
+		}
+		if len(shownBy) == 0 {
+			lost++ // a datum with no region: nothing could show its box
+			continue
+		}
 		fmt.Fprintf(&g, `<g class="md2html-tip" id="%s-t%d" opacity="0" transform="translate(%s,%s)">`, prefix, i, num(b.X), num(b.Y))
 		fmt.Fprintf(&g, `<rect width="%s" height="%s" rx="4" style="fill: var(--chart-surface); stroke: var(--rule)"/>`, num(b.W), num(b.H))
 		for j, line := range r.Marks[i].Tooltip {
 			fmt.Fprintf(&g, `<text x="%d" y="%d" style="fill: var(--fg)">%s</text>`, tipPadX, tipBaseline+j*tipLine, html.EscapeString(line))
 		}
 		g.WriteString("</g>")
-		hit := ""
-		if cells != nil && len(cells[i]) >= 3 {
-			hit = fmt.Sprintf(", #%s-v%d:hover", prefix, i)
-		}
-		fmt.Fprintf(&c, ".md2html-chart:has(#%[1]s-m%[2]d:hover, #%[1]s-m%[2]d:focus%[3]s) #%[1]s-t%[2]d { opacity: 1 }\n", prefix, i, hit)
+		fmt.Fprintf(&c, ".md2html-chart:has(%s) #%s-t%d { opacity: 1 }\n", strings.Join(shownBy, ", "), prefix, i)
 	}
 	g.WriteString("</g>")
-	return tagged[:end] + g.String() + tagged[end:], c.String()
+	if c.Len() == 0 {
+		return hover{svg: svg, matched: true, lost: lost, why: why}
+	}
+	return hover{svg: tagged[:end] + g.String() + tagged[end:], css: c.String(), matched: true, lost: lost, why: why}
 }
 
 // hitCells returns each mark's nearest-point region, clipped to the plot
-// area, or nil when the chart gets none: when a tooltip mark is not a
-// point (a region over it would hide its own hover), when there are more
-// than maxHitRegions points, or when the plot area cannot be found.
-func hitCells(svg string, r rendered) [][][2]float64 {
-	if len(r.Marks) > maxHitRegions {
-		return nil
-	}
+// area, or nil and why the chart gets none: when a tooltip mark is neither
+// a point nor a line or area datum (a region over a bar would hide its own
+// hover), when there are more than maxHitRegions of them, or when the plot
+// area cannot be found, as on a chart of several views.
+func hitCells(svg string, r rendered) ([][][2]float64, string) {
 	sites := make([][2]float64, len(r.Marks))
 	for i, mk := range r.Marks {
-		if !mk.Symbol {
-			return nil
+		if !mk.Symbol && !mk.Datum {
+			return nil, "a line's or an area's tooltip shows only on a chart whose tooltip marks are all points, lines and areas"
 		}
 		sites[i] = [2]float64{(mk.X1 + mk.X2) / 2, (mk.Y1 + mk.Y2) / 2}
 	}
+	if len(r.Marks) > maxHitRegions {
+		return nil, fmt.Sprintf("the chart has %d tooltip points, over the %d that get nearest-point regions", len(r.Marks), maxHitRegions)
+	}
 	x0, y0, w, h, ok := plotArea(svg)
 	if !ok {
-		return nil
+		return nil, "md2html finds no single plot area to draw nearest-point regions in, as on a chart of several views (concat, facet or repeat)"
 	}
-	return voronoiCells(sites, x0, y0, x0+w, y0+h)
+	return voronoiCells(sites, x0, y0, x0+w, y0+h), ""
 }
 
 var (
