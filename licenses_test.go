@@ -11,7 +11,9 @@ func TestThirdPartyNoticesNameEveryBundledComponent(t *testing.T) {
 	got := ThirdPartyNotices()
 	for _, name := range []string{"Vega 5.30.0", "Vega-Lite 5.21.0", "d3-array", "delaunator",
 		"robust-predicates", "json-stringify-pretty-compact", "topojson-client", "internmap",
-		"d3-geo-projection", "d3-path", "d3-scale ", "d3-scale-chromatic", "d3-shape"} {
+		"d3-geo-projection", "d3-path", "d3-scale ", "d3-scale-chromatic", "d3-shape",
+		"github.com/dop251/goja ", "github.com/dlclark/regexp2/v2 ", "github.com/go-sourcemap/sourcemap ",
+		"github.com/google/pprof ", "golang.org/x/text "} {
 		if !strings.Contains(got, "== "+name) {
 			t.Errorf("notices do not name %s", name)
 		}

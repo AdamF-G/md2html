@@ -9,7 +9,7 @@
 // it with `just e2e`, which needs a local Chrome or Chromium.
 module github.com/AdamF-G/md2html/e2e
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/AdamF-G/md2html v0.0.0
