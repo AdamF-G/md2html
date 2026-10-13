@@ -48,7 +48,7 @@ func themeConfig(fontFamily string) map[string]any {
 		"title":  map[string]any{"color": p("fg")},
 		"text":   map[string]any{"color": p("fg"), "fontSize": 12},
 		"mark":   map[string]any{"color": p("series-1")},
-		"point":  map[string]any{"size": 100, "strokeWidth": 2, "stroke": p("chart-surface")},
+		"point":  map[string]any{"filled": true, "size": 100, "strokeWidth": 2, "stroke": p("chart-surface")},
 		"bar":    map[string]any{"cornerRadiusEnd": 4, "stroke": p("chart-surface"), "strokeWidth": 2},
 		"rule":   map[string]any{"color": p("chart-axis")},
 		"line":   map[string]any{"strokeWidth": 2, "strokeCap": "round", "strokeJoin": "round"},

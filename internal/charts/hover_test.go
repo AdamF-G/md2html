@@ -191,3 +191,137 @@ func TestLayerWithoutTooltipKeepsOthersBoxes(t *testing.T) {
 		}
 	}
 }
+
+func pointsSpec(n int) string {
+	var vals []string
+	for i := 0; i < n; i++ {
+		vals = append(vals, fmt.Sprintf(`{"x":%d,"y":%d}`, i, (i*37)%100))
+	}
+	return `{"width":400,"data":{"values":[` + strings.Join(vals, ",") + `]},"mark":"point","encoding":{"x":{"field":"x","type":"quantitative"},"y":{"field":"y","type":"quantitative"},"tooltip":{"field":"y"}}}`
+}
+
+func TestHoverLayerAddsHitRegionsForPoints(t *testing.T) {
+	r, err := renderSpec([]byte(pointsSpec(3)), fixed{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, css := hoverLayer(r.SVG, r, "md2html-c1", fixed{})
+	if n := strings.Count(out, `class="md2html-hit"`); n != 3 {
+		t.Errorf("%d hit regions for 3 points", n)
+	}
+	if !strings.Contains(css, "#md2html-c1-v0:hover") {
+		t.Error("css does not show box 0 when its region is hovered")
+	}
+}
+
+// Half-plane clipping is O(n²), so a dense scatter gets no regions.
+func TestHoverLayerSkipsHitRegionsAboveTheirCap(t *testing.T) {
+	r, err := renderSpec([]byte(pointsSpec(501)), fixed{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := hoverLayer(r.SVG, r, "md2html-c1", fixed{}); strings.Contains(out, "md2html-hit") {
+		t.Error("501 points got hit regions")
+	}
+}
+
+func TestLegendEntriesAndMarksShareASeriesClass(t *testing.T) {
+	spec := mergeConfig(mustJSON(t, goldenSpecs[1].spec), themeConfig("sans-serif")) // the two-group bar chart
+	r, err := renderSpec(marshal(t, spec), fixed{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, _, _ := tokenize(r.SVG)
+	out, _ := hoverLayer(tok, r, "md2html-c1", fixed{})
+	for _, c := range []string{"md2html-legend-s1", "md2html-legend-s2", "md2html-s1", "md2html-s2"} {
+		if !strings.Contains(out, c) {
+			t.Errorf("missing class %s", c)
+		}
+	}
+}
+
+// Over 50 tooltip marks, marks are not tab stops (the figure is, Task 10).
+func TestManyMarksAreNotEachATabStop(t *testing.T) {
+	r, _ := renderSpec([]byte(pointsSpec(51)), fixed{}, nil)
+	if out, _ := hoverLayer(r.SVG, r, "md2html-c1", fixed{}); strings.Contains(out, `tabindex="0"`) {
+		t.Error("51 marks are each a tab stop")
+	}
+}
+
+// A mark that already has a class keeps one class attribute.
+func TestTaggingMergesIntoAnExistingClass(t *testing.T) {
+	r := rendered{Width: 300, Height: 100, Marks: []mark{{Tooltip: []string{"a"}, X1: 10, Y1: 50, X2: 20, Y2: 60}}}
+	svg := `<svg width="300" height="100"><g class="mark-symbol role-mark"><path class="own" style="fill: var(--series-3)" d="M0,0"/></g></svg>`
+	out, _ := hoverLayer(svg, r, "md2html-c1", fixed{})
+	tag := regexp.MustCompile(`<path id="md2html-c1-m0"[^>]*>`).FindString(out)
+	if strings.Count(tag, "class=") != 1 || !strings.Contains(tag, `class="own md2html-mark md2html-s3"`) {
+		t.Errorf("classes not merged: %s", tag)
+	}
+}
+
+// themed renders a spec under the theme and tokenizes it, as Render does.
+func themed(t *testing.T, s string) (string, rendered) {
+	t.Helper()
+	r, err := renderSpec(marshal(t, mergeConfig(mustJSON(t, s), themeConfig("sans-serif"))), fixed{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, _, err := tokenize(r.SVG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok, r
+}
+
+// Legend highlighting does not depend on tooltips: a bar chart with a
+// colour legend and no tooltip still gets the legend and series classes,
+// and each legend entry is focusable.
+func TestLegendClassesWithoutTooltips(t *testing.T) {
+	spec := `{"data":{"values":[{"k":"a","g":"x","v":3},{"k":"b","g":"y","v":5},{"k":"c","g":"x","v":2}]},"mark":"bar","encoding":{"x":{"field":"k","type":"nominal"},"y":{"field":"v","type":"quantitative"},"color":{"field":"g","type":"nominal"}}}`
+	tok, r := themed(t, spec)
+	out, _ := hoverLayer(tok, r, "md2html-c1", fixed{})
+	for _, c := range []string{"md2html-legend-s1", "md2html-legend-s2", "md2html-mark md2html-s1", "md2html-mark md2html-s2"} {
+		if !strings.Contains(out, c) {
+			t.Errorf("missing class %s", c)
+		}
+	}
+	if n := len(regexp.MustCompile(`<g class="md2html-legend-s\d+" tabindex="0"`).FindAllString(out, -1)); n != 2 {
+		t.Errorf("%d focusable legend entries, want 2", n)
+	}
+	if strings.Contains(out, `id="md2html-c1-m`) {
+		t.Error("a mark without a tooltip got a box id")
+	}
+}
+
+// A line is drawn in its series' stroke, and is classed by it.
+func TestLinePathsGetSeriesClasses(t *testing.T) {
+	spec := `{"data":{"values":[{"t":1,"v":2,"k":"a"},{"t":2,"v":4,"k":"a"},{"t":1,"v":3,"k":"b"},{"t":2,"v":1,"k":"b"}]},"mark":"line","encoding":{"x":{"field":"t","type":"quantitative"},"y":{"field":"v","type":"quantitative"},"color":{"field":"k","type":"nominal"}}}`
+	tok, r := themed(t, spec)
+	out, _ := hoverLayer(tok, r, "md2html-c1", fixed{})
+	for _, s := range []string{"1", "2"} {
+		if !regexp.MustCompile(`<path class="md2html-mark md2html-s` + s + `"[^>]*aria-roledescription="line mark"`).MatchString(out) {
+			t.Errorf("line path of series %s not classed", s)
+		}
+		if !strings.Contains(out, "md2html-legend-s"+s) {
+			t.Errorf("legend entry of series %s not classed", s)
+		}
+	}
+}
+
+// Each legend is judged alone: a size legend that names no series does not
+// cost the colour legend its classes.
+func TestTwoLegendsAreClassedSeparately(t *testing.T) {
+	spec := `{"data":{"values":[{"x":1,"y":2,"c":"a","s":1},{"x":2,"y":3,"c":"b","s":5},{"x":3,"y":1,"c":"a","s":9}]},"mark":"point","encoding":{"x":{"field":"x","type":"quantitative"},"y":{"field":"y","type":"quantitative"},"color":{"field":"c","type":"nominal"},"size":{"field":"s","type":"quantitative"}}}`
+	tok, r := themed(t, spec)
+	out, _ := hoverLayer(tok, r, "md2html-c1", fixed{})
+	colour, size, ok := strings.Cut(out, "for size")
+	if !ok {
+		t.Fatal("no size legend")
+	}
+	if !strings.Contains(colour, "md2html-legend-s1") || !strings.Contains(colour, "md2html-legend-s2") {
+		t.Error("the colour legend lost its classes")
+	}
+	if strings.Contains(size, "md2html-legend-s") {
+		t.Error("the size legend's entries were classed")
+	}
+}
