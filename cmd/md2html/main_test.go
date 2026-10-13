@@ -243,7 +243,7 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 // the CLI side too — without it, a reordering here would ship green while
 // the library stayed correct.
 func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", false, false, false, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", false, false, false, false, "", nil)
 	want := md2html.Builtins()
 	if len(opts.Transforms) != len(want) {
 		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
@@ -258,7 +258,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // Each --no-* flag must drop exactly its own transform and nothing else,
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", true, true, true, nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", true, true, true, false, "", nil)
 	want := []string{"containers", "alerts", "linkAttrs", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
@@ -894,5 +894,37 @@ func TestRunLicensesPrintsTheNotices(t *testing.T) {
 	}
 	if out.String() != md2html.ThirdPartyNotices() {
 		t.Error("--licenses did not print the notices whole")
+	}
+}
+
+const chartPage = "```vega-lite\nmark: point\ndata: {url: ../data/r.csv}\nencoding: {x: {field: v, type: quantitative}}\n```\n"
+
+func TestRunNoChartsFlag(t *testing.T) {
+	root := tree(t, map[string]string{"a.md": "```vega-lite\nmark: point\n```\n"})
+	var out, errb bytes.Buffer
+	run([]string{filepath.Join(root, "a.md"), "-o", filepath.Join(root, "site"), "--no-charts"}, &out, &errb)
+	b, _ := os.ReadFile(filepath.Join(root, "site", "a.html"))
+	if !strings.Contains(string(b), "language-vega-lite") {
+		t.Error("--no-charts rendered a chart")
+	}
+}
+
+// Data a page reads may sit anywhere under the run's base, not only beside
+// the page; outside the base it is refused.
+func TestRunChartDataInsideTheBase(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": chartPage, "data/r.csv": "v\n1\n", "notes/b.md": "# B"})
+	var out, errb bytes.Buffer
+	run([]string{filepath.Join(root, "docs"), filepath.Join(root, "notes"), "-o", filepath.Join(root, "site")}, &out, &errb)
+	b, _ := os.ReadFile(filepath.Join(root, "site", "docs", "a.html"))
+	if !strings.Contains(string(b), "md2html-chart") {
+		t.Errorf("data inside the base was refused: %s", errb.String())
+	}
+
+	alone := tree(t, map[string]string{"docs/a.md": chartPage, "data/r.csv": "v\n1\n"})
+	errb.Reset()
+	run([]string{filepath.Join(alone, "docs"), "-o", filepath.Join(alone, "site")}, &out, &errb)
+	b, _ = os.ReadFile(filepath.Join(alone, "site", "a.html"))
+	if !strings.Contains(string(b), "language-vega-lite") || !strings.Contains(errb.String(), "chart data") {
+		t.Errorf("data outside the base was read, or not warned about: %s", errb.String())
 	}
 }

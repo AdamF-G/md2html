@@ -86,6 +86,7 @@ Flags:
 		noExt     = fs.Bool("no-external-links", false, "do not mark external links")
 		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
+		noCharts  = fs.Bool("no-charts", false, "leave vega-lite fences as code blocks instead of rendering charts")
 		version   = fs.Bool("version", false, "print the version and exit")
 		licenses  = fs.Bool("licenses", false, "print the licences of the third-party software in md2html and exit")
 		guide     = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
@@ -253,7 +254,7 @@ Flags:
 			// the sink needs no locking and lines from two documents can
 			// never interleave.
 			var warnings []string
-			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt,
+			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt, *noCharts, res.Base,
 				func(m string) { warnings = append(warnings, m) })
 			opts.Plugins, opts.Styles, opts.PluginCache = plugins, styles, cache
 			out, err := md2html.Convert(src, opts)
@@ -410,7 +411,7 @@ func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 // that report against it. TestRunReportsContainerWarningToStderr covers the
 // one diagnostic that travels that way.
 func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc, autoTOC string,
-	noTable, noAnchor, noExt bool, warn func(string)) md2html.Options {
+	noTable, noAnchor, noExt, noCharts bool, dataRoot string, warn func(string)) md2html.Options {
 
 	skip := map[string]bool{
 		"tableScroll":    noTable,
@@ -428,6 +429,8 @@ func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc, autoTO
 	return md2html.Options{
 		Fragment:   fragment,
 		NoSource:   noSource,
+		NoCharts:   noCharts,
+		DataRoot:   dataRoot,
 		SourcePath: d.Src,
 		CSS:        css,
 		Lang:       lang,
