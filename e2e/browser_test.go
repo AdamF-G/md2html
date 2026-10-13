@@ -2809,3 +2809,43 @@ func TestBrowserPluginCSSFetchesNothing(t *testing.T) {
 		t.Error("the control page's fetch was not seen, so the check proves nothing")
 	}
 }
+
+// An identifier in a narrow table column must not split mid-word. Prose
+// code may break anywhere, since it has no scroll container of its own,
+// but a table sits in .table-scroll, so the column can widen and the table
+// scroll instead. Checked in both built-in styles, at a desktop width
+// where the long prose in the other columns squeezes the narrow one.
+func TestBrowserTableCodeStaysWhole(t *testing.T) {
+	src := "| Test | What it asks for | What runs | Read by |\n|---|---|---|---|\n" +
+		"| T5 | " + strings.Repeat("one GPU degraded on both axes while its peers stay at full performance, ", 3) +
+		"| " + strings.Repeat("the same cap on one GPU only, so it lines up against the sweep, ", 3) +
+		"| `rack_validation.straggler` |\n"
+	files := map[string][]byte{}
+	for _, style := range []string{"default", "claude-artifact"} {
+		page, err := md2html.Convert([]byte(src), md2html.Options{Styles: []string{style}})
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", style, err)
+		}
+		files[style+".html"] = page
+	}
+	baseURL := serveGenerated(t, files)
+	ctx := newBrowserCtx(t)
+	for _, style := range []string{"default", "claude-artifact"} {
+		var lines int
+		if err := chromedp.Run(ctx,
+			chromedp.EmulateViewport(1000, 800),
+			chromedp.Navigate(baseURL+"/"+style+".html"),
+			chromedp.WaitVisible("main", chromedp.ByQuery),
+			chromedp.Evaluate(`(() => {
+				const r = document.createRange();
+				r.selectNodeContents(document.querySelector("td code"));
+				return new Set([...r.getClientRects()].map(x => Math.round(x.top))).size;
+			})()`, &lines),
+		); err != nil {
+			t.Fatalf("%s: browser run: %v", style, err)
+		}
+		if lines != 1 {
+			t.Errorf("%s: the table's code span wraps onto %d lines", style, lines)
+		}
+	}
+}

@@ -46,6 +46,9 @@ major version instead.
   chip. The default stylesheet now gives a chip three tones, `.chip-ok`,
   `.chip-warn` and `.chip-info`, from the status colours and the accent,
   and every style built on it inherits them.
+- A code span in a table cell broke anywhere, so a narrow column split an
+  identifier such as `rack_validation.straggler` across lines. Inside a
+  scrolling table it now stays whole and the column widens instead.
 
 ## v0.9.0 — 2026-09-28
 
