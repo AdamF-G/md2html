@@ -87,6 +87,7 @@ Flags:
 		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
 		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
 		version   = fs.Bool("version", false, "print the version and exit")
+		licenses  = fs.Bool("licenses", false, "print the licences of the third-party software in md2html and exit")
 		guide     = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
 
 		listStyles = fs.Bool("list-styles", false, "list the styles available, from built-in plugins and any --plugin, and exit")
@@ -121,6 +122,11 @@ Flags:
 	// what a user reads here always matches what is in their output.
 	if *version {
 		fmt.Fprintf(stdout, "md2html %s\n", md2html.Version)
+		return 0
+	}
+	// Like --version, the whole invocation: the notices, nothing converted.
+	if *licenses {
+		fmt.Fprint(stdout, md2html.ThirdPartyNotices())
 		return 0
 	}
 	// The guide the skill sends its reader to, and the one --help names for

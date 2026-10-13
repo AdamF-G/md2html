@@ -886,3 +886,13 @@ func TestRunListStylesNoTrailingSpace(t *testing.T) {
 		}
 	}
 }
+
+func TestRunLicensesPrintsTheNotices(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--licenses"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if out.String() != md2html.ThirdPartyNotices() {
+		t.Error("--licenses did not print the notices whole")
+	}
+}
