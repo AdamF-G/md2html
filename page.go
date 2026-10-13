@@ -69,7 +69,7 @@ const mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.es
 // would otherwise sit on the page as inert preformatted text.
 //
 // Fragments never get this: they are published as Artifacts, which render
-// mermaid natively. The theme test mirrors the stylesheet's two signals —
+// mermaid natively, with the host's theme rather than the page's. The theme test mirrors the stylesheet's two signals —
 // an explicit [data-theme] wins, otherwise the OS preference decides.
 //
 // It also wires up click-to-expand: a diagram rendered at prose width can be
@@ -95,7 +95,86 @@ import mermaid from "` + url + `";
 const explicit = document.documentElement.dataset.theme;
 const dark = explicit === "dark" ||
   (explicit !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
-mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "default" });
+mermaid.initialize({ startOnLoad: true, ...diagramTheme(dark) });
+
+// diagramTheme builds mermaid's theme from the stylesheet's colour tokens,
+// so a diagram matches whichever style the page uses. Each token is drawn
+// to a one-pixel canvas and read back as sRGB hex, the only form mermaid's
+// colour maths is sure to accept, whatever syntax the style wrote it in.
+// A stylesheet without the tokens (--css replacing the default) gets
+// mermaid's stock theme instead.
+function diagramTheme(dark) {
+  const stock = { theme: dark ? "dark" : "default" };
+  try {
+    const css = getComputedStyle(document.documentElement);
+    const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+    const read = (name) => {
+      const v = css.getPropertyValue(name).trim();
+      if (!v) throw new Error(name + " is not set");
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = v;
+      ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+    };
+    const hex = (c) => "#" + c.map((n) => n.toString(16).padStart(2, "0")).join("");
+    const mix = (a, b, t) => a.map((n, i) => Math.round(n * t + b[i] * (1 - t)));
+    const [bg, fg, muted, accent, rule, codeBg, warn] =
+      ["--bg", "--fg", "--muted", "--accent", "--rule", "--code-bg", "--warn"].map(read);
+    const tint = (c) => hex(mix(c, bg, 0.28));
+    return {
+      theme: "base",
+      themeVariables: {
+        darkMode: dark,
+        fontFamily: getComputedStyle(document.body).fontFamily,
+        background: hex(bg),
+        textColor: hex(fg),
+        titleColor: hex(fg),
+        primaryColor: hex(codeBg),
+        primaryTextColor: hex(fg),
+        primaryBorderColor: hex(accent),
+        secondaryColor: hex(codeBg),
+        tertiaryColor: hex(bg),
+        lineColor: hex(muted),
+        mainBkg: hex(codeBg),
+        nodeBorder: hex(accent),
+        clusterBkg: hex(bg),
+        clusterBorder: hex(rule),
+        edgeLabelBackground: hex(bg),
+        noteBkgColor: tint(accent),
+        noteTextColor: hex(fg),
+        noteBorderColor: hex(accent),
+        actorBkg: hex(codeBg),
+        actorBorder: hex(accent),
+        actorTextColor: hex(fg),
+        signalColor: hex(fg),
+        signalTextColor: hex(fg),
+        labelBoxBkgColor: hex(codeBg),
+        labelBoxBorderColor: hex(rule),
+        labelTextColor: hex(fg),
+        sectionBkgColor: hex(codeBg),
+        altSectionBkgColor: hex(bg),
+        sectionBkgColor2: hex(codeBg),
+        gridColor: hex(rule),
+        taskBkgColor: hex(codeBg),
+        taskBorderColor: hex(muted),
+        taskTextColor: hex(fg),
+        taskTextLightColor: hex(fg),
+        taskTextDarkColor: hex(fg),
+        taskTextOutsideColor: hex(fg),
+        taskTextClickableColor: hex(accent),
+        activeTaskBkgColor: tint(accent),
+        activeTaskBorderColor: hex(accent),
+        doneTaskBkgColor: hex(mix(muted, bg, 0.2)),
+        doneTaskBorderColor: hex(muted),
+        critBkgColor: tint(warn),
+        critBorderColor: hex(warn),
+        todayLineColor: hex(warn),
+      },
+    };
+  } catch (e) {
+    return stock;
+  }
+}
 
 const lightbox = document.createElement("dialog");
 lightbox.className = "mermaid-lightbox";

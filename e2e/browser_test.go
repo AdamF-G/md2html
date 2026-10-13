@@ -840,46 +840,7 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 	mime.AddExtensionType(".mjs", "text/javascript")
 
 	dir, baseURL := serveDir(t)
-
-	// Up one directory: the vendored build belongs to the library's own
-	// testdata (page_test.go pins its version against the default URL there),
-	// and this module only borrows it to serve offline.
-	vendorRoot := filepath.Join("..", "testdata", "vendor")
-	vendorFiles := map[string][]byte{}
-	err := filepath.WalkDir(vendorRoot, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, err := filepath.Rel(vendorRoot, path)
-		if err != nil {
-			return err
-		}
-		// Matched structurally rather than against the literal versioned
-		// filename, so this doesn't become a fourth copy of the version pin
-		// (alongside the pinned URL and the vendored file itself) that goes
-		// stale on a re-vendor. Only the top-level entrypoint
-		// (testdata/vendor/mermaid-<version>.esm.min.mjs) matches: chunk
-		// files live under chunks/ and their rel path starts with that
-		// directory name, not "mermaid-".
-		if strings.HasPrefix(rel, "mermaid-") && strings.HasSuffix(rel, ".esm.min.mjs") {
-			rel = "mermaid.esm.min.mjs"
-		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		vendorFiles["vendor/"+filepath.ToSlash(rel)] = content
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk %s: %v", vendorRoot, err)
-	}
-	writeFiles(t, dir, vendorFiles)
-
-	mermaidURL := baseURL + "/vendor/mermaid.esm.min.mjs"
+	mermaidURL := serveVendoredMermaid(t, dir, baseURL)
 
 	page, err := md2html.Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"),
 		md2html.Options{MermaidURL: mermaidURL})
@@ -944,6 +905,135 @@ func TestBrowserMermaidDiagramExpandsOnClick(t *testing.T) {
 	if werr != nil || herr != nil || widthNum <= 10 || heightNum <= 10 {
 		t.Errorf("cloned svg size = %sx%s, want real dimensions from the viewBox", width, height)
 	}
+}
+
+// A diagram takes its colours from the page's own tokens, so it matches
+// whichever style the page uses, in either colour scheme, instead of
+// mermaid's stock light or dark theme. Only the flowchart chunks are
+// vendored, so a flowchart carries the check; every diagram type reads the
+// same theme variables.
+func TestBrowserMermaidFollowsTheStyle(t *testing.T) {
+	dir, baseURL := serveDir(t)
+	mermaidURL := serveVendoredMermaid(t, dir, baseURL)
+	files := map[string][]byte{}
+	for _, style := range []string{"default", "claude-artifact"} {
+		page, err := md2html.Convert([]byte("```mermaid\ngraph LR\n  A[Ingest] --> B[Publish]\n```\n"),
+			md2html.Options{MermaidURL: mermaidURL, Styles: []string{style}})
+		if err != nil {
+			t.Fatalf("%s: Convert: %v", style, err)
+		}
+		files[style+".html"] = page
+	}
+	writeFiles(t, dir, files)
+	ctx := newBrowserCtx(t)
+
+	const probe = figResolveVar + `
+	(() => {
+		const rect = document.querySelector("pre.mermaid svg .node rect");
+		const label = document.querySelector("pre.mermaid svg .nodeLabel");
+		const cs = getComputedStyle(rect);
+		return {fill: cs.fill, stroke: cs.stroke, text: getComputedStyle(label).color,
+			bg: resolveVar("--code-bg"), accent: resolveVar("--accent"), fg: resolveVar("--fg")};
+	})()`
+	type sample struct{ Fill, Stroke, Text, Bg, Accent, Fg string }
+	for _, style := range []string{"default", "claude-artifact"} {
+		for _, scheme := range []string{"light", "dark"} {
+			var s sample
+			if err := chromedp.Run(ctx,
+				emulation.SetEmulatedMedia().WithFeatures([]*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: scheme}}),
+				chromedp.Navigate(baseURL+"/"+style+".html"),
+				chromedp.WaitVisible("pre.mermaid svg .node rect", chromedp.ByQuery),
+				chromedp.Evaluate(probe, &s),
+			); err != nil {
+				t.Fatalf("%s %s: browser run: %v", style, scheme, err)
+			}
+			if s.Fill != s.Bg {
+				t.Errorf("%s %s: node fill %s, want --code-bg %s", style, scheme, s.Fill, s.Bg)
+			}
+			if s.Stroke != s.Accent {
+				t.Errorf("%s %s: node border %s, want --accent %s", style, scheme, s.Stroke, s.Accent)
+			}
+			if s.Text != s.Fg {
+				t.Errorf("%s %s: node label %s, want --fg %s", style, scheme, s.Text, s.Fg)
+			}
+		}
+	}
+}
+
+// A stylesheet that defines none of the colour tokens, as a --css
+// replacement may not, must still get a rendered diagram: the runtime falls
+// back to mermaid's stock theme rather than handing it colours that do not
+// exist.
+func TestBrowserMermaidWithoutTokensUsesTheStockTheme(t *testing.T) {
+	dir, baseURL := serveDir(t)
+	mermaidURL := serveVendoredMermaid(t, dir, baseURL)
+	page, err := md2html.Convert([]byte("```mermaid\ngraph LR\n  A --> B\n```\n"),
+		md2html.Options{MermaidURL: mermaidURL, CSS: "body { font-family: serif; }"})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	writeFiles(t, dir, map[string][]byte{"plain.html": page})
+	ctx := newBrowserCtx(t)
+	var fill string
+	if err := chromedp.Run(ctx,
+		emulation.SetEmulatedMedia().WithFeatures([]*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: "light"}}),
+		chromedp.Navigate(baseURL+"/plain.html"),
+		chromedp.WaitVisible("pre.mermaid svg .node rect", chromedp.ByQuery),
+		chromedp.Evaluate(`getComputedStyle(document.querySelector("pre.mermaid svg .node rect")).fill`, &fill),
+	); err != nil {
+		t.Fatalf("browser run: %v", err)
+	}
+	// #ececff, the default theme's primaryColor.
+	if fill != "rgb(236, 236, 255)" {
+		t.Errorf("node fill %s, want mermaid's stock rgb(236, 236, 255)", fill)
+	}
+}
+
+// serveVendoredMermaid publishes the vendored mermaid build into dir, which
+// baseURL serves, and returns the URL of its entrypoint. See
+// TestBrowserMermaidDiagramExpandsOnClick for why the whole tree is copied.
+func serveVendoredMermaid(t *testing.T, dir, baseURL string) string {
+	t.Helper()
+	mime.AddExtensionType(".mjs", "text/javascript")
+	// Up one directory: the vendored build belongs to the library's own
+	// testdata (page_test.go pins its version against the default URL there),
+	// and this module only borrows it to serve offline.
+	vendorRoot := filepath.Join("..", "testdata", "vendor")
+	vendorFiles := map[string][]byte{}
+	err := filepath.WalkDir(vendorRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(vendorRoot, path)
+		if err != nil {
+			return err
+		}
+		// Matched structurally rather than against the literal versioned
+		// filename, so this doesn't become a fourth copy of the version pin
+		// (alongside the pinned URL and the vendored file itself) that goes
+		// stale on a re-vendor. Only the top-level entrypoint
+		// (testdata/vendor/mermaid-<version>.esm.min.mjs) matches: chunk
+		// files live under chunks/ and their rel path starts with that
+		// directory name, not "mermaid-".
+		if strings.HasPrefix(rel, "mermaid-") && strings.HasSuffix(rel, ".esm.min.mjs") {
+			rel = "mermaid.esm.min.mjs"
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		vendorFiles["vendor/"+filepath.ToSlash(rel)] = content
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", vendorRoot, err)
+	}
+	writeFiles(t, dir, vendorFiles)
+
+	return baseURL + "/vendor/mermaid.esm.min.mjs"
 }
 
 // A collapsible container hides its body, but not the way "hidden" is

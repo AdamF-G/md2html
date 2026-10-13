@@ -27,6 +27,12 @@ major version instead.
 
 - The default stylesheet is now the built-in `default` plugin's style. Its
   content and the output are unchanged.
+- A diagram on a full page takes its colours from the page's style: nodes
+  from the code background and accent, text from the text colour, lines
+  from the muted colour, and gantt bars from tints of the accent, warning
+  and muted colours. It used mermaid's stock light or dark theme, which
+  matched no style, and its gantt axis and labels were hard to read in
+  dark mode. A stylesheet without the colour tokens keeps the stock theme.
 - Both shells wrap the content in `<main class="md2html">`, and the
   default stylesheet's `main` rules are scoped to that class. `--fragment`
   output had no `<main>`, so a host such as a Claude Artifact, which

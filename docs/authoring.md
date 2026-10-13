@@ -470,8 +470,9 @@ graph LR
 ```
 ````
 
-A page with a diagram loads a pinned MermaidJS build from a CDN, themed to
-match the page in light and dark mode. `--fragment` output loads nothing,
+A page with a diagram loads a pinned MermaidJS build from a CDN, coloured
+from the page's style in light and dark mode: its background, text,
+accent, rule, muted and warning colours. `--fragment` output loads nothing,
 and leaves the diagram to a host that renders mermaid itself, as a Claude
 Artifact does. The fence must be spelled ```` ```mermaid ````:
 ```` ```{.mermaid} ```` is an ordinary code block, and a `caption=` on a
