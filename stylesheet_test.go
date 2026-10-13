@@ -424,21 +424,46 @@ func TestStylesheetChecksTheJoinedFiles(t *testing.T) {
 	}
 }
 
-// claude-artifact defines every chart token for light and dark, so a page
-// in that style renders charts with var(--token) styles in every theme.
-func TestClaudeArtifactDefinesEveryChartToken(t *testing.T) {
-	css, err := NewPluginCache().Stylesheet([]string{"claude-artifact"}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	light, dark, ok := charts.TokenValues(css)
-	if !ok {
-		t.Fatal("claude-artifact defines no chart tokens")
-	}
-	for _, tok := range charts.Tokens {
-		if light[tok] == "" || dark[tok] == "" {
-			t.Errorf("--%s missing in light (%q) or dark (%q)", tok, light[tok], dark[tok])
+// Every chart token is defined in every built-in style, on bare :root and
+// in both theme blocks, so a page renders charts in every theme state.
+func TestBuiltinStylesDefineEveryChartToken(t *testing.T) {
+	for _, style := range []string{"default", "claude-artifact"} {
+		css, err := NewPluginCache().Stylesheet([]string{style}, nil, nil)
+		if err != nil {
+			t.Fatal(err)
 		}
+		light, dark, ok := charts.TokenValues(css)
+		if !ok {
+			t.Fatalf("%s defines no chart tokens", style)
+		}
+		for _, tok := range charts.Tokens {
+			if light[tok] == "" || dark[tok] == "" {
+				t.Errorf("%s: --%s missing in light (%q) or dark (%q)", style, tok, light[tok], dark[tok])
+			}
+		}
+	}
+}
+
+// The two built-ins' series palettes differ (decision 9).
+func TestDefaultAndClaudeArtifactSeriesDiffer(t *testing.T) {
+	values := func(style string) map[string]string {
+		css, err := NewPluginCache().Stylesheet([]string{style}, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		light, _, _ := charts.TokenValues(css)
+		return light
+	}
+	d, a := values("default"), values("claude-artifact")
+	same := 0
+	for n := 1; n <= 8; n++ {
+		k := fmt.Sprintf("series-%d", n)
+		if d[k] == a[k] {
+			same++
+		}
+	}
+	if same == 8 {
+		t.Error("default's series palette is claude-artifact's")
 	}
 }
 
