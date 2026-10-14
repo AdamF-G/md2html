@@ -3711,6 +3711,73 @@ func TestBrowserSearchFromDisk(t *testing.T) {
 	}
 }
 
+// Going back to a page restores it as it was left, from the back-forward
+// cache, typed query and open results included. The box starts empty
+// instead, as it does on any other visit.
+func TestBrowserSearchIsClearWhenComingBack(t *testing.T) {
+	src := t.TempDir()
+	writeFiles(t, src, siteSources)
+	dir, baseURL := serveDir(t)
+	buildSite(t, src, dir)
+	ctx := newBrowserCtx(t)
+	searchFor(t, ctx, baseURL+"/index.html", "experi")
+	err := chromedp.Run(ctx,
+		chromedp.Click(`.md2html-search-results li a`, chromedp.ByQuery),
+		pollPage(`location.pathname.endsWith("/exp.html")`),
+		// history.back and pollPage rather than chromedp's NavigateBack and
+		// Poll: a page restored from the back-forward cache fires no load
+		// event and comes back in a JavaScript context chromedp never learns.
+		pollPage(`history.back() || true`),
+		pollPage(`document.querySelector("h1").textContent.startsWith("Home") && `+
+			`document.querySelector(".md2html-search-input").value === "" && `+
+			`document.querySelectorAll(".md2html-search-results li").length === 0`),
+	)
+	if err != nil {
+		t.Fatalf("after going back, the search box still holds the last search: %v", err)
+	}
+}
+
+// pollPage evaluates expr in whatever page the tab shows now, until it is
+// true or ctx ends. Unlike chromedp.Poll it names no execution context, so
+// it survives a page the back-forward cache swaps in.
+func pollPage(expr string) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		for {
+			res, _, err := cdpruntime.Evaluate(expr).WithReturnByValue(true).Do(ctx)
+			if err == nil && res != nil && string(res.Value) == "true" {
+				return nil
+			}
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("%s never became true: %w", expr, ctx.Err())
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+	})
+}
+
+// The results are a dropdown: a click elsewhere closes them, and coming
+// back to the box shows them again for what it holds.
+func TestBrowserSearchResultsCloseOnAClickElsewhere(t *testing.T) {
+	src := t.TempDir()
+	writeFiles(t, src, siteSources)
+	dir, baseURL := serveDir(t)
+	buildSite(t, src, dir)
+	ctx := newBrowserCtx(t)
+	searchFor(t, ctx, baseURL+"/index.html", "experi")
+	err := chromedp.Run(ctx,
+		// The code block, not the heading: the open dropdown covers the
+		// heading, and a click there would land on a result.
+		chromedp.Click(`pre`, chromedp.ByQuery),
+		chromedp.Poll(`document.querySelectorAll(".md2html-search-results li").length === 0`, nil),
+		chromedp.Click(`.md2html-search-input`, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md2html-search-results li a`, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+}
+
 func TestBrowserCopyButtonCopies(t *testing.T) {
 	src := t.TempDir()
 	writeFiles(t, src, siteSources)

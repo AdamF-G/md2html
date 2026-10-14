@@ -432,6 +432,21 @@ const searchRuntime = `<script>
     }
   };
   input.addEventListener("input", show);
+  // The results are a dropdown: a click outside the box closes them, and
+  // coming back to the box shows them again for what it holds.
+  input.addEventListener("focus", show);
+  document.addEventListener("click", (ev) => {
+    if (!box.contains(ev.target)) list.replaceChildren();
+  });
+  // Going back restores a page from the back-forward cache exactly as it
+  // was left, last search and its results included. Start empty instead,
+  // as on any other visit.
+  window.addEventListener("pageshow", (ev) => {
+    if (ev.persisted) {
+      input.value = "";
+      list.replaceChildren();
+    }
+  });
   document.addEventListener("keydown", (ev) => {
     const typing = /^(input|textarea|select)$/i.test(document.activeElement.tagName);
     if ((ev.key === "k" && (ev.metaKey || ev.ctrlKey)) || (ev.key === "/" && !typing)) {
