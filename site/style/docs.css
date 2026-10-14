@@ -1,0 +1,75 @@
+/* The layout of md2html's documentation site, on top of the default style.
+   The shell (site/shell.md) puts a header, a section nav, the breadcrumb,
+   the page's <main>, previous/next and a footer straight into <body>; this
+   places them. Narrow screens get them stacked, in source order. */
+
+body { padding-top: 0; }
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  padding: 0.9rem 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+.topbar > p { margin: 0; }
+.topbar > p a { color: var(--fg); text-decoration: none; font-size: 1.15rem; }
+.topbar .md2html-pages { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+.topbar .md2html-pages ul { display: none; }
+.topbar .md2html-search { position: relative; margin-left: auto; width: min(18rem, 100%); }
+.topbar .md2html-search-results {
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; }
+.sidebar .md2html-pages li { margin: 0.3rem 0; }
+
+nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
+/* On the home page the trail is the page itself. */
+nav[aria-label="Breadcrumb"]:has(li:only-child) { display: none; }
+
+.foot {
+  margin-top: 4rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media screen and (min-width: 62rem) {
+  body {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-areas:
+      "top    top"
+      "side   crumbs"
+      "side   main"
+      "side   pn"
+      "foot   foot";
+    column-gap: 3rem;
+    max-width: 78rem;
+    margin: 0 auto;
+  }
+  body > .topbar { grid-area: top; }
+  body > .sidebar {
+    grid-area: side;
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    margin: 0;
+  }
+  body > nav[aria-label="Breadcrumb"] { grid-area: crumbs; }
+  body > main.md2html { grid-area: main; margin: 0; min-width: 0; }
+  body > .md2html-prev-next { grid-area: pn; max-width: var(--measure); }
+  body > .foot { grid-area: foot; }
+}

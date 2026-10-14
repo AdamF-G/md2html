@@ -9,3 +9,6 @@
 
 # Rendered docs
 docs/**/*.html
+
+# The documentation site, built by `just site`.
+/_site/

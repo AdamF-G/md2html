@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "name": "md2html-site",
+  "description": "The layout of md2html's own documentation site",
+  "styles": {
+    "docs": {
+      "description": "A top bar, a section sidebar and the page, on the default look",
+      "css": ["docs.css"]
+    }
+  }
+}

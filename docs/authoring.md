@@ -1,3 +1,6 @@
+---
+nav-order: 1
+---
 # Writing Markdown for md2html
 
 How to write `.md` that converts well with `md2html`. Read the quick

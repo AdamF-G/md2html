@@ -34,3 +34,12 @@ e2e:
 # Run the Pandoc compatibility suite (needs pandoc; skips without it).
 compat:
     cd compat && go test -count=1 ./...
+
+# The documentation site: the repo's own Markdown, wrapped in site/shell.md.
+# .github/workflows/pages.yml runs the same command to publish it to GitHub
+# Pages, so change the two together.
+
+# Build the documentation site into _site/.
+site:
+    rm -rf _site
+    go run ./cmd/md2html --site site/shell.md --no-source --exclude docs/plans -o _site index.md README.md CHANGELOG.md docs
