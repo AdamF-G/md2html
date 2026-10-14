@@ -360,6 +360,29 @@ const tocSideRuntime = `<script>
 </script>
 `
 
+// copyRuntime gives each code block on a page built with a site shell a
+// Copy button. Only such pages get it, so output without a shell is
+// unchanged.
+const copyRuntime = `<script>
+document.querySelectorAll("pre > code").forEach((code) => {
+  const pre = code.parentElement;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "md2html-copy";
+  btn.textContent = "Copy";
+  btn.setAttribute("aria-label", "Copy code");
+  btn.addEventListener("click", async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(code.textContent); ok = true; } catch (e) {}
+    btn.textContent = ok ? "Copied" : "Copy failed";
+    setTimeout(() => { btn.textContent = "Copy"; }, 2000);
+  });
+  pre.classList.add("md2html-copyable");
+  pre.append(btn);
+});
+</script>
+`
+
 // searchRuntime drives a site's search box: it loads the index the box
 // names with a script tag, shows the box, and lists matches as the reader
 // types — a title over a heading over a defined term over the first
@@ -430,6 +453,13 @@ func hasFloatingTOC(body []byte) bool {
 	return bytes.Contains(body, []byte(`<nav class="toc toc-float"`))
 }
 
+// needsSiteCSS reports whether a page carries marker output siteCSS draws:
+// any page built with a site shell, and any page with a [[list]] or
+// [[subdirs]], which work without one.
+func needsSiteCSS(body []byte, wrapped bool) bool {
+	return wrapped || bytes.Contains(body, []byte(`class="md2html-list`))
+}
+
 // renderPage wraps body in a complete HTML document. mermaidURL is the
 // build the mermaid runtime imports, and is only consulted for a body that
 // actually carries a diagram. A non-nil source is embedded after the
@@ -455,6 +485,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
 	b.WriteString("<style>\n")
+	if needsSiteCSS(body, wrapped) {
+		b.WriteString(siteCSS)
+	}
 	b.WriteString(css)
 	b.WriteString("\n</style>\n</head>\n<body>\n")
 	if wrapped {
@@ -481,6 +514,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	if bytes.Contains(body, []byte(`class="md2html-search"`)) {
 		b.WriteString(searchRuntime)
 	}
+	if wrapped {
+		b.WriteString(copyRuntime)
+	}
 	b.WriteString("</body>\n</html>\n")
 	return []byte(b.String())
 }
@@ -504,6 +540,9 @@ func renderFragment(body []byte, title, css, runtime string) []byte {
 	b.WriteString("\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
 	b.WriteString("<style>\n")
+	if needsSiteCSS(body, false) {
+		b.WriteString(siteCSS)
+	}
 	b.WriteString(css)
 	b.WriteString("\n</style>\n<main class=\"md2html\">\n")
 	b.Write(body)

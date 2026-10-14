@@ -1,0 +1,25 @@
+/* Site mode, and the list markers on any page. md2html puts these rules
+   ahead of the page's style, and only on a page built with a site shell or
+   one holding a [[list]] or [[subdirs]], so a page without either is as it
+   was. They draw what the markers produce plainly, in the theme's custom
+   properties, so they suit any style; a style's own rules for the same
+   classes come later and win. Where each piece sits is the style's choice. */
+.md2html-pages, .md2html-pages ul, ul.md2html-list, .md2html-breadcrumb { list-style: none; margin: 0; padding: 0; }
+.md2html-pages ul { padding-left: 1em; }
+.md2html-pages a { text-decoration: none; }
+.md2html-pages a[aria-current="page"], .md2html-list a[aria-current="true"] { color: var(--accent); font-weight: 600; }
+.md2html-label { color: var(--muted); }
+.md2html-breadcrumb { display: flex; flex-wrap: wrap; gap: 0.4em; font-size: 0.9em; color: var(--muted); }
+.md2html-breadcrumb li + li::before { content: "\203a"; margin-right: 0.4em; }
+.md2html-prev-next { display: flex; gap: 1em; margin-top: 3em; }
+.md2html-prev-next a { border: 1px solid var(--rule); border-radius: 6px; padding: 0.6em 1em; text-decoration: none; }
+.md2html-prev-next .md2html-dir { display: block; font-size: 0.8em; color: var(--muted); }
+.md2html-next { margin-left: auto; text-align: right; }
+.md2html-search-input { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4em 0.6em; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); }
+.md2html-search-results { list-style: none; margin: 0.3em 0 0; padding: 0; }
+.md2html-search-results:empty { display: none; }
+.md2html-search-results li { padding: 0.3em 0.6em; }
+.md2html-search-kind { color: var(--muted); font-size: 0.85em; }
+pre.md2html-copyable { position: relative; }
+.md2html-copy { position: absolute; top: 0.4em; right: 0.4em; font: inherit; font-size: 0.8em; padding: 0.1em 0.6em; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--muted); cursor: pointer; }
+.md2html-copy:hover, .md2html-copy:focus-visible { color: var(--accent); }

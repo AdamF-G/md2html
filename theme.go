@@ -14,6 +14,14 @@ import "embed"
 //go:embed plugins/default/default.css
 var defaultCSS string
 
+// siteCSS draws what the site and list markers produce. It is not part of
+// any style: renderPage puts it ahead of the page's style when the page
+// needs it (see needsSiteCSS), so a page without those markers is
+// unchanged and a style's own rules for the same classes win.
+//
+//go:embed site.css
+var siteCSS string
+
 // builtinFS holds every built-in plugin, one directory each under plugins/.
 // A contributor adds a plugin by adding a directory; nothing here changes.
 //

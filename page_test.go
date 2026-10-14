@@ -751,3 +751,49 @@ func TestTOCSideRuntimeIsAnAccessibleButtonThatPersists(t *testing.T) {
 		}
 	}
 }
+
+func TestCopyButtonsOnlyOnWrappedPages(t *testing.T) {
+	body := []byte("<pre><code>x</code></pre>")
+	if got := string(renderPage(body, "T", "en", "", "", mermaidCDN, nil, true)); !strings.Contains(got, `className = "md2html-copy"`) {
+		t.Error("a wrapped page has no copy runtime")
+	}
+	if got := string(renderPage(body, "T", "en", "", "", mermaidCDN, nil, false)); strings.Contains(got, "md2html-copy") {
+		t.Error("a page built without a shell gained the copy runtime")
+	}
+}
+
+func TestSiteStylesheetCoversSiteOutput(t *testing.T) {
+	for _, sel := range []string{".md2html-pages", ".md2html-breadcrumb", ".md2html-prev-next",
+		".md2html-search-input", ".md2html-search-results", ".md2html-copy", ".md2html-label", "ul.md2html-list"} {
+		if !strings.Contains(siteCSS, sel) {
+			t.Errorf("the site stylesheet does not style %s", sel)
+		}
+	}
+	// It is no style's: a style is what it was before site mode.
+	if strings.Contains(defaultCSS, "md2html-pages") {
+		t.Error("the default style carries site rules")
+	}
+}
+
+// The site rules go only where marker output is, ahead of the page's style,
+// so a page without markers is byte for byte what it was.
+func TestSiteStylesheetOnlyWhereNeeded(t *testing.T) {
+	const css = "/*style*/"
+	plain := string(renderPage([]byte("<p>x</p>"), "T", "en", "", css, mermaidCDN, nil, false))
+	if !strings.Contains(plain, "<style>\n"+css+"\n</style>") {
+		t.Errorf("a page without markers should carry its style alone:\n%s", plain)
+	}
+	for name, page := range map[string]string{
+		"list":     string(renderPage([]byte(`<ul class="md2html-list"></ul>`), "T", "en", "", css, mermaidCDN, nil, false)),
+		"inline":   string(renderPage([]byte(`<p class="md2html-list md2html-inline"></p>`), "T", "en", "", css, mermaidCDN, nil, false)),
+		"wrapped":  string(renderPage([]byte("<p>x</p>"), "T", "en", "", css, mermaidCDN, nil, true)),
+		"fragment": string(renderFragment([]byte(`<ul class="md2html-list"></ul>`), "T", css, "")),
+	} {
+		if !strings.Contains(page, "<style>\n"+siteCSS+css+"\n</style>") {
+			t.Errorf("%s: want the site rules ahead of the style:\n%s", name, page)
+		}
+	}
+	if frag := string(renderFragment([]byte("<p>x</p>"), "T", css, "")); strings.Contains(frag, "md2html-pages") {
+		t.Errorf("a fragment without markers gained the site rules:\n%s", frag)
+	}
+}
