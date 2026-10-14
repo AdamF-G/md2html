@@ -54,6 +54,10 @@ major version instead.
 
 ### Changed
 
+- `--version` names the commit when the build is not exactly a tagged
+  release, for example `md2html v0.9.0 (db7884578809, modified)`, so two
+  builds between tags can be told apart. The version itself is unchanged
+  and still matches the provenance marker.
 - The default stylesheet is now the built-in `default` plugin's style. Its
   content and the output are unchanged.
 - The binary is larger: the chart engine and the Vega bundles take a

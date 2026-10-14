@@ -123,11 +123,12 @@ Flags:
 		args = fs.Args()[1:]
 	}
 	// Ahead of the entry check, so --version needs no entry point, and
-	// ahead of any work, so it never converts a document. The string is
-	// the constant stamped into every generated file's provenance marker:
-	// what a user reads here always matches what is in their output.
+	// ahead of any work, so it never converts a document. The string starts
+	// with the constant stamped into every generated file's provenance
+	// marker, so what a user reads here matches what is in their output,
+	// and adds the commit when the build is not exactly the tagged release.
 	if *version {
-		fmt.Fprintf(stdout, "md2html %s\n", md2html.Version)
+		fmt.Fprintf(stdout, "md2html %s\n", versionString())
 		return 0
 	}
 	// Like --version, the whole invocation: the notices, nothing converted.

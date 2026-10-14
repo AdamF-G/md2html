@@ -300,15 +300,18 @@ func TestRunResolvesChipsSectionLinksAndTOC(t *testing.T) {
 	}
 }
 
-// --version reports the same constant that every generated file's
+// --version starts with the constant that every generated file's
 // provenance marker carries, so the two can never disagree.
 func TestRunVersionPrintsVersionToStdout(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := run([]string{"--version"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
-	if got, want := out.String(), "md2html "+md2html.Version+"\n"; got != want {
+	if got, want := out.String(), "md2html "+versionString()+"\n"; got != want {
 		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if !strings.HasPrefix(out.String(), "md2html "+md2html.Version) {
+		t.Errorf("stdout = %q, want it to start with the marker's version", out.String())
 	}
 	if errb.Len() != 0 {
 		t.Errorf("nothing should go to stderr, got: %s", errb.String())
