@@ -436,6 +436,14 @@ p.docdate {
   font-size: 0.9em;
   margin: 0 0 2.5rem;
 }
+/* With title-block: above they sit over the title instead, as an eyebrow:
+   one size, close together and close to the heading. The class pair
+   outranks a later style's p.subtitle, which is written for the standfirst. */
+p:is(.subtitle, .docdate).eyebrow {
+  font-size: 0.9rem;
+  margin: 0 0 0.15rem;
+}
+p.eyebrow:has(+ h1) { margin-bottom: 0.5rem; }
 
 /* A caption bar that reads as part of the block, not as a floating line of
    prose above it — which is the whole distinction the feature exists for. */

@@ -129,6 +129,7 @@ toc-title: Contents
 | `title` | The `<title>`, shown in the browser tab. Nothing on the page. |
 | `subtitle` | A `<p class="subtitle">` under the first `<h1>`. |
 | `date` | A `<p class="docdate">` under the subtitle. |
+| `title-block` | `above` puts the subtitle and date over the `<h1>` instead, as a short eyebrow line, each also classed `eyebrow`. Default `below`. |
 | `lang` | The page's `<html lang>`. Overrides `--lang`; default `en`. |
 | `toc` | The contents list's layout: `inline`, `float` or `none`. See [Contents list](#contents-list). |
 | `toc-title` | The contents list's name for screen readers. Default `Table of Contents`. |
@@ -1276,7 +1277,7 @@ the host's own `<main>` too.
 
 Classes you can style, beyond plain elements: `md2html`, `callout`, `card`, `group`,
 `stats`, `defs`, `details.container`, `chip` and `chip-*`, `xref`,
-`nav.toc`, `subtitle`, `docdate`, `code-figure`, `fig` and `fig-*`,
+`nav.toc`, `subtitle`, `docdate`, `eyebrow`, `code-figure`, `fig` and `fig-*`,
 `table-scroll`, `anchor`, `source-tools`, and `md2html-chart` on a
 chart's `<figure>`. A class you add to your own
 Markdown is inert until a style names it.

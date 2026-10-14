@@ -222,3 +222,27 @@ func applyDocMeta(root *html.Node, subtitle, date string) {
 	insert("subtitle", subtitle)
 	insert("docdate", date)
 }
+
+// raiseDocMeta moves the subtitle and date paragraphs under the leading h1
+// to just above it, for front matter title-block: above, and classes each
+// "eyebrow" so a style can set them as the short line over a title rather
+// than as a standfirst. They keep their own classes, so they are still the
+// page's subtitle and date. A page with no h1 already has them at the top,
+// so it changes nothing there.
+func raiseDocMeta(root *html.Node) {
+	h := firstHeading(root)
+	if h == nil {
+		return
+	}
+	var meta []*html.Node
+	for n := skipInert(h.NextSibling); n != nil && n.Type == html.ElementNode &&
+		n.DataAtom == atom.P && (hasClass(n, "subtitle") || hasClass(n, "docdate")); n = skipInert(n.NextSibling) {
+		meta = append(meta, n)
+	}
+	for _, p := range meta {
+		p.Parent.RemoveChild(p)
+		class, _ := attr(p, "class")
+		setAttr(p, "class", class+" eyebrow")
+		h.Parent.InsertBefore(p, h)
+	}
+}

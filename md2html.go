@@ -201,7 +201,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
 	//
-	// Only title/subtitle/date/lang/toc/toc-title/plugins/style are read below. A block carrying some other
+	// Only title/subtitle/date/title-block/lang/toc/toc-title/plugins/style are read below. A block carrying some other
 	// flat key (an "author:" line, say) is still accepted and still
 	// stripped from the body — it parsed as valid front matter — but the
 	// key itself is silently dropped: there is nowhere in the page for it
@@ -255,6 +255,15 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		liftSubtitle(root)
 	}
 	applyDocMeta(root, subtitle, meta["date"])
+	switch tb := meta["title-block"]; tb {
+	case "above":
+		raiseDocMeta(root)
+	case "", "below":
+	default:
+		if opt.Warn != nil {
+			opt.Warn(fmt.Sprintf("front matter title-block %q is not above or below; the subtitle and date stay below the title", tb))
+		}
+	}
 
 	transforms := opt.Transforms
 	if transforms == nil {

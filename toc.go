@@ -280,7 +280,8 @@ func wantsAutoTOC(mode string, src []byte, root *html.Node) bool {
 
 // insertTOCMarker adds a marker paragraph where an author would put one by
 // hand: after the page's title block (a leading h1 and the subtitle and
-// date under it), or at the top of a page with no title. It returns the
+// date under it, or above it with title-block: above), or at the top of a
+// page with no title. It returns the
 // marker, so Convert can take it out again if the TOC transform left it —
 // a literal "[[toc]]" is the right fallback for a marker the author
 // wrote, but not for one they never did.
@@ -289,6 +290,9 @@ func insertTOCMarker(root *html.Node) *html.Node {
 	p.AppendChild(&html.Node{Type: html.TextNode, Data: "[[toc]]"})
 
 	anchor := skipInert(root.FirstChild)
+	for anchor != nil && anchor.Type == html.ElementNode && anchor.DataAtom == atom.P && hasClass(anchor, "eyebrow") {
+		anchor = skipInert(anchor.NextSibling)
+	}
 	if anchor == nil || anchor.Type != html.ElementNode || anchor.DataAtom != atom.H1 {
 		root.InsertBefore(p, root.FirstChild)
 		return p

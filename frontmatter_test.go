@@ -361,3 +361,57 @@ func TestConvertQuotedLangIsUsed(t *testing.T) {
 		t.Errorf("lang = %q, warnings %v", got, warns)
 	}
 }
+
+// title-block: above moves the subtitle and date over the title, in their
+// own order, keeping their classes, and the contents list still goes after
+// the title rather than above the eyebrow.
+func TestConvertTitleBlockAbove(t *testing.T) {
+	var warnings []string
+	got := convert(t, "---\nsubtitle: Team A · Project B\ndate: 2026-01-01\ntitle-block: above\ntoc: inline\n---\n# Title\n\n[[toc]]\n\n## One\n\nBody.\n", func(w string) { warnings = append(warnings, w) })
+	sub := strings.Index(got, `<p class="subtitle eyebrow">Team A · Project B</p>`)
+	date := strings.Index(got, `<p class="docdate eyebrow">2026-01-01</p>`)
+	h1 := strings.Index(got, "<h1")
+	toc := strings.Index(got, "<nav")
+	if sub < 0 || date < 0 || h1 < 0 || toc < 0 || !(sub < date && date < h1 && h1 < toc) {
+		t.Errorf("want subtitle, date, h1, contents in that order\ngot: %s", got)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warned: %v", warnings)
+	}
+}
+
+// The italic-line subtitle moves the same way, and with no h1 nothing moves.
+func TestConvertTitleBlockAboveLiftedAndHeadless(t *testing.T) {
+	got := convert(t, "---\ntitle-block: above\n---\n# Title\n\n*Sub*\n", nil)
+	if s, h := strings.Index(got, `<p class="subtitle eyebrow">Sub</p>`), strings.Index(got, "<h1"); s < 0 || s > h {
+		t.Errorf("lifted subtitle not raised\ngot: %s", got)
+	}
+	got = convert(t, "---\nsubtitle: Sub\ntitle-block: above\n---\nProse.\n", nil)
+	if !strings.Contains(got, `<p class="subtitle">Sub</p>`) {
+		t.Errorf("headless page changed\ngot: %s", got)
+	}
+}
+
+// An automatic contents list also goes under the title, not over the
+// eyebrow.
+func TestConvertTitleBlockAboveAutoTOC(t *testing.T) {
+	root, err := parseFragment([]byte(`<p class="subtitle eyebrow">S</p><h1>T</h1><p>x</p>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := insertTOCMarker(root)
+	if prev := skipInert(m.PrevSibling); prev == nil || prev.Data != "h1" {
+		t.Errorf("marker not after the h1")
+	}
+}
+
+func TestConvertTitleBlockUnknownWarns(t *testing.T) {
+	var warnings []string
+	got := convert(t, "---\nsubtitle: Sub\ntitle-block: top\n---\n# T\n", func(w string) { warnings = append(warnings, w) })
+	if len(warnings) != 1 || !strings.Contains(warnings[0], `title-block "top"`) {
+		t.Errorf("warnings = %v", warnings)
+	}
+	if strings.Index(got, "subtitle") < strings.Index(got, "<h1") {
+		t.Errorf("subtitle moved on an unknown value\ngot: %s", got)
+	}
+}

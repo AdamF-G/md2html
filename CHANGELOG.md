@@ -56,6 +56,10 @@ major version instead.
   past the text column, the way a wide figure does. A top-level block with
   the `wide` class, such as `::: {.card .wide}`, does the same.
 
+- Front matter `title-block: above` puts the subtitle and date over the
+  title, as an eyebrow line such as `Team A · Project B`, instead of
+  under it. They keep their classes and also carry `eyebrow`.
+
 ### Changed
 
 - `--version` names the commit when the build is not exactly a tagged
