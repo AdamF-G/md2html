@@ -27,6 +27,8 @@ func (s *Site) navMarkers(src string, warn func(string)) Transform {
 				replaceMarker(m, s.breadcrumb(page, from))
 			case "prev-next":
 				replaceMarker(m, s.prevNext(page, from))
+			case "search":
+				replaceMarker(m, s.searchBox(from))
 			}
 		}
 		return nil

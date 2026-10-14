@@ -379,6 +379,9 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	section, wrapped := "", false
 	if opt.Site != nil && !opt.Fragment {
 		section = opt.Site.section(opt.SourcePath)
+		// Before the shell wraps it, and for a shell: none page too. A
+		// facet is read as data, so its @file#key references resolve.
+		opt.Site.record(opt.SourcePath, title, resolveRefs(meta, filepath.Dir(opt.SourcePath), opt.Site.facets, opt.Warn), root)
 		switch v := meta["shell"]; v {
 		case "none":
 		default:

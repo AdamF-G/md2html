@@ -360,6 +360,70 @@ const tocSideRuntime = `<script>
 </script>
 `
 
+// searchRuntime drives a site's search box: it loads the index the box
+// names with a script tag, shows the box, and lists matches as the reader
+// types — a title over a heading over a defined term over the first
+// paragraph — with each match's facets beside it. "/" and Ctrl or Cmd+K
+// focus the box; Escape clears it.
+const searchRuntime = `<script>
+(() => {
+  const box = document.querySelector(".md2html-search");
+  if (!box) return;
+  const input = box.querySelector("input");
+  const list = box.querySelector(".md2html-search-results");
+  const base = box.dataset.index.replace(/[^/]*$/, "");
+  const load = document.createElement("script");
+  load.src = box.dataset.index;
+  load.onload = () => { box.hidden = false; };
+  document.head.appendChild(load);
+  const show = () => {
+    const q = input.value.trim().toLowerCase();
+    list.replaceChildren();
+    if (!q || !window.md2htmlSearch) return;
+    const hits = [];
+    for (const e of window.md2htmlSearch) {
+      let best = 0, href = e.url;
+      if (e.title.toLowerCase().includes(q)) best = 4;
+      for (const h of e.headings || []) {
+        if (best < 3 && h.text.toLowerCase().includes(q)) { best = 3; href = e.url + "#" + h.id; }
+      }
+      if (best < 2 && (e.terms || []).some((t) => t.toLowerCase().includes(q))) best = 2;
+      if (best < 1 && (e.text || "").toLowerCase().includes(q)) best = 1;
+      if (best) hits.push({ e, best, href });
+    }
+    hits.sort((a, b) => b.best - a.best || a.e.title.localeCompare(b.e.title));
+    for (const { e, href } of hits.slice(0, 10)) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = base + href;
+      a.textContent = e.title;
+      li.append(a);
+      const facets = Object.values(e.facets || {});
+      if (facets.length) {
+        const k = document.createElement("span");
+        k.className = "md2html-search-kind";
+        k.textContent = facets.join(" · ");
+        li.append(" ", k);
+      }
+      list.append(li);
+    }
+  };
+  input.addEventListener("input", show);
+  document.addEventListener("keydown", (ev) => {
+    const typing = /^(input|textarea|select)$/i.test(document.activeElement.tagName);
+    if ((ev.key === "k" && (ev.metaKey || ev.ctrlKey)) || (ev.key === "/" && !typing)) {
+      ev.preventDefault();
+      input.focus();
+    } else if (ev.key === "Escape" && document.activeElement === input) {
+      input.value = "";
+      show();
+      input.blur();
+    }
+  });
+})();
+</script>
+`
+
 // hasFloatingTOC reports whether the rendered body carries a contents list
 // the TOC transform marked to float.
 func hasFloatingTOC(body []byte) bool {
@@ -413,6 +477,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	}
 	if hasFloatingTOC(body) {
 		b.WriteString(tocSideRuntime)
+	}
+	if bytes.Contains(body, []byte(`class="md2html-search"`)) {
+		b.WriteString(searchRuntime)
 	}
 	b.WriteString("</body>\n</html>\n")
 	return []byte(b.String())

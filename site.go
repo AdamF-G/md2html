@@ -17,7 +17,9 @@ import (
 type Site struct {
 	// Warnings are the problems found while laying the site out, and those
 	// in the shell's own source, each once, found while pages convert. Read
-	// them after every Convert call using the site has returned.
+	// them after every Convert call using the site has returned. Pages
+	// convert in parallel, so they arrive in no fixed order: sort them for
+	// stable output, as the command does, by Src and then Message.
 	Warnings []Warning
 
 	shellSrc  string
@@ -35,7 +37,8 @@ type Site struct {
 	order     []*siteNode
 
 	mu          sync.Mutex
-	entries     []searchEntry   // Task 7
+	entries     []searchEntry   // the search index, in arrival order
+	entryAt     map[string]int  // each entry's place in entries, by URL
 	shellWarned map[string]bool // shell warnings already in Warnings
 }
 
@@ -210,11 +213,11 @@ func (s *Site) buildTree(docs []Doc) {
 		}
 		mark(top)
 	}
+	// A hidden page takes its subtree with it, except at the root: a
+	// hidden root hides its own page, not the whole site.
 	var visit func(n *siteNode)
 	visit = func(n *siteNode) {
 		if n.hidden && n != s.root {
-	// A hidden page takes its subtree with it, except at the root: a
-	// hidden root hides its own page, not the whole site.
 			return
 		}
 		if n.doc != nil && !n.hidden {
@@ -296,6 +299,3 @@ func (s *Site) outline() string {
 	rec(s.root, 0)
 	return b.String()
 }
-
-// searchEntry is one page's record in the search index; Task 7 fills it in.
-type searchEntry struct{}

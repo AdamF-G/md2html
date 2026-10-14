@@ -1030,3 +1030,84 @@ func TestRunSiteReportsShellWarningsOnce(t *testing.T) {
 		t.Errorf("summary should count the shell's warnings:\n%s", got)
 	}
 }
+
+func TestRunSiteWritesTheSearchIndex(t *testing.T) {
+	root := tree(t, map[string]string{
+		"shell.md":      "---\nsite: true\n---\n[[search]]\n\n[[content]]\n",
+		"docs/index.md": "# Home\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs"),
+		"-o", filepath.Join(root, "site")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	b, err := os.ReadFile(filepath.Join(root, "site/md2html-search.js"))
+	if err != nil || !strings.Contains(string(b), `"title":"Home"`) {
+		t.Errorf("index (err %v):\n%s", err, b)
+	}
+}
+
+// The site's warnings come out in one order whatever order the pages
+// converted in: by file, then by message.
+func TestRunSiteWarningsAreSorted(t *testing.T) {
+	root := tree(t, map[string]string{
+		"shell.md":      "---\nsite: true\n---\n::: zzz\nx\n:::\n\n::: aaa\nx\n:::\n\n[[content]]\n",
+		"docs/index.md": "# Home\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs"),
+		"-o", filepath.Join(root, "site")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	got := errb.String()
+	a, z := strings.Index(got, `"aaa"`), strings.Index(got, `"zzz"`)
+	if a < 0 || z < 0 || a > z {
+		t.Errorf("want the aaa warning before the zzz one:\n%s", got)
+	}
+}
+
+// The same site built twice is the same bytes, pages, index and stderr.
+func TestRunSiteIsByteIdentical(t *testing.T) {
+	root := tree(t, map[string]string{
+		"shell.md":            "---\nsite: true\nsearch-facets: kind\n---\n::: zzz\nx\n:::\n\n::: aaa\nx\n:::\n\n[[pages]]\n\n[[breadcrumb]]\n\n[[search]]\n\n[[content]]\n\n[[prev-next]]\n",
+		"docs/index.md":       "# Home\n",
+		"docs/a/index.md":     "# A\n",
+		"docs/a/one.md":       "---\nkind: guide\n---\n# One\n\n::: bogus\nx\n:::\n",
+		"docs/a/two.md":       "# Two\n",
+		"docs/b/three.md":     "# Three\n",
+		"docs/b/c/four.md":    "# Four\n",
+		"docs/b/c/five.md":    "# Five\n",
+		"docs/b/c/d/six.md":   "# Six\n",
+		"docs/b/c/d/seven.md": "# Seven\n",
+	})
+	build := func(out string) (map[string]string, string) {
+		var stdout, errb bytes.Buffer
+		if code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs"),
+			"-o", filepath.Join(root, out)}, &stdout, &errb); code != 0 {
+			t.Fatalf("exit %d, stderr: %s", code, errb.String())
+		}
+		files := map[string]string{}
+		filepath.WalkDir(filepath.Join(root, out), func(p string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				b, _ := os.ReadFile(p)
+				rel, _ := filepath.Rel(filepath.Join(root, out), p)
+				files[rel] = string(b)
+			}
+			return nil
+		})
+		return files, strings.ReplaceAll(errb.String(), filepath.Join(root, out), "OUT")
+	}
+	first, firstErr := build("site1")
+	second, secondErr := build("site2")
+	if firstErr != secondErr {
+		t.Errorf("stderr differs:\n%s\n---\n%s", firstErr, secondErr)
+	}
+	if len(first) != len(second) || len(first) < 10 {
+		t.Fatalf("%d files then %d", len(first), len(second))
+	}
+	for name, b := range first {
+		if second[name] != b {
+			t.Errorf("%s differs between builds", name)
+		}
+	}
+}
