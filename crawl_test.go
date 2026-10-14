@@ -967,3 +967,25 @@ func TestCrawlRewritesAssetsForARelativeOutDir(t *testing.T) {
 		t.Errorf("asset link = %q, want %q", got, want)
 	}
 }
+
+func TestCrawlKeepsFrontMatterAndTitle(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"a.md": "---\nnav-order: 2\n---\n# Alpha\n",
+		"b.md": "---\ntitle: Bravo page\n---\n# Ignored\n",
+		"c.md": "no heading here\n",
+	})
+	res := mustCrawl(t, CrawlOptions{Entries: []string{root}, Depth: -1, LinkDepth: -1})
+	got := map[string]Doc{}
+	for _, d := range res.Docs {
+		got[filepath.Base(d.Src)] = d
+	}
+	if d := got["a.md"]; d.Title != "Alpha" || d.Meta["nav-order"] != "2" {
+		t.Errorf("a.md: title %q, meta %v; want Alpha and nav-order 2", d.Title, d.Meta)
+	}
+	if d := got["b.md"]; d.Title != "Bravo page" {
+		t.Errorf("b.md: title %q, want the front matter title", d.Title)
+	}
+	if d := got["c.md"]; d.Title != "c" || d.Meta != nil {
+		t.Errorf("c.md: title %q, meta %v; want the base name and no meta", d.Title, d.Meta)
+	}
+}

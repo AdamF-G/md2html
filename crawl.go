@@ -62,6 +62,13 @@ type Doc struct {
 	// LinkMap maps an href exactly as written in this document to its
 	// replacement. Populated by buildLinkMaps.
 	LinkMap map[string]string
+	// Meta is the document's front matter, nil when it has none. Discovery
+	// reads it so a site can be laid out before any page converts.
+	Meta map[string]string
+	// Title is the document's title as Convert derives it with no options:
+	// the front matter title, else the first <h1>, else the file's base
+	// name. A site labels the page with it.
+	Title string
 }
 
 // Warning is a non-fatal problem found during a run.
@@ -379,6 +386,8 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	// discovery, keyed by resolved source path, so buildLinkMaps can reuse
 	// them below instead of re-reading and re-parsing every document.
 	linksBySrc := map[string][]Link{}
+	metaBySrc := map[string]map[string]string{}
+	titleBySrc := map[string]string{}
 
 	var order []string
 	for len(queue) > 0 {
@@ -399,12 +408,18 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		// text, not a document reference, and must not be followed or
 		// checked for existence just because it was still in the tree the
 		// unstripped bytes would have produced.
-		_, body, _ := splitFrontMatter(src)
+		meta, body, _ := splitFrontMatter(src)
 		root, err := parseDoc(body)
 		if err != nil {
 			res.Warnings = append(res.Warnings, Warning{cur, "parse failed: " + err.Error()})
 			continue
 		}
+		metaBySrc[cur] = meta
+		title := meta["title"]
+		if title == "" {
+			title = extractTitle(root, cur)
+		}
+		titleBySrc[cur] = title
 
 		links := ExtractLinks(root, filepath.Dir(cur))
 		linksBySrc[cur] = links
@@ -442,7 +457,8 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 
 	sort.Strings(order)
 	for _, s := range order {
-		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir)})
+		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir),
+			Meta: metaBySrc[s], Title: titleBySrc[s]})
 	}
 	// Two distinct sources can map to one output path: a.md and a.markdown
 	// in one directory, or a real document under base/_external colliding
@@ -465,11 +481,8 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 }
 
 // buildLinkMaps computes, for every document, the replacement for each
-// href it contains. Document links resolve to other emitted documents
-// inside the output tree; asset links point back out at the original file
-// on disk, since assets are never copied. linksBySrc supplies the links
-// already extracted for each document during discovery, so this does not
-// re-read or re-parse any file.
+// href it contains. linksBySrc supplies the links already extracted for each
+// document during discovery, so this does not re-read or re-parse any file.
 func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]Link) {
 	// Index the emit set by source path for O(1) lookup.
 	outBySrc := make(map[string]string, len(res.Docs))
@@ -479,46 +492,55 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 
 	for i := range res.Docs {
 		d := &res.Docs[i]
-		d.LinkMap = map[string]string{}
+		d.LinkMap = linkMapFor(linksBySrc[d.Src], d.Out, outBySrc, opt)
+	}
+}
 
-		outDir := filepath.Dir(d.Out)
-		for _, l := range linksBySrc[d.Src] {
-			switch l.Kind {
-			case LinkDoc:
-				if opt.NoMdLinks {
-					continue
-				}
-				target, err := resolve(l.Abs)
-				if err != nil {
-					continue
-				}
-				targetOut, ok := outBySrc[target]
-				if !ok {
-					continue // not emitted: leave the link as written
-				}
-				rel, err := filepath.Rel(outDir, targetOut)
-				if err != nil {
-					continue
-				}
-				d.LinkMap[l.Href] = encodePath(filepath.ToSlash(rel)) + fragmentOf(l.Href)
-
-			case LinkAsset:
-				if opt.NoAssets || opt.OutDir == "" {
-					// In place, the HTML sits beside its source and existing
-					// relative links already resolve.
-					continue
-				}
-				if _, err := os.Stat(l.Abs); err != nil {
-					continue // missing asset: Crawl already warned; leave link as written
-				}
-				rel, err := filepath.Rel(outDir, l.Abs)
-				if err != nil {
-					continue
-				}
-				d.LinkMap[l.Href] = encodePath(filepath.ToSlash(rel))
+// linkMapFor computes the replacement for each of links, as written in a
+// document whose output is fromOut. Document links resolve to other emitted
+// documents inside the output tree; asset links point back out at the
+// original file on disk, since assets are never copied. A site uses it to
+// rewrite its shell's links once per page.
+func linkMapFor(links []Link, fromOut string, outBySrc map[string]string, opt CrawlOptions) map[string]string {
+	m := map[string]string{}
+	outDir := filepath.Dir(fromOut)
+	for _, l := range links {
+		switch l.Kind {
+		case LinkDoc:
+			if opt.NoMdLinks {
+				continue
 			}
+			target, err := resolve(l.Abs)
+			if err != nil {
+				continue
+			}
+			targetOut, ok := outBySrc[target]
+			if !ok {
+				continue // not emitted: leave the link as written
+			}
+			rel, err := filepath.Rel(outDir, targetOut)
+			if err != nil {
+				continue
+			}
+			m[l.Href] = encodePath(filepath.ToSlash(rel)) + fragmentOf(l.Href)
+
+		case LinkAsset:
+			if opt.NoAssets || opt.OutDir == "" {
+				// In place, the HTML sits beside its source and existing
+				// relative links already resolve.
+				continue
+			}
+			if _, err := os.Stat(l.Abs); err != nil {
+				continue // missing asset: Crawl already warned; leave link as written
+			}
+			rel, err := filepath.Rel(outDir, l.Abs)
+			if err != nil {
+				continue
+			}
+			m[l.Href] = encodePath(filepath.ToSlash(rel))
 		}
 	}
+	return m
 }
 
 // encodePath percent-encodes each segment of a slash-separated relative
