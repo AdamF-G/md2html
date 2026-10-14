@@ -465,6 +465,7 @@ func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 2
 	}
+	label := styleLabels(all)
 	for _, p := range all {
 		if p.Description != "" {
 			fmt.Fprintf(stdout, "%s: %s\n", p.Name, p.Description)
@@ -473,13 +474,33 @@ func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 		}
 		for _, n := range p.StyleNames() {
 			if d := p.Styles[n].Description; d != "" {
-				fmt.Fprintf(stdout, "  %s/%s  %s\n", p.Name, n, d)
+				fmt.Fprintf(stdout, "  %s  %s\n", label(p, n), d)
 			} else {
-				fmt.Fprintf(stdout, "  %s/%s\n", p.Name, n)
+				fmt.Fprintf(stdout, "  %s\n", label(p, n))
 			}
 		}
 	}
 	return 0
+}
+
+// styleLabels names each style of plugins the way --style takes it: by its
+// own name, unless another of plugins has a style of that name too, when
+// only plugin/style picks it out. Listing every style as plugin/style
+// instead read as the name twice for a plugin of one style named after
+// itself, as each built-in is, and showed more than anyone needs to type.
+func styleLabels(plugins []*md2html.Plugin) func(*md2html.Plugin, string) string {
+	count := map[string]int{}
+	for _, p := range plugins {
+		for _, n := range p.StyleNames() {
+			count[n]++
+		}
+	}
+	return func(p *md2html.Plugin, n string) string {
+		if count[n] > 1 {
+			return p.Name + "/" + n
+		}
+		return n
+	}
 }
 
 // checkStyles is --check-style. It reports on each style list a run could
@@ -491,7 +512,8 @@ func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 // warnings and notes there are.
 func checkStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 	cache := md2html.NewPluginCache()
-	if _, err := checkPlugins(cache, dirs, styles, stderr); err != nil {
+	all, err := checkPlugins(cache, dirs, styles, stderr)
+	if err != nil {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 2
 	}
@@ -500,32 +522,39 @@ func checkStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 2
 	}
-	var lists [][]string
-	switch {
-	case len(styles) > 0:
-		lists = [][]string{styles}
-	case len(dirs) > 0:
-		for _, p := range loaded {
+	// Each list is assembled by its qualified names, which can never be
+	// ambiguous, and reported under the name --style takes, as
+	// --list-styles shows it; a --style list is reported as it was written.
+	type checked struct {
+		names []string
+		label string
+	}
+	var lists []checked
+	label := styleLabels(all)
+	each := func(plugins []*md2html.Plugin) {
+		for _, p := range plugins {
 			for _, n := range p.StyleNames() {
-				lists = append(lists, []string{p.Name + "/" + n})
-			}
-		}
-	default:
-		for _, p := range md2html.BuiltinPlugins() {
-			for _, n := range p.StyleNames() {
-				lists = append(lists, []string{p.Name + "/" + n})
+				lists = append(lists, checked{[]string{p.Name + "/" + n}, label(p, n)})
 			}
 		}
 	}
+	switch {
+	case len(styles) > 0:
+		lists = []checked{{styles, strings.Join(styles, ",")}}
+	case len(dirs) > 0:
+		each(loaded)
+	default:
+		each(md2html.BuiltinPlugins())
+	}
 	code := 0
 	for _, l := range lists {
-		css, err := cache.Stylesheet(l, loaded, nil)
+		css, err := cache.Stylesheet(l.names, loaded, nil)
 		if err != nil {
 			fmt.Fprintf(stderr, "md2html: %v\n", err)
 			return 2
 		}
 		fs := stylecheck.Check(css)
-		fmt.Fprint(stdout, stylecheck.Report(strings.Join(l, ","), fs))
+		fmt.Fprint(stdout, stylecheck.Report(l.label, fs))
 		if stylecheck.HasError(fs) {
 			code = 1
 		}

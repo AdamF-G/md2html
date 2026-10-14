@@ -11,12 +11,16 @@ shortened here:
 
 ```text
 claude-artifact: Looks from pages Claude publishes as Artifacts
-  claude-artifact/claude-artifact  The rules every Artifact follows, …
+  claude-artifact  The rules every Artifact follows, …
 default: The stylesheet md2html uses when no style is selected
-  default/default  Warm neutrals, system fonts, both themes
+  default  Warm neutrals, system fonts, both themes
 proof: Ink on proof paper
-  proof/proof  A cool page, blue-black ink and a peacock-teal accent, in both themes
+  proof  A cool page, blue-black ink and a peacock-teal accent, in both themes
 ```
+
+Each style is listed by the name to write after `--style`. Two plugins can
+have styles of the same name; then each is listed as `plugin/style`, the
+only name that picks it.
 
 ## Choosing styles
 

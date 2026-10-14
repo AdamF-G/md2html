@@ -46,9 +46,15 @@ func TestCheckStyleBuiltinsPass(t *testing.T) {
 	if code := run([]string{"--check-style"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d: %s%s", code, out.String(), errb.String())
 	}
-	for _, want := range []string{"default/default: no problems\n", "claude-artifact/claude-artifact: no problems\n", "proof/proof: no problems\n"} {
-		if !bytes.Contains(out.Bytes(), []byte(want)) {
-			t.Errorf("stdout lacks %q:\n%s", want, out.String())
+	// Whole lines: "default: no problems" is also the tail of
+	// "default/default: no problems".
+	lines := map[string]bool{}
+	for _, l := range strings.Split(out.String(), "\n") {
+		lines[l] = true
+	}
+	for _, want := range []string{"default: no problems", "claude-artifact: no problems", "proof: no problems"} {
+		if !lines[want] {
+			t.Errorf("stdout lacks the line %q:\n%s", want, out.String())
 		}
 	}
 }
@@ -59,13 +65,13 @@ func TestCheckStyleReportsEachPluginStyle(t *testing.T) {
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
 	}
-	want := "acme/bad: 2 errors\n" +
+	want := "bad: 2 errors\n" +
 		"  error    light --muted on --bg is 2.22:1, under 3:1\n" +
 		"  error    light --muted on --code-bg is 2.01:1, under 3:1\n" +
-		"acme/plain: no problems\n" +
-		"acme/quiet: 1 warning\n" +
+		"plain: no problems\n" +
+		"quiet: 1 warning\n" +
 		"  warning  light --muted on --code-bg is 4.28:1, under 4.5:1 (WCAG AA)\n" +
-		"acme/worse: 4 errors\n" +
+		"worse: 4 errors\n" +
 		"  error    light --muted on --bg is 2.22:1, under 3:1\n" +
 		"  error    light --muted on --code-bg is 2.01:1, under 3:1\n" +
 		"  error    dark --muted on --bg is 2.44:1, under 3:1\n" +

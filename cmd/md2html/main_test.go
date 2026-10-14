@@ -840,9 +840,29 @@ func TestRunListStyles(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
 	for _, want := range []string{
-		"acme: Acme looks\n  acme/plain  Plain and quiet\n",
-		"default: The stylesheet md2html uses when no style is selected\n  default/default  ",
+		"acme: Acme looks\n  plain  Plain and quiet\n",
+		"default: The stylesheet md2html uses when no style is selected\n  default  ",
 	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("stdout lacks %q:\n%s", want, out.String())
+		}
+	}
+}
+
+// A style is listed by the name --style takes: its own, unless another
+// plugin has a style of that name too, when only plugin/style picks it.
+func TestRunListStylesQualifiesOnlyAClash(t *testing.T) {
+	root := tree(t, map[string]string{
+		"acme/md2html-plugin.json":  `{"format": 1, "name": "acme", "styles": {"house": {"css": ["p.css"]}, "plain": {"css": ["p.css"]}}}`,
+		"acme/p.css":                "",
+		"other/md2html-plugin.json": `{"format": 1, "name": "other", "styles": {"house": {"css": ["p.css"]}}}`,
+		"other/p.css":               "",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-styles", "--plugin", filepath.Join(root, "acme") + "," + filepath.Join(root, "other")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	for _, want := range []string{"\n  acme/house\n", "\n  other/house\n", "\n  plain\n", "\n  default  "} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("stdout lacks %q:\n%s", want, out.String())
 		}
@@ -905,7 +925,7 @@ func TestRunListStylesNoTrailingSpace(t *testing.T) {
 	if code := run([]string{"--list-styles", "--plugin", filepath.Join(root, "acme")}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
-	if !strings.Contains(out.String(), "\n  acme/bare\n") {
+	if !strings.Contains(out.String(), "\n  bare\n") {
 		t.Errorf("stdout:\n%q", out.String())
 	}
 	for _, line := range strings.Split(out.String(), "\n") {

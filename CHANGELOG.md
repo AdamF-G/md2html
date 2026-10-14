@@ -57,6 +57,10 @@ major version instead.
   What it prints of a section now opens with a `#` heading, and a link from
   one section to another names that section's file, as in
   `styles.md#chart-settings`.
+- `--list-styles` and `--check-style` name each style the way `--style`
+  takes it: `proof`, not `proof/proof`. A style whose name another
+  plugin's style shares is still shown as `plugin/style`, the only name
+  that picks it.
 
 ## v0.10.0 — 2026-10-14
 
