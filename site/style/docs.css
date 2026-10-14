@@ -17,24 +17,12 @@ body { padding-top: 0; }
 .topbar > p { margin: 0; }
 .topbar > p a { color: var(--fg); text-decoration: none; font-size: 1.15rem; }
 .topbar .md2html-pages { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
-.topbar .md2html-pages ul { display: none; }
-.topbar .md2html-search { position: relative; margin-left: auto; width: min(18rem, 100%); }
-.topbar .md2html-search-results {
-  position: absolute;
-  z-index: 10;
-  left: 0;
-  right: 0;
-  background: var(--bg);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-}
+.topbar .md2html-search { margin-left: auto; width: min(18rem, 100%); }
 
 .sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; }
 .sidebar .md2html-pages li { margin: 0.3rem 0; }
 
 nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
-/* On the home page the trail is the page itself. */
-nav[aria-label="Breadcrumb"]:has(li:only-child) { display: none; }
 
 .foot {
   margin-top: 4rem;
