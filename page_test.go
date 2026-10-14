@@ -24,7 +24,7 @@ func TestExtractTitleFallsBackToFilename(t *testing.T) {
 }
 
 func TestPageShellIsCompleteDocument(t *testing.T) {
-	got := string(renderPage([]byte(`<p>hi</p>`), "T", "en", "body{}", mermaidCDN, nil))
+	got := string(renderPage([]byte(`<p>hi</p>`), "T", "en", "", "body{}", mermaidCDN, nil, false))
 	for _, want := range []string{"<!doctype html>", "<html", "<head>", "<title>T</title>", "<body", "<p>hi</p>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("page missing %q\ngot: %s", want, got)
@@ -60,7 +60,7 @@ func TestFragmentWrapsBodyInMain(t *testing.T) {
 
 func TestBothShellsStartWithMarker(t *testing.T) {
 	for name, got := range map[string][]byte{
-		"page":     renderPage([]byte(`<p>x</p>`), "T", "en", "", mermaidCDN, nil),
+		"page":     renderPage([]byte(`<p>x</p>`), "T", "en", "", "", mermaidCDN, nil, false),
 		"fragment": renderFragment([]byte(`<p>x</p>`), "T", "", ""),
 	} {
 		if !strings.HasPrefix(string(got), MarkerPrefix) {

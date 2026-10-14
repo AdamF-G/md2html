@@ -230,10 +230,26 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if malformed && opt.Warn != nil {
 		opt.Warn("front matter block is not flat key: value; rendering it as body text")
 	}
+	// Whether the site's shell will wrap this page. Decided this early
+	// because the contents list depends on it.
+	wrapping := opt.Site != nil && !opt.Fragment && meta["shell"] != "none"
 
 	// The style comes before rendering: a chart is drawn in the page's
 	// face and colours.
-	style, err := choosePageStyle(opt, meta)
+	// The shell's style is the site's: a page without a style of its own
+	// takes it, with the shell's plugins found from the shell. A page's own
+	// style still wins, and --style applies where neither sets one.
+	styleOpt, styleMeta := opt, meta
+	if opt.Site != nil && !opt.Fragment && meta["style"] == "" && opt.Site.shellMeta["style"] != "" {
+		styleOpt.SourcePath = opt.Site.shellSrc
+		styleOpt.Warn = opt.Site.shellWarn // a problem with it is the shell's
+		styleMeta = map[string]string{"style": opt.Site.shellMeta["style"], "plugins": opt.Site.shellMeta["plugins"]}
+		// The page's plugins widen only its own style:, as without a site.
+		if meta["plugins"] != "" && opt.Warn != nil {
+			opt.Warn("front matter plugins has no effect without style; ignoring it")
+		}
+	}
+	style, err := choosePageStyle(styleOpt, styleMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -245,9 +261,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The navigation markers need a site's tree. Said once per marker, and
-	// left as written, the degradation [[toc]] has with nothing to list.
-	if opt.Site == nil && opt.Warn != nil {
+	// The navigation markers need a site's tree, which a fragment ignores.
+	// Said once per marker, and left as written, the degradation [[toc]]
+	// has with nothing to list.
+	if (opt.Site == nil || opt.Fragment) && opt.Warn != nil {
 		for _, m := range findMarkers(root) {
 			if navMarkerNames[m.name] {
 				opt.Warn(fmt.Sprintf("[[%s]] needs a site shell (--site); leaving it as written", m.name))
@@ -315,16 +332,27 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	}
 	// Placed before the front matter check below, which it satisfies.
 	var autoMarker *html.Node
-	if !optOut && wantsAutoTOC(opt.AutoTOC, src, root) {
+	if !optOut && !(wrapping && opt.Site.shellTOC) && wantsAutoTOC(opt.AutoTOC, src, root) {
 		autoMarker = insertTOCMarker(root)
 	}
 	float := tocFloats(frontTOC, tocMode, opt.Warn) && !opt.Fragment
+	// A floating list is placed against a column centred in the viewport,
+	// which a site's layout does not promise, so under a shell every
+	// contents list is inline where its marker is. Said only when the page
+	// asked: --toc float is refused with --site, and AutoTOC's float is
+	// only a default.
+	if wrapping && float {
+		if meta["toc"] == "float" && opt.Warn != nil {
+			opt.Warn(`front matter toc "float" has no effect under a site shell; the contents list is inline`)
+		}
+		float = false
+	}
 	// A front matter toc value only sets layout for a marker that already
 	// exists; on its own it renders nothing, and silently — the mismatch
 	// (front matter says the page has a contents list, the page doesn't)
 	// is exactly what warnings are for. Checked here, before the "toc"
 	// transform below has a chance to remove any marker present.
-	if opt.Warn != nil && IsTOCMode(meta["toc"]) && len(findTOCMarkers(root)) == 0 {
+	if opt.Warn != nil && IsTOCMode(meta["toc"]) && len(findTOCMarkers(root)) == 0 && !(wrapping && opt.Site.shellTOC) {
 		opt.Warn(fmt.Sprintf("front matter toc %q has no [[toc]] or [TOC] marker in the document; it has no effect", meta["toc"]))
 	}
 	transforms = withTOC(transforms, meta["toc-title"], float)
@@ -345,6 +373,22 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		autoMarker.Parent.RemoveChild(autoMarker)
 	}
 
+	section, wrapped := "", false
+	if opt.Site != nil && !opt.Fragment {
+		section = opt.Site.section(opt.SourcePath)
+		switch v := meta["shell"]; v {
+		case "none":
+		default:
+			if v != "" && opt.Warn != nil {
+				opt.Warn(fmt.Sprintf("front matter shell %q is not none; wrapping the page in the site's shell", v))
+			}
+			if root, err = opt.Site.wrap(root, opt.SourcePath, opt.Transforms, meta["toc-title"], opt.Warn); err != nil {
+				return nil, err
+			}
+			wrapped = true
+		}
+	}
+
 	body, err := renderTree(root)
 	if err != nil {
 		return nil, err
@@ -361,5 +405,5 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		}
 		return renderFragment(body, title, css, runtime), nil
 	}
-	return renderPage(body, title, pageLang(meta["lang"], opt.Lang, opt.Warn), css, mermaidURL, source), nil
+	return renderPage(body, title, pageLang(meta["lang"], opt.Lang, opt.Warn), section, css, mermaidURL, source, wrapped), nil
 }

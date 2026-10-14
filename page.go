@@ -371,21 +371,36 @@ func hasFloatingTOC(body []byte) bool {
 // actually carries a diagram. A non-nil source is embedded after the
 // content, and a comment beside the marker says where, so an agent reading
 // from the top learns of it before it reaches the end.
-func renderPage(body []byte, title, lang, css, mermaidURL string, source []byte) []byte {
+//
+// section, when not empty, is written as data-section on <html>, so a
+// site's style can mark the current section. wrapped says the page was
+// built with a site shell: its body is then the shell, which already holds
+// the page's <main class="md2html">, so the body goes straight into <body>.
+func renderPage(body []byte, title, lang, section, css, mermaidURL string, source []byte, wrapped bool) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
 	if source != nil {
 		fmt.Fprintf(&b, "\n<!-- original Markdown: textContent of the textarea #%s at the end of the body -->", SourceID)
 	}
-	fmt.Fprintf(&b, "\n<!doctype html>\n<html lang=\"%s\">\n<head>\n", html.EscapeString(lang))
+	fmt.Fprintf(&b, "\n<!doctype html>\n<html lang=\"%s\"", html.EscapeString(lang))
+	if section != "" {
+		fmt.Fprintf(&b, " data-section=\"%s\"", html.EscapeString(section))
+	}
+	b.WriteString(">\n<head>\n")
 	b.WriteString(`<meta charset="utf-8">` + "\n")
 	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
 	b.WriteString("<style>\n")
 	b.WriteString(css)
-	b.WriteString("\n</style>\n</head>\n<body>\n<main class=\"md2html\">\n")
-	b.Write(body)
-	b.WriteString("\n</main>\n")
+	b.WriteString("\n</style>\n</head>\n<body>\n")
+	if wrapped {
+		b.Write(body)
+		b.WriteString("\n")
+	} else {
+		b.WriteString("<main class=\"md2html\">\n")
+		b.Write(body)
+		b.WriteString("\n</main>\n")
+	}
 	if source != nil {
 		b.WriteString(sourceElement(source))
 		b.WriteString(sourceToolsRuntime)

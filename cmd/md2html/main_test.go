@@ -956,3 +956,77 @@ func TestRunChartDataInsideTheBase(t *testing.T) {
 		t.Errorf("data outside the base was read, or not warned about: %s", errb.String())
 	}
 }
+
+func TestRunSiteWritesPagesNotTheShell(t *testing.T) {
+	root := tree(t, map[string]string{
+		"shell.md":      "---\nsite: true\n---\nTOP\n\n[[content]]\n",
+		"docs/index.md": "# Home\n",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs"),
+		"-o", filepath.Join(root, "site")}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	page, err := os.ReadFile(filepath.Join(root, "site/index.html"))
+	if err != nil || !strings.Contains(string(page), "TOP") {
+		t.Fatalf("index.html not wrapped (err %v):\n%s", err, page)
+	}
+	if _, err := os.Stat(filepath.Join(root, "site/shell.html")); err == nil {
+		t.Error("the shell was written as a page")
+	}
+}
+
+func TestRunSiteRefusesTOCFloat(t *testing.T) {
+	root := tree(t, map[string]string{"shell.md": "---\nsite: true\n---\n[[content]]\n", "a.md": "# A\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), "--toc", "float", filepath.Join(root, "a.md")}, &out, &errb); code != 2 ||
+		!strings.Contains(errb.String(), "--toc float cannot be used with --site") {
+		t.Errorf("exit %d, want 2; stderr: %s", code, errb.String())
+	}
+}
+
+func TestRunSiteRefusesFragment(t *testing.T) {
+	root := tree(t, map[string]string{"shell.md": "---\nsite: true\n---\n[[content]]\n", "a.md": "# A\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), "--fragment", filepath.Join(root, "a.md")}, &out, &errb); code != 2 ||
+		!strings.Contains(errb.String(), "it cannot be used with --fragment") {
+		t.Errorf("exit %d, want 2; stderr: %s", code, errb.String())
+	}
+}
+
+func TestRunSiteRefusesAShellWithoutSiteTrue(t *testing.T) {
+	root := tree(t, map[string]string{"shell.md": "[[content]]\n", "docs/a.md": "# A\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs")}, &out, &errb); code != 1 ||
+		!strings.Contains(errb.String(), "site: true") {
+		t.Errorf("exit %d, stderr: %s", code, errb.String())
+	}
+}
+
+func TestRunSiteReportsShellWarningsOnce(t *testing.T) {
+	root := tree(t, map[string]string{
+		"shell.md":      "---\nsite: true\nstyle: no-such-style\n---\n::: bogus\nx\n:::\n\n[[content]]\n",
+		"docs/index.md": "# Home\n",
+		"docs/a.md":     "# A\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs"),
+		"-o", filepath.Join(root, "site")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	got := errb.String()
+	shell := filepath.Join(root, "shell.md")
+	if n := strings.Count(got, shell+": unknown container kind"); n != 1 {
+		t.Errorf("container warning from the shell %d times, want 1:\n%s", n, got)
+	}
+	if n := strings.Count(got, shell+": "); n != 2 {
+		t.Errorf("want the shell's two warnings (container, style) once each:\n%s", got)
+	}
+	if strings.Contains(got, "docs/") {
+		t.Errorf("a page was blamed for the shell:\n%s", got)
+	}
+	if !strings.Contains(got, ", 2 warning(s)") {
+		t.Errorf("summary should count the shell's warnings:\n%s", got)
+	}
+}

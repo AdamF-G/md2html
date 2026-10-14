@@ -80,6 +80,7 @@ Flags:
 		depth     = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
 		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
 		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
+		sitePath  = fs.String("site", "", "wrap every page in this shell page, whose front matter says site: true, and give the build site navigation and search")
 		preview   = fs.Bool("preview-runtime", false, "with --fragment, add the mermaid runtime a full page has, to preview a fragment outside its host")
 		noSource  = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
 		cssPath   = fs.String("css", "", "replace the stylesheet with this file (not with --style)")
@@ -217,6 +218,15 @@ Flags:
 		fmt.Fprint(stderr, "md2html: --preview-runtime needs --fragment; a full page already has the mermaid runtime\n")
 		return 2
 	}
+	if *sitePath != "" && *fragment {
+		fmt.Fprint(stderr, "md2html: --site needs full pages; it cannot be used with --fragment\n")
+		return 2
+	}
+	// The shell places contents lists, so none floats under one.
+	if *sitePath != "" && *toc == "float" {
+		fmt.Fprint(stderr, "md2html: --toc float cannot be used with --site; the shell places contents lists\n")
+		return 2
+	}
 	// Plugins and styles are checked once, up front, so a typo stops the run
 	// before any page is written rather than costing a warning per page.
 	// Their load warnings are reported here, once; Convert stays quiet about
@@ -237,7 +247,7 @@ Flags:
 		css = string(b)
 	}
 
-	res, err := md2html.Crawl(md2html.CrawlOptions{
+	crawlOpt := md2html.CrawlOptions{
 		Entries:   entries,
 		OutDir:    *outDir,
 		Depth:     *depth,
@@ -245,10 +255,19 @@ Flags:
 		LinkDepth: *linkDepth,
 		NoMdLinks: *noMd,
 		NoAssets:  *noAssets,
-	})
+	}
+	res, err := md2html.Crawl(crawlOpt)
 	if err != nil {
 		fmt.Fprintf(stderr, "md2html: %v\n", err)
 		return 1
+	}
+	var site *md2html.Site
+	if *sitePath != "" {
+		site, err = md2html.BuildSite(res, *sitePath, crawlOpt)
+		if err != nil {
+			fmt.Fprintf(stderr, "md2html: %v\n", err)
+			return 1
+		}
 	}
 
 	type outcome struct {
@@ -286,6 +305,7 @@ Flags:
 			opts.Plugins, opts.Styles, opts.PluginCache = plugins, styles, cache
 			opts.StyleChosen = checks.chosen
 			opts.PreviewRuntime = *preview
+			opts.Site = site
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
 				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err, warnings: warnings}
@@ -325,6 +345,13 @@ Flags:
 			warned++
 		}
 	}
+	siteWarnings := 0
+	if site != nil {
+		for _, w := range site.Warnings {
+			siteWarnings++
+			fmt.Fprintf(stderr, "md2html: %s: %s\n", w.Src, w.Message)
+		}
+	}
 	for _, w := range res.Warnings {
 		fmt.Fprintf(stderr, "md2html: %s: %s\n", w.Src, w.Message)
 	}
@@ -336,7 +363,7 @@ Flags:
 		}
 	}
 	fmt.Fprintf(stderr, "md2html: %d written, %d refused, %d failed, %d warning(s)\n",
-		written, refused, failed, len(res.Warnings)+warned)
+		written, refused, failed, len(res.Warnings)+warned+siteWarnings)
 
 	if refused > 0 || failed > 0 {
 		return 1

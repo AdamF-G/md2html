@@ -15,7 +15,9 @@ import (
 // from a crawl, and Convert uses it through Options.Site. Convert calls in
 // parallel share one, so it is safe for concurrent use.
 type Site struct {
-	// Warnings are the problems found while laying the site out.
+	// Warnings are the problems found while laying the site out, and those
+	// in the shell's own source, each once, found while pages convert. Read
+	// them after every Convert call using the site has returned.
 	Warnings []Warning
 
 	shellSrc  string
@@ -32,8 +34,9 @@ type Site struct {
 	bySrc     map[string]*siteNode
 	order     []*siteNode
 
-	mu      sync.Mutex
-	entries []searchEntry // Task 7
+	mu          sync.Mutex
+	entries     []searchEntry   // Task 7
+	shellWarned map[string]bool // shell warnings already in Warnings
 }
 
 // siteNode is one place in the tree: a page, or a directory, which has a
@@ -118,6 +121,23 @@ func BuildSite(res *CrawlResult, shell string, opt CrawlOptions) (*Site, error) 
 }
 
 func (s *Site) warn(src, msg string) { s.Warnings = append(s.Warnings, Warning{src, msg}) }
+
+// shellWarn records a problem in the shell's own source. Every page
+// processes the shell, so each message is kept once, under the shell's
+// path. Convert calls run in parallel, so it locks; Warnings is read once
+// they are all done.
+func (s *Site) shellWarn(msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.shellWarned[msg] {
+		return
+	}
+	if s.shellWarned == nil {
+		s.shellWarned = map[string]bool{}
+	}
+	s.shellWarned[msg] = true
+	s.warn(s.shellSrc, msg)
+}
 
 // buildTree places every document below the run's base: a directory is a
 // node, its index.md its page, and a document from outside the base is
