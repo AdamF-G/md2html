@@ -9,7 +9,7 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
-## Unreleased
+## v0.10.0 — 2026-10-14
 
 ### Added
 
@@ -20,7 +20,17 @@ major version instead.
   available. Fonts and images a style uses are inlined, so pages still load
   nothing. `md2html --guide styles` documents all of it, including how to
   write a plugin and a walkthrough for making your own style, with a
-  starter to copy.
+  starter to copy. The library takes the same choices as `Options.Styles`
+  and `Options.Plugins`, and adds the `Plugin` and `Style` types,
+  `BuiltinPlugins`, `AvailablePlugins` and `ManifestName`. A
+  `PluginCache` (`NewPluginCache`, `Options.PluginCache`) loads plugins
+  with `Load` and `LoadAll` and assembles stylesheets, keeping both, so a
+  run that converts many pages reads each plugin and inlines its fonts
+  once.
+- `Options.StyleChosen` is called for each page whose style is chosen,
+  with the styles' names, the directory of each style's plugin and the
+  stylesheet they assemble. The CLI checks each style list's colours
+  there.
 - The built-in `claude-artifact` style follows the rules every page Claude
   publishes as an Artifact does.
 - Charts: a `vega-lite` fence holds a Vega-Lite spec in YAML or JSON, with
@@ -31,49 +41,45 @@ major version instead.
   legend highlighting made of CSS, and a collapsed table of its data. The
   page gains no script and fetches nothing. Dates show the same in any
   time zone: as written when they name no zone, and in UTC when they name
-  an instant. A spec that fails warns
-  and stays a code block. Vega 5.30.0 and Vega-Lite 5.21.0 run embedded.
-  `md2html --guide charts` documents it.
-- **`--no-charts`** (`Options.NoCharts`) leaves `vega-lite` fences as code
-  blocks.
-- **`--licenses`** prints the licences of the third-party software built
-  into md2html.
-- A style's manifest takes a `charts` block: the font chart text is
-  measured in (`font`, or `metrics: builtin:system-sans` with a `pad`), the
-  CSS `font-family` it renders in, and the `width` charts are laid out at.
-- Chart tokens a style can set: `--series-1` to `--series-8`,
-  `--status-good`, `--status-warning`, `--status-serious`,
-  `--status-critical`, `--chart-surface`, `--chart-grid` and
-  `--chart-axis`. `claude-artifact` defines them all, and charts use its
-  embedded IBM Plex Sans metrics.
-- `--check-style` measures a style's colours: text contrast against WCAG,
-  and chart colours against the dataviz skill's rules, including
-  colour-blind separation. A build reports a style's problems in one line.
-  The built-in styles pass every rule; the default's light `--warn` and
-  its status colours moved slightly to get there.
-
-- A `wide` container (`::: wide`) lets a table, code block or card extend
-  past the text column, the way a wide figure does. A top-level block with
-  the `wide` class, such as `::: {.card .wide}`, does the same.
-
-- Front matter `title-block: above` puts the subtitle and date over the
-  title, as an eyebrow line such as `Team A · Project B`, instead of
-  under it. They keep their classes and also carry `eyebrow`.
-
-- **`--preview-runtime`** (`Options.PreviewRuntime`), with `--fragment`,
-  ends a fragment that has a mermaid diagram in the runtime a full page
-  has, so it can be previewed in a browser. Fragments stay script-free
-  without it.
-
+  an instant. A spec that fails warns and stays a code block. Vega 5.30.0
+  and Vega-Lite 5.21.0 run embedded. `md2html --guide charts` documents
+  it.
 - Charts can name the page's own colours, `token:accent`, `token:warn`,
   `token:ok`, `token:rule`, `token:bg` and `token:code-bg`, so a mark can
   match the text around it and still follow the theme. A style can add
   colour roles of its own with `tokens` in its manifest's `charts` block,
   such as `"tokens": ["inject", "source"]` for `token:inject`.
-
+- Chart tokens a style can set: `--series-1` to `--series-8`,
+  `--status-good`, `--status-warning`, `--status-serious`,
+  `--status-critical`, `--chart-surface`, `--chart-grid` and
+  `--chart-axis`. The default style and `claude-artifact` define them
+  all, and charts in `claude-artifact` use its embedded IBM Plex Sans
+  metrics.
+- A style's manifest takes a `charts` block: the font chart text is
+  measured in (`font`, or `metrics: builtin:system-sans` with a `pad`), the
+  CSS `font-family` it renders in, and the `width` charts are laid out at.
+- **`--no-charts`** (`Options.NoCharts`) leaves `vega-lite` fences as code
+  blocks.
+- `--check-style` measures a style's colours: text contrast against WCAG,
+  and chart colours against the dataviz skill's rules, including
+  colour-blind separation. A build reports a style's problems in one line.
+  The built-in styles pass every rule; the default's light `--warn` and
+  its status colours moved slightly to get there.
+- **`--licenses`** (`ThirdPartyNotices`) prints the licences of the
+  third-party software built into md2html.
+- A `wide` container (`::: wide`) lets a table, code block or card extend
+  past the text column, the way a wide figure does. A top-level block with
+  the `wide` class, such as `::: {.card .wide}`, does the same.
+- Front matter `title-block: above` puts the subtitle and date over the
+  title, as an eyebrow line such as `Team A · Project B`, instead of
+  under it. They keep their classes and also carry `eyebrow`.
 - A container's attribute block takes `title-level=2` to `6`, which
   writes its title as a heading: in the outline, the contents list and the
   heading anchors, and styled as the paragraph title was.
+- **`--preview-runtime`** (`Options.PreviewRuntime`), with `--fragment`,
+  ends a fragment that has a mermaid diagram in the runtime a full page
+  has, so it can be previewed in a browser. Fragments stay script-free
+  without it.
 
 ### Changed
 
