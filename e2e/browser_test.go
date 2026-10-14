@@ -3632,3 +3632,103 @@ func TestBrowserManyChartsAndContainers(t *testing.T) {
 		t.Errorf("hovering a mark of the chart in the opened details: its box has opacity %s, want 1", op)
 	}
 }
+
+// buildSite renders src (shell.md plus docs/...) into out the way the CLI
+// does, search index included.
+func buildSite(t *testing.T, src string, out string) {
+	t.Helper()
+	opt := md2html.CrawlOptions{Entries: []string{filepath.Join(src, "docs")}, OutDir: out, Depth: -1, LinkDepth: -1}
+	res, err := md2html.Crawl(opt)
+	if err != nil {
+		t.Fatalf("Crawl: %v", err)
+	}
+	site, err := md2html.BuildSite(res, filepath.Join(src, "shell.md"), opt)
+	if err != nil {
+		t.Fatalf("BuildSite: %v", err)
+	}
+	for _, d := range res.Docs {
+		b, err := os.ReadFile(d.Src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, err := md2html.Convert(b, md2html.Options{SourcePath: d.Src, LinkMap: d.LinkMap, Site: site})
+		if err != nil {
+			t.Fatalf("Convert %s: %v", d.Src, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(d.Out), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(d.Out, page, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(site.IndexPath(), site.SearchIndex(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+var siteSources = map[string][]byte{
+	"shell.md":        []byte("---\nsite: true\nsearch-facets: kind\n---\n[[search]]\n\n[[content]]\n"),
+	"docs/index.md":   []byte("# Home\n\n```\necho hi\n```\n"),
+	"docs/api/exp.md": []byte("---\nkind: class\n---\n# Experiment\n\nA plan of runs.\n"),
+}
+
+func searchFor(t *testing.T, ctx context.Context, url, query string) (string, string) {
+	t.Helper()
+	var first, kind string
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(url),
+		chromedp.WaitVisible(`.md2html-search-input`, chromedp.ByQuery),
+		chromedp.SendKeys(`.md2html-search-input`, query, chromedp.ByQuery),
+		chromedp.WaitVisible(`.md2html-search-results li a`, chromedp.ByQuery),
+		chromedp.Text(`.md2html-search-results li a`, &first, chromedp.ByQuery),
+		chromedp.Text(`.md2html-search-results li .md2html-search-kind`, &kind, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	return first, kind
+}
+
+func TestBrowserSearchFindsAPage(t *testing.T) {
+	src := t.TempDir()
+	writeFiles(t, src, siteSources)
+	dir, baseURL := serveDir(t)
+	buildSite(t, src, dir)
+	first, kind := searchFor(t, newBrowserCtx(t), baseURL+"/index.html", "experi")
+	if first != "Experiment" || kind != "class" {
+		t.Errorf("first result %q (%q), want Experiment (class)", first, kind)
+	}
+}
+
+func TestBrowserSearchFromDisk(t *testing.T) {
+	src, out := t.TempDir(), t.TempDir()
+	writeFiles(t, src, siteSources)
+	buildSite(t, src, out)
+	first, _ := searchFor(t, newBrowserCtx(t), "file://"+filepath.ToSlash(filepath.Join(out, "index.html")), "plan of")
+	if first != "Experiment" {
+		t.Errorf("from disk, first result %q, want Experiment", first)
+	}
+}
+
+func TestBrowserCopyButtonCopies(t *testing.T) {
+	src := t.TempDir()
+	writeFiles(t, src, siteSources)
+	dir, baseURL := serveDir(t)
+	buildSite(t, src, dir)
+	var label string
+	err := chromedp.Run(newBrowserCtx(t),
+		chromedp.Navigate(baseURL+"/index.html"),
+		chromedp.Click(`pre .md2html-copy`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Poll(`document.querySelector("pre .md2html-copy").textContent !== "Copy"`, nil),
+		chromedp.Text(`pre .md2html-copy`, &label, chromedp.ByQuery),
+	)
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	// Headless Chrome may deny clipboard access; either outcome proves the
+	// button is wired. What must not happen is no response at all.
+	if label != "Copied" && label != "Copy failed" {
+		t.Errorf("button says %q after a click", label)
+	}
+}
