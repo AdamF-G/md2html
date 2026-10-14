@@ -5,6 +5,7 @@ package md2html
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 
 	fences "github.com/AdamF-G/md2html/internal/fences"
 	"github.com/yuin/goldmark"
@@ -291,6 +292,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	} else if opt.Warn != nil {
 		transforms = withWarn(transforms, opt.Warn)
 	}
+	// Ahead of every other transform: a marker's URL must still be the plain
+	// autolink GFM made it, and the links it expands to then get the same
+	// treatment as any others (external-link marking, for one).
+	transforms = append([]Transform{listMarkers(meta, filepath.Dir(opt.SourcePath), opt.Warn)}, transforms...)
 	// Resolved even for a fragment, so a bad value is still reported; a
 	// fragment then stays inline, since it can carry no side control.
 	tocMode := opt.TOC
