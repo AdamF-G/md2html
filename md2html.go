@@ -313,6 +313,9 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// autolink GFM made it, and the links it expands to then get the same
 	// treatment as any others (external-link marking, for one).
 	transforms = append([]Transform{listMarkers(meta, filepath.Dir(opt.SourcePath), opt.Warn)}, transforms...)
+	if opt.Site != nil && !opt.Fragment {
+		transforms = append([]Transform{opt.Site.navMarkers(opt.SourcePath, opt.Warn), contentMarkerWarning(opt.Warn)}, transforms...)
+	}
 	// Resolved even for a fragment, so a bad value is still reported; a
 	// fragment then stays inline, since it can carry no side control.
 	tocMode := opt.TOC
