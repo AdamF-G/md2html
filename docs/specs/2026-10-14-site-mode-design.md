@@ -120,7 +120,7 @@ without one they warn and stay as written.
 | Marker | Expands to |
 |---|---|
 | `[[content]]` | The current page's body. Exactly one per shell. |
-| `[[pages]]` | The tree as a nested list of links, current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node; `from="root"` (default) at the top. |
+| `[[pages]]` | The tree as a nested list of links, current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node, or at the top when that node has nothing below it, as on the root page or a top-level page of its own; `from="root"` (default) at the top. |
 | `[[breadcrumb]]` | The current page's ancestors as a list of links, in its own `<nav aria-label="Breadcrumb">`. A trail that would hold only the current page, as on the root page, is not drawn. |
 | `[[prev-next]]` | Links to the previous and next page in tree order, in its own `<nav aria-label="Previous and next">`. |
 | `[[toc]]` | The current page's contents list, as today. |

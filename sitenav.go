@@ -63,13 +63,26 @@ func (s *Site) pagesList(m marker, page *siteNode, from string, say func(string,
 				start = n
 			}
 		}
-		if start == nil {
-			return nil // the root page has no section
+		// The root page has no section, and a top-level page of its own has
+		// nothing below it: either would list nothing, so the whole tree
+		// stands in, and a section sidebar is never blank.
+		if start == nil || !hasShownChild(start) {
+			start = s.root
 		}
 	default:
 		say("[[pages]] from %q is not root or section; listing from the root", v)
 	}
 	return s.pagesLevel(start, page, from, depth)
+}
+
+// hasShownChild reports whether n has a child [[pages]] would list.
+func hasShownChild(n *siteNode) bool {
+	for _, c := range n.children {
+		if !c.hidden {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Site) pagesLevel(n, page *siteNode, from string, depth int) *html.Node {

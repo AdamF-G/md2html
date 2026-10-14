@@ -129,3 +129,32 @@ func TestBreadcrumbIsOmittedOnTheRootPage(t *testing.T) {
 		t.Errorf("a page below the root lost its breadcrumb:\n%s", page)
 	}
 }
+
+// A page whose section has nothing below it, the root page or a top-level
+// page of its own, would get an empty [[pages from="section"]]; it gets the
+// whole tree instead, so a section sidebar is never blank.
+func TestPagesFromSectionFallsBackToTheWholeTree(t *testing.T) {
+	files := map[string]string{"shell/site.md": "---\nsite: true\n---\n[[pages from=\"section\"]]\n\n[[content]]\n"}
+	for k, v := range treeFiles {
+		if k != "shell/site.md" {
+			files[k] = v
+		}
+	}
+	files["docs/about.md"] = "# About\n"
+	s, res, root := siteFixture(t, files, "shell/site.md")
+	for _, rel := range []string{"docs/index.md", "docs/about.md"} {
+		out, warnings := sitePage(t, s, res, root, rel)
+		if len(warnings) != 0 {
+			t.Errorf("%s: warnings %q", rel, warnings)
+		}
+		for _, want := range []string{">Get started<", ">Install<", ">Guides<", ">Bravo<", ">About<"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%s: the sidebar lacks %s:\n%s", rel, want, out)
+			}
+		}
+	}
+	// A page with a section still lists that section alone.
+	if out, _ := sitePage(t, s, res, root, "docs/guides/b.md"); strings.Contains(out, ">Install<") {
+		t.Errorf("a page in Guides listed another section:\n%s", out)
+	}
+}
