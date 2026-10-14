@@ -7,7 +7,7 @@ containers, diagrams, charts and cross-references, and builds sites like
 this one from a single Markdown shell page.
 
 - [What md2html does and how to install it](README.md)
-- [Writing Markdown for md2html](docs/authoring.md), the authoring guide
+- [Writing Markdown for md2html](docs/guide/index.md), the authoring guide
 - [What changed in each release](CHANGELOG.md)
 - [Design notes](docs/specs/index.md), the reasoning behind each feature
 

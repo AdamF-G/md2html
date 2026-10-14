@@ -394,7 +394,7 @@ func TestRunGuidePrintsNamedSections(t *testing.T) {
 		t.Fatalf("exit %d, stderr: %s", code, errb.String())
 	}
 	got := out.String()
-	if !strings.HasPrefix(got, "## Styles\n") || !strings.Contains(got, "\n## Diagrams\n") {
+	if !strings.HasPrefix(got, "# Styles\n") || !strings.Contains(got, "\n# Diagrams\n") {
 		t.Errorf("did not print Styles then Diagrams:\n%s", got)
 	}
 }

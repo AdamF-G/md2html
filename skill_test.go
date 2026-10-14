@@ -3,6 +3,8 @@ package md2html
 import (
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -88,7 +90,7 @@ func TestInstalledSkillMarkerCarriesRepositoryAndVersion(t *testing.T) {
 }
 
 // The skill's own text must send a reader to `md2html --guide`. Naming
-// only "docs/authoring.md" is the failure this guards: that path is real in
+// only "docs/guide" is the failure this guards: that path is real in
 // this repo and absent everywhere the skill is installed, so the one reader
 // who needs the pointer is the one it fails.
 func TestInstalledSkillPointsAtTheGuideFlag(t *testing.T) {
@@ -185,18 +187,43 @@ func read(t *testing.T, p string) string {
 }
 
 // --guide prints the repo's own guide, not a summary that drifts: it is
-// what the skill sends every reader to. Only the front matter, which places
-// the page in the documentation site, is left out.
+// what the skill sends every reader to. The guide is the files in
+// docs/guide, the opening first and then the sections in nav-order, each
+// verbatim but for its front matter and the contents marker below its
+// title, which only serve the page in the documentation site.
 func TestAuthoringGuideIsTheRepositoryGuide(t *testing.T) {
-	src, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
-	if err != nil {
-		t.Fatal(err)
+	files, err := filepath.Glob(filepath.Join("docs", "guide", "*.md"))
+	if err != nil || len(files) < 2 {
+		t.Fatalf("found %d guide files, %v", len(files), err)
 	}
-	_, want, _ := splitFrontMatter(src)
-	if string(AuthoringGuide()) != string(want) {
-		t.Error("AuthoringGuide is not docs/authoring.md verbatim, less its front matter")
+	type page struct {
+		order int
+		text  string
 	}
-	if strings.HasPrefix(string(AuthoringGuide()), "---") {
-		t.Error("AuthoringGuide carries the page's front matter")
+	var pages []page
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		meta, body, _ := splitFrontMatter(src)
+		order, err := strconv.Atoi(meta["nav-order"])
+		if err != nil {
+			t.Fatalf("%s has no nav-order", f)
+		}
+		if filepath.Base(f) == "index.md" {
+			order = 0
+		}
+		title, rest, _ := strings.Cut(string(body), "\n")
+		rest = strings.TrimPrefix(rest, "\n[[toc]]\n")
+		pages = append(pages, page{order, title + "\n" + rest})
+	}
+	sort.SliceStable(pages, func(i, j int) bool { return pages[i].order < pages[j].order })
+	var want []string
+	for _, p := range pages {
+		want = append(want, p.text)
+	}
+	if got := string(AuthoringGuide()); got != strings.Join(want, "\n") {
+		t.Error("AuthoringGuide is not the docs/guide files in order, less front matter and [[toc]]")
 	}
 }

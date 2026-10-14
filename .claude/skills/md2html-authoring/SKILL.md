@@ -20,7 +20,7 @@ container, a `fig` diagram or a cross-reference, print its section:
 the conversion prints warnings, `md2html --guide warnings` says what each
 one means and how to fix it. To change how pages look,
 `md2html --guide styles` covers choosing a style and writing a plugin that
-adds one. In the md2html repo the whole guide is `docs/authoring.md`.
+adds one. In the md2html repo the guide is `docs/guide`, a file per section.
 
 Three of those traps come up most. Each gives valid output and a zero exit,
 with no warning:

@@ -1,8 +1,6 @@
 package md2html
 
 import (
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -213,11 +211,7 @@ func TestStripChipTokensKeepsNonChipSpanLabel(t *testing.T) {
 // .chip-ok} while no rule named chip-ok, so the example rendered as a
 // plain grey chip with no warning.
 func TestGuideChipClassesAreStyled(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	named := regexp.MustCompile(`\.(chip-[a-z]+)`).FindAllStringSubmatch(string(b), -1)
+	named := regexp.MustCompile(`\.(chip-[a-z]+)`).FindAllStringSubmatch(string(AuthoringGuide()), -1)
 	if len(named) == 0 {
 		t.Fatal("the guide names no chip-* class")
 	}

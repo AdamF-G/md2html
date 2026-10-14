@@ -26,7 +26,7 @@ func TestContainerBracedCalloutUnchanged(t *testing.T) {
 	}
 }
 
-// The trap docs/authoring.md warns about, fixed.
+// The trap the authoring guide warns about, fixed.
 func TestContainerBareNameGetsClass(t *testing.T) {
 	got := convert(t, "::: callout\nhello\n:::\n", nil)
 	if !strings.Contains(got, `<div class="callout">`) {
@@ -577,7 +577,7 @@ func TestContainerForgedFenceKindCannotChooseTheElement(t *testing.T) {
 }
 
 // data-fence is a reserved namespace rather than three literal names, and
-// docs/authoring.md and the skill both say so. That claim is only true if
+// docs/guide/callouts-and-containers.md and the skill both say so. That claim is only true if
 // the prefix test ignores case: data-Fencepost used to survive while
 // data-fencepost was dropped.
 func TestContainerReservedNamespaceIgnoresCase(t *testing.T) {

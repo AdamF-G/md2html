@@ -94,7 +94,7 @@ func TestCodeFenceEscapesCaption(t *testing.T) {
 	}
 }
 
-// Documented in docs/authoring.md: a caption is re-parsed like any other
+// Documented in docs/guide/code-blocks.md: a caption is re-parsed like any other
 // prose, so a chip token or a "§" reference inside one resolves through the
 // same inline rewriters as body text, not as literal escaped brackets.
 func TestCodeFenceCaptionRunsThroughChips(t *testing.T) {

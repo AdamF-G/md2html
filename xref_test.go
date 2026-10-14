@@ -100,7 +100,7 @@ func TestSectionNumbersRequiresSeparator(t *testing.T) {
 	// headingNumRe cannot simply allow a trailing dot — "4.3." and "4.3"
 	// would then be the same reference, and a document that numbers both
 	// would resolve one of them to the wrong heading. Pinned here because
-	// the failure is silent at authoring time; docs/authoring.md says so
+	// the failure is silent at authoring time; the guide's silent traps say so
 	// out loud for the same reason.
 	if id, ok := m["4.3"]; ok {
 		t.Errorf(`m["4.3"] = %q, want absent — a trailing dot is not a separator`, id)

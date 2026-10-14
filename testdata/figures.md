@@ -34,7 +34,7 @@ items:
 caption: Labels take *inline* `Markdown`
 items:
   - box: "`auth` middleware"
-  - arrow: "see [authoring](../docs/authoring.md)"
+  - arrow: "see [authoring](../docs/guide/index.md)"
   - box: "status **ready**"
 ```
 

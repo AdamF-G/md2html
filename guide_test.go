@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"bytes"
 	"go/scanner"
 	"go/token"
 	"maps"
@@ -11,19 +12,17 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/AdamF-G/md2html/internal/charts"
 	"github.com/AdamF-G/md2html/internal/stylecheck"
 )
 
-// guide returns docs/authoring.md, the text `md2html --guide` prints.
+// guide returns the whole authoring guide, as `md2html --guide all`
+// prints it: every file in docs/guide, in order.
 func guide(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
+	return string(AuthoringGuide())
 }
 
 // artifactStyle converts with the claude-artifact style, which defines
@@ -391,31 +390,60 @@ func TestGuideClaims(t *testing.T) {
 }
 
 // The guide is converted by the tool it describes and read on GitHub, so it
-// can fall into its own traps: an unbalanced fence, a stray badge, an
-// in-page link to a heading that was renamed. It must convert with no
-// warning, and every #fragment it links must name an id on the page.
+// can fall into its own traps: an unbalanced fence, a stray badge, a link
+// to a heading that was renamed or moved to another page. Each of its pages
+// must convert with no warning, every #fragment it links must name an id
+// on the page it points to, and a page long enough to need one has a
+// contents list.
 func TestGuideConvertsCleanly(t *testing.T) {
-	var warnings []string
-	got := convert(t, guide(t), func(w string) { warnings = append(warnings, w) })
-	if len(warnings) > 0 {
-		t.Errorf("the guide converts with warnings: %q", warnings)
+	files, err := filepath.Glob(filepath.Join("docs", "guide", "*.md"))
+	if err != nil || len(files) < 10 {
+		t.Fatalf("found %d guide pages, %v", len(files), err)
 	}
-	if !strings.Contains(got, `<nav class="toc"`) {
-		t.Error("the guide has no contents list")
-	}
-	ids := map[string]bool{}
-	for _, m := range regexp.MustCompile(` id="([^"]+)"`).FindAllStringSubmatch(got, -1) {
-		ids[m[1]] = true
-	}
-	for _, m := range regexp.MustCompile(`href="#([^"]+)"`).FindAllStringSubmatch(got, -1) {
-		if !ids[m[1]] {
-			t.Errorf("the guide links #%s, which no element on the page has", m[1])
+	ids := map[string]map[string]bool{} // page -> ids on it
+	pages := map[string]string{}
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var warnings []string
+		got := convert(t, string(src), func(w string) { warnings = append(warnings, w) })
+		if len(warnings) > 0 {
+			t.Errorf("%s converts with warnings: %q", f, warnings)
+		}
+		page := filepath.Base(f)
+		pages[page] = got
+		ids[page] = map[string]bool{}
+		for _, m := range regexp.MustCompile(` id="([^"]+)"`).FindAllStringSubmatch(got, -1) {
+			ids[page][m[1]] = true
+		}
+		if strings.Count(string(src), "\n") > 150 && !strings.Contains(got, `<nav class="toc"`) {
+			t.Errorf("%s is long and has no contents list", f)
+		}
+		prose := regexp.MustCompile(`(?s)<pre.*?</pre>|<code>.*?</code>`).ReplaceAllString(got, "")
+		for _, stray := range []string{`class="chip`, `class="xref"`, "```", ":::"} {
+			if strings.Contains(prose, stray) {
+				t.Errorf("%s appears in %s's prose, outside code", stray, f)
+			}
 		}
 	}
-	prose := regexp.MustCompile(`(?s)<pre.*?</pre>|<code>.*?</code>`).ReplaceAllString(got, "")
-	for _, stray := range []string{`class="chip`, `class="xref"`, "```", ":::"} {
-		if strings.Contains(prose, stray) {
-			t.Errorf("%s appears in the guide's prose, outside code", stray)
+	// A fragment conversion leaves a link as written, so a link to another
+	// section reads href="charts.md#colours". A link out of docs/guide,
+	// such as ../../README.md, has a path this does not match, and is
+	// left to the site build.
+	link := regexp.MustCompile(`href="(?:([a-z-]+\.md))?(?:#([^"]+))?"`)
+	for page, got := range pages {
+		for _, m := range link.FindAllStringSubmatch(got, -1) {
+			to := m[1]
+			if to == "" {
+				to = page
+			}
+			if ids[to] == nil {
+				t.Errorf("%s links %s, which is not a guide page", page, m[0])
+			} else if m[2] != "" && !ids[to][m[2]] {
+				t.Errorf("%s links %s#%s, which no element on that page has", page, to, m[2])
+			}
 		}
 	}
 }
@@ -528,11 +556,11 @@ func TestGuideWarningsExistInTheCode(t *testing.T) {
 		}
 	}
 
-	text := guide(t)
-	_, section, ok := strings.Cut(text, "\n## Warnings\n")
-	if !ok {
-		t.Fatal("the guide has no Warnings section")
+	b, err := GuideSection("warnings")
+	if err != nil {
+		t.Fatal(err)
 	}
+	section := string(b)
 	check := func(kind string, quoted [][]string, min int) {
 		if len(quoted) < min {
 			t.Fatalf("found only %d %s messages in the section; has its format changed?", len(quoted), kind)
@@ -649,7 +677,7 @@ func TestGuideSummaryHoldsTheQuickReferenceAndTraps(t *testing.T) {
 			t.Errorf("summary is missing the whole %s section", name)
 		}
 	}
-	for _, not := range []string{"## Page structure", "### Nesting fences", "\n[[toc]]\n"} {
+	for _, not := range []string{"# Page structure", "## Nesting fences", "\n[[toc]]\n"} {
 		if strings.Contains(sum, not) {
 			t.Errorf("summary carries %q", not)
 		}
@@ -674,29 +702,126 @@ func TestGuideSummaryNamesResolve(t *testing.T) {
 			continue
 		}
 		first, _, _ := strings.Cut(string(b), "\n")
-		if first != "## "+strings.SplitN(m[2], " (", 2)[0] {
+		if first != "# "+strings.SplitN(m[2], " (", 2)[0] {
 			t.Errorf("%s printed a section starting %q", m[1], first)
 		}
 	}
 }
 
-// A section runs from its `##` heading to the next, carrying the headings
-// below it, and a heading inside a code block is example text, not a
-// section. Only a section's whole name finds it.
+// The guide's parts are its files: the opening first, then the sections
+// in nav-order, each named by its file. A part is printed without its
+// front matter or its contents marker, and its index entry lists the
+// headings below its title. A heading inside a code block is example
+// text, not a heading, and only a section's whole name finds it.
 func TestGuideSection(t *testing.T) {
-	src := []byte("# T\n\nintro\n\n## Links and images\n\nl\n\n### Following links\n\nf\n\n" +
-		"## Code\n\n```markdown\n## Not a section\n```\n\nc\n")
-	parts := splitGuide(src)
-	got, err := guideSection(src, parts, "links-and-images")
-	if err != nil || string(got) != "## Links and images\n\nl\n\n### Following links\n\nf\n" {
+	fsys := fstest.MapFS{
+		"index.md": {Data: []byte("---\nnav-order: 1\n---\n# T\n\nintro\n")},
+		"code.md": {Data: []byte("---\nnav-order: 2\n---\n# Code\n\n[[toc]]\n\n" +
+			"```markdown\n## Not a section\n\n[[toc]]\n```\n\nc\n")},
+		"links-and-images.md": {Data: []byte("---\nnav-order: 1\n---\n# Links and images\n\nl\n\n" +
+			"## Following links\n\nf\n\n### Deeper\n\nd\n\n\n")},
+	}
+	parts, err := loadGuide(fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, p := range parts {
+		names = append(names, p.name)
+	}
+	if strings.Join(names, " ") != "index links-and-images code" {
+		t.Errorf("parts in the order %v", names)
+	}
+	if got := string(parts[0].text); got != "# T\n\nintro\n" {
+		t.Errorf("opening: %q", got)
+	}
+	if p := parts[1]; p.title != "Links and images" || strings.Join(p.subtitles, ";") != "Following links" {
+		t.Errorf("links-and-images: title %q, subtitles %q", p.title, p.subtitles)
+	}
+	got, err := guideSection(parts, "links-and-images")
+	if err != nil || string(got) != "# Links and images\n\nl\n\n## Following links\n\nf\n\n### Deeper\n\nd\n" {
 		t.Errorf("links-and-images: %q, %v", got, err)
 	}
-	if got, _ := guideSection(src, parts, "code"); !strings.HasSuffix(string(got), "```\n\nc\n") {
+	if got, _ := guideSection(parts, "code"); string(got) != "# Code\n\n```markdown\n## Not a section\n\n[[toc]]\n```\n\nc\n" {
 		t.Errorf("code: %q", got)
 	}
-	for _, name := range []string{"not-a-section", "following-links", "links"} {
-		if _, err := guideSection(src, parts, name); err == nil {
+	for _, name := range []string{"not-a-section", "following-links", "links", "index"} {
+		if _, err := guideSection(parts, name); err == nil {
 			t.Errorf("%s found a section", name)
+		}
+	}
+}
+
+// A guide page with no nav-order, or one that is not a number, has no
+// place in the order, and loading the guide says so rather than guessing.
+func TestGuideNeedsANavOrder(t *testing.T) {
+	for _, fm := range []string{"", "---\nnav-order: x\n---\n"} {
+		fsys := fstest.MapFS{
+			"index.md": {Data: []byte("---\nnav-order: 1\n---\n# T\n")},
+			"a.md":     {Data: []byte(fm + "# A\n")},
+		}
+		if _, err := loadGuide(fsys); err == nil || !strings.Contains(err.Error(), "a.md") {
+			t.Errorf("front matter %q: err = %v", fm, err)
+		}
+	}
+}
+
+// Two sections with one nav-order have no order of their own: the site
+// would break the tie one way and --guide another, with nothing to say
+// they differ. The opening is first whatever its nav-order, which places
+// the guide among the other docs, so it shares one with a section freely.
+func TestGuideRefusesASharedNavOrder(t *testing.T) {
+	fsys := fstest.MapFS{
+		"index.md": {Data: []byte("---\nnav-order: 1\n---\n# T\n")},
+		"a.md":     {Data: []byte("---\nnav-order: 1\n---\n# A\n")},
+		"b.md":     {Data: []byte("---\nnav-order: 2\n---\n# B\n")},
+	}
+	if _, err := loadGuide(fsys); err != nil {
+		t.Errorf("a section sharing the opening's nav-order: %v", err)
+	}
+	fsys["c.md"] = &fstest.MapFile{Data: []byte("---\nnav-order: 2\n---\n# C\n")}
+	_, err := loadGuide(fsys)
+	if err == nil || !strings.Contains(err.Error(), "b.md") || !strings.Contains(err.Error(), "c.md") {
+		t.Errorf("two sections at nav-order 2: err = %v", err)
+	}
+}
+
+// The guide was one page, docs/authoring.md, and agents and their skills
+// ask for its sections by the anchors they had there. Splitting it into a
+// file per section kept those names; this is what holds them.
+func TestGuideKeepsItsSectionNames(t *testing.T) {
+	for _, name := range []string{
+		"quick-reference", "silent-traps", "page-structure", "links-and-images",
+		"callouts-and-containers", "code-blocks", "diagrams", "charts",
+		"inline-marks", "other-markdown", "choosing-between-forms", "sites",
+		"build-behaviour", "styles", "warnings",
+	} {
+		if _, err := GuideSection(name); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+// Front matter places a page in the documentation site and [[toc]] gives
+// it a contents list there; neither is any use to a reader of --guide, who
+// gets the index instead. Converting what --guide prints would draw a
+// contents list from a marker that survived, so that is the check, which
+// leaves the markers the guide shows inside code alone.
+func TestGuideOutputLeavesOutFrontMatterAndTOC(t *testing.T) {
+	outs := map[string][]byte{"summary": GuideSummary(), "all": AuthoringGuide()}
+	for _, p := range guideParts()[1:] {
+		b, err := GuideSection(p.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outs[p.name] = b
+	}
+	for name, b := range outs {
+		if bytes.HasPrefix(b, []byte("---")) || bytes.Contains(b, []byte("\n---\nnav-order:")) {
+			t.Errorf("%s carries front matter", name)
+		}
+		if strings.Contains(convert(t, string(b), nil), `<nav class="toc"`) {
+			t.Errorf("%s carries a [[toc]] marker", name)
 		}
 	}
 }

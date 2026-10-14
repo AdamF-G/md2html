@@ -211,7 +211,7 @@ func TestHeadingAnchorsExcludeChipsFromSlug(t *testing.T) {
 }
 
 // A chip-free heading's slug must be byte-identical to what it was before
-// chips existed — docs/authoring.md promises stable, predictable ids.
+// chips existed — docs/guide/page-structure.md promises stable, predictable ids.
 func TestHeadingAnchorsSlugUnchangedWithoutChips(t *testing.T) {
 	got := apply(t, `<h2>Hello World</h2>`, HeadingAnchors())
 	if !strings.Contains(got, `id="hello-world"`) {

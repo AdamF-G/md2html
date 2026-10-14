@@ -18,14 +18,11 @@ const skillName = "md2html-authoring"
 // `md2html --guide`, which always matches the binary doing the conversion,
 // where a copy installed beside the skill would describe whichever version
 // installed it. Both are embedded from where they already live — the skill
-// this repo uses on itself, and the authoring guide — rather than from
-// copies kept in step by hand.
-var (
-	//go:embed .claude/skills/md2html-authoring/SKILL.md
-	skillDoc []byte
-	//go:embed docs/authoring.md
-	authoringDoc []byte
-)
+// this repo uses on itself here, and the authoring guide's files in
+// docs/guide by guide.go — rather than from copies kept in step by hand.
+//
+//go:embed .claude/skills/md2html-authoring/SKILL.md
+var skillDoc []byte
 
 // retiredSkillFiles are files earlier versions installed into the skill
 // directory and this one no longer does. A stale authoring.md beside the
@@ -105,19 +102,21 @@ func InstallSkill(parent string) ([]string, error) {
 	return written, nil
 }
 
-// AuthoringGuide returns the Markdown authoring guide: the syntax md2html
-// understands and the traps that render wrong without a warning. It is what
-// `md2html --guide` prints, and what the skill sends its reader to.
+// AuthoringGuide returns the whole Markdown authoring guide: the syntax
+// md2html understands and the traps that render wrong without a warning.
+// It is what `md2html --guide all` prints, and what the skill sends its
+// reader to: every file of the guide in order, a blank line between them,
+// each without the front matter and contents marker that serve it on the
+// documentation site.
 func AuthoringGuide() []byte {
-	return bytes.Clone(guideSource())
-}
-
-// guideSource is the authoring guide without its front matter, which only
-// places the page in md2html's documentation site and is no part of the
-// guide a reader gets.
-func guideSource() []byte {
-	_, body, _ := splitFrontMatter(authoringDoc)
-	return body
+	var b bytes.Buffer
+	for i, p := range guideParts() {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.Write(p.text)
+	}
+	return b.Bytes()
 }
 
 // skillFiles returns the skill's files, keyed by the name each takes inside

@@ -47,6 +47,12 @@ major version instead.
 - A paragraph that is only `[[content]]`, `[[pages]]`, `[[breadcrumb]]`,
   `[[prev-next]]` or `[[search]]` now warns in a build without `--site`,
   where it needs a shell. It still renders as written.
+- The authoring guide is a file per section in `docs/guide`, so the
+  documentation site shows each section as a page of its own.
+  `md2html --guide` reads the same files and takes the same section names.
+  What it prints of a section now opens with a `#` heading, and a link from
+  one section to another names that section's file, as in
+  `styles.md#chart-settings`.
 
 ## v0.10.0 — 2026-10-14
 

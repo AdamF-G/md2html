@@ -46,7 +46,7 @@ md2html --install-skill DIR       # any agent, into the skills directory it read
 
 Each writes `SKILL.md` into a `md2html-authoring` directory. The skill
 tells the agent when to look and what the silent traps are, and sends it to
-`md2html --guide` for the [authoring reference](./docs/authoring.md) —
+`md2html --guide` for the [authoring reference](./docs/guide/index.md) —
 its quick reference and traps first, then one section at a time as the
 page needs them — so the guidance always describes the binary that will convert the page —
 which neither a copy installed beside the skill nor a link to this repo's
@@ -155,7 +155,7 @@ with no page shell, ready to drop into a Claude Artifact.
 - **Safety for your files.** Every generated file is marked, and a file
   without the marker is never overwritten.
 
-The full syntax, with the traps, is in [docs/authoring.md](./docs/authoring.md).
+The full syntax, with the traps, is in [the authoring guide](./docs/guide/index.md).
 
 ## The dialect
 
@@ -421,7 +421,7 @@ recipient's agent anyway.
 Callouts, diagrams, heading attributes, footnotes and definition lists all
 work, and some of them fail silently if you get the syntax wrong: the
 guide lists those as silent traps. See
-[docs/authoring.md](./docs/authoring.md), or `md2html --guide` for the copy
+[the authoring guide](./docs/guide/index.md), or `md2html --guide` for the copy
 that matches your binary, or install [the authoring
 skill](#the-authoring-skill-for-agents) so your agent has it to hand.
 
@@ -437,7 +437,7 @@ out, err := md2html.Convert(src, md2html.Options{SourcePath: "doc.md"})
 while converting a document: a front matter block that isn't flat
 `key: value`, a container naming a kind that doesn't exist, a `fig` fence
 whose body doesn't parse or doesn't validate, and the others listed under
-Warnings in the [authoring guide](./docs/authoring.md#warnings). They all
+[Warnings](./docs/guide/warnings.md) in the authoring guide. They all
 arrive whatever `Transforms` holds — a builtin that reports is rebuilt
 against this sink before it runs, so appending to `Builtins()` costs you no
 diagnostics. `Convert` never writes to stderr itself; the callback runs

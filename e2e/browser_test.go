@@ -2709,10 +2709,7 @@ func TestBrowserSourceToolsHiddenInPrint(t *testing.T) {
 func TestBrowserClaudeArtifactFitsAPhone(t *testing.T) {
 	// The authoring guide, not the conformance fixture: the fixture carries
 	// its own <style> setting tokens, which would test that instead.
-	guide, err := os.ReadFile("../docs/authoring.md")
-	if err != nil {
-		t.Fatal(err)
-	}
+	guide := md2html.AuthoringGuide()
 	wide := "# Wide blocks\n\n" +
 		"```fig\nwide: true\nlayout: cols\nitems:\n" +
 		"  - box: Ingest every file\n  - box: Validate each record\n  - box: Publish the result\n" +
