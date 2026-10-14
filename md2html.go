@@ -169,6 +169,11 @@ type Options struct {
 	// comes from the renderer, and a transform that reports is rebuilt
 	// against this sink before it runs (see Transforms).
 	Warn func(string)
+
+	// Site, when set, wraps the page in the site's shell and gives its
+	// markers the site's tree (see BuildSite). SourcePath must be the page's
+	// source as the crawl resolved it. Fragment output ignores it.
+	Site *Site
 }
 
 // newParser builds the goldmark instance. Every extension here is required
@@ -238,6 +243,15 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	root, err := parseFragment(buf.Bytes())
 	if err != nil {
 		return nil, err
+	}
+	// The navigation markers need a site's tree. Said once per marker, and
+	// left as written, the degradation [[toc]] has with nothing to list.
+	if opt.Site == nil && opt.Warn != nil {
+		for _, m := range findMarkers(root) {
+			if navMarkerNames[m.name] {
+				opt.Warn(fmt.Sprintf("[[%s]] needs a site shell (--site); leaving it as written", m.name))
+			}
+		}
 	}
 
 	// Before transforms: HeadingAnchors would otherwise contribute its "#"
