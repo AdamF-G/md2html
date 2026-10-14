@@ -1,26 +1,149 @@
-/* The layout of md2html's documentation site, on top of the default style.
-   The shell (site/shell.md) puts a header, a section nav, the breadcrumb,
-   the page's <main>, previous/next and a footer straight into <body>; this
-   places them. Narrow screens get them stacked, in source order. */
+/* The layout and look of md2html's documentation site, on top of the
+   default style. The shell (site/shell.md) puts a header, a section nav,
+   the breadcrumb, the page's <main>, previous/next and a footer straight
+   into <body>; this places them, and narrow screens get them stacked in
+   source order.
+
+   The look is ink on proof paper: a faintly cool page, blue-black text and
+   a peacock-teal accent, with the top bar as a full-width band of ink, the
+   one bold element. --band and --band-fg are this style's own; everything
+   else is the default's palette, set in both themes as the guide's
+   "Making your own style" asks. */
+
+:root {
+  --bg: #f7f9f8;
+  --fg: #1a2830;
+  --muted: #56676e;
+  --accent: #0a6668;
+  --rule: #d5dfdd;
+  --code-bg: #e8eeec;
+  --ok: #2b6b40;
+  --warn: #9e4800;
+  --chart-grid: #dde6e4;
+  --chart-axis: #b9c8c5;
+  --series-1: #00948a;
+  --series-2: #a8611e;
+  --band: #14303c;
+  --band-fg: #e4eef0;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f191e;
+    --fg: #dce6e8;
+    --muted: #8b9fa6;
+    --accent: #5cc3bf;
+    --rule: #233740;
+    --code-bg: #15242b;
+    --ok: #6fbe89;
+    --warn: #f0915a;
+    --chart-grid: #1c2c33;
+    --chart-axis: #31474f;
+    --series-1: #12a6ab;
+    --series-2: #cf7346;
+    --band: #133039;
+    color-scheme: dark;
+    --band-fg: #dce6e8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f191e;
+  --fg: #dce6e8;
+  --muted: #8b9fa6;
+  --accent: #5cc3bf;
+  --rule: #233740;
+  --code-bg: #15242b;
+  --ok: #6fbe89;
+  --warn: #f0915a;
+  --chart-grid: #1c2c33;
+  --chart-axis: #31474f;
+  --series-1: #12a6ab;
+  --series-2: #cf7346;
+  --band: #133039;
+  color-scheme: dark;
+  --band-fg: #dce6e8;
+}
+/* The default's own explicit light block outranks a bare :root, so the
+   light palette is restated for it. */
+:root[data-theme="light"] {
+  --bg: #f7f9f8;
+  --fg: #1a2830;
+  --muted: #56676e;
+  --accent: #0a6668;
+  --rule: #d5dfdd;
+  --code-bg: #e8eeec;
+  --ok: #2b6b40;
+  --warn: #9e4800;
+  --chart-grid: #dde6e4;
+  --chart-axis: #b9c8c5;
+  --series-1: #00948a;
+  --series-2: #a8611e;
+  --band: #14303c;
+  --band-fg: #e4eef0;
+  color-scheme: light;
+}
+
+/* Headings in a book serif, so a page reads as set type; body text stays
+   in the default's sans, which the charts' label metrics assume. */
+h1, h2, h3, h4 {
+  font-family: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Cambria, Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
 
 body { padding-top: 0; }
 
+/* A band of ink the full width of the window, though the bar's content
+   keeps to the page's grid: the shadow paints the band past the bar's own
+   box, and the clip keeps it from spilling above or below. */
 .topbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1.5rem;
   padding: 0.9rem 0;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--rule);
+  margin-bottom: 2rem;
+  background: var(--band);
+  color: var(--band-fg);
+  box-shadow: 0 0 0 100vmax var(--band);
+  clip-path: inset(0 -100vmax);
 }
 .topbar > p { margin: 0; }
-.topbar > p a { color: var(--fg); text-decoration: none; font-size: 1.15rem; }
+.topbar > p a {
+  color: var(--band-fg);
+  text-decoration: none;
+  font-family: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Cambria, Georgia, serif;
+  font-weight: 700;
+  font-size: 1.3rem;
+}
 .topbar .md2html-pages { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
+.topbar .md2html-pages a { color: var(--band-fg); opacity: 0.78; }
+.topbar .md2html-pages a:hover,
+.topbar .md2html-pages a[aria-current="page"] { opacity: 1; }
+.topbar .md2html-pages a[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.4em;
+}
+.topbar .md2html-search-input {
+  background: color-mix(in srgb, var(--band-fg) 10%, var(--band));
+  border-color: color-mix(in srgb, var(--band-fg) 25%, var(--band));
+  color: var(--band-fg);
+}
+.topbar .md2html-search-input::placeholder { color: var(--band-fg); opacity: 0.6; }
+.topbar .md2html-search-results { color: var(--fg); }
 .topbar .md2html-search { margin-left: auto; width: min(18rem, 100%); }
 
-.sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; }
+.sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; scrollbar-width: thin; }
 .sidebar .md2html-pages li { margin: 0.3rem 0; }
+.sidebar .md2html-pages a { color: var(--fg); }
+.sidebar .md2html-pages a:hover { color: var(--accent); }
+.sidebar .md2html-pages a[aria-current="page"] {
+  color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+  margin-left: -0.6rem;
+  padding-left: 0.6rem;
+}
 
 nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
 
