@@ -25,7 +25,7 @@ func TestBuiltinStylesPassTheStyleCheck(t *testing.T) {
 			}
 		}
 	}
-	if n < 2 {
-		t.Errorf("checked %d built-in styles, want default and claude-artifact at least", n)
+	if n < 3 {
+		t.Errorf("checked %d built-in styles, want default, claude-artifact and proof at least", n)
 	}
 }

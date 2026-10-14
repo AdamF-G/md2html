@@ -1,0 +1,126 @@
+/* proof: ink on proof paper. A faintly cool page, blue-black text and a
+   peacock-teal accent, in both themes, layered on the default stylesheet
+   so it only says what differs. Headings are set in a book serif; body
+   text stays in the default's sans, which the charts' label metrics
+   assume, so charts need no block of their own.
+
+   --band and --band-fg are this style's own: the colours of a header
+   band, the one bold element of the look. The band applies to the site
+   header landmark, the <header> that a site shell (see `md2html --guide
+   sites`) puts straight into <body>; a page without one is just the
+   palette and the headings. Only colour and decoration are here, so
+   whatever uses the band places it and spaces it itself.
+
+   Everything else in the palette is the default's, set in all three theme
+   states as the guide's "Making your own style" asks. */
+
+:root {
+  --bg: #f7f9f8;
+  --fg: #1a2830;
+  --muted: #56676e;
+  --accent: #0a6668;
+  --rule: #d5dfdd;
+  --code-bg: #e8eeec;
+  --ok: #2b6b40;
+  --warn: #9e4800;
+  --chart-grid: #dde6e4;
+  --chart-axis: #b9c8c5;
+  --series-1: #00948a;
+  --series-2: #a8611e;
+  --band: #14303c;
+  --band-fg: #e4eef0;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f191e;
+    --fg: #dce6e8;
+    --muted: #8b9fa6;
+    --accent: #5cc3bf;
+    --rule: #233740;
+    --code-bg: #15242b;
+    --ok: #6fbe89;
+    --warn: #f0915a;
+    --chart-grid: #1c2c33;
+    --chart-axis: #31474f;
+    --series-1: #12a6ab;
+    --series-2: #cf7346;
+    --band: #133039;
+    color-scheme: dark;
+    --band-fg: #dce6e8;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f191e;
+  --fg: #dce6e8;
+  --muted: #8b9fa6;
+  --accent: #5cc3bf;
+  --rule: #233740;
+  --code-bg: #15242b;
+  --ok: #6fbe89;
+  --warn: #f0915a;
+  --chart-grid: #1c2c33;
+  --chart-axis: #31474f;
+  --series-1: #12a6ab;
+  --series-2: #cf7346;
+  --band: #133039;
+  color-scheme: dark;
+  --band-fg: #dce6e8;
+}
+/* The default's own explicit light block outranks a bare :root, so the
+   light palette is restated for it. */
+:root[data-theme="light"] {
+  --bg: #f7f9f8;
+  --fg: #1a2830;
+  --muted: #56676e;
+  --accent: #0a6668;
+  --rule: #d5dfdd;
+  --code-bg: #e8eeec;
+  --ok: #2b6b40;
+  --warn: #9e4800;
+  --chart-grid: #dde6e4;
+  --chart-axis: #b9c8c5;
+  --series-1: #00948a;
+  --series-2: #a8611e;
+  --band: #14303c;
+  --band-fg: #e4eef0;
+  color-scheme: light;
+}
+
+/* Headings in a book serif, so a page reads as set type. */
+h1, h2, h3, h4 {
+  font-family: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Cambria, Georgia, serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* A band of ink the full width of the window, though the header's content
+   keeps to the page's column: the shadow paints the band past the header's
+   own box, and the clip keeps it from spilling above or below. */
+body > header {
+  background: var(--band);
+  color: var(--band-fg);
+  box-shadow: 0 0 0 100vmax var(--band);
+  clip-path: inset(0 -100vmax);
+}
+body > header > p a {
+  color: var(--band-fg);
+  text-decoration: none;
+  font-family: Charter, "Bitstream Charter", "Iowan Old Style", "Sitka Text", Cambria, Georgia, serif;
+  font-weight: 700;
+}
+body > header .md2html-pages a { color: var(--band-fg); opacity: 0.78; }
+body > header .md2html-pages a:hover,
+body > header .md2html-pages a[aria-current="page"] { opacity: 1; }
+body > header .md2html-pages a[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.4em;
+}
+body > header .md2html-search-input {
+  background: color-mix(in srgb, var(--band-fg) 10%, var(--band));
+  border-color: color-mix(in srgb, var(--band-fg) 25%, var(--band));
+  color: var(--band-fg);
+}
+body > header .md2html-search-input::placeholder { color: var(--band-fg); opacity: 0.6; }
+body > header .md2html-search-results { color: var(--fg); }

@@ -1,0 +1,12 @@
+{
+  "format": 1,
+  "name": "proof",
+  "description": "Ink on proof paper",
+  "styles": {
+    "proof": {
+      "description": "A cool page, blue-black ink and a peacock-teal accent, in both themes",
+      "base": "default",
+      "css": ["proof.css"]
+    }
+  }
+}

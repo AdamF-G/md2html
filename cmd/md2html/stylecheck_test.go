@@ -46,7 +46,7 @@ func TestCheckStyleBuiltinsPass(t *testing.T) {
 	if code := run([]string{"--check-style"}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d: %s%s", code, out.String(), errb.String())
 	}
-	for _, want := range []string{"default/default: no problems\n", "claude-artifact/claude-artifact: no problems\n"} {
+	for _, want := range []string{"default/default: no problems\n", "claude-artifact/claude-artifact: no problems\n", "proof/proof: no problems\n"} {
 		if !bytes.Contains(out.Bytes(), []byte(want)) {
 			t.Errorf("stdout lacks %q:\n%s", want, out.String())
 		}

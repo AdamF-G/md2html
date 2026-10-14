@@ -1,6 +1,6 @@
 ---
 site: true
-style: docs
+style: proof, docs
 plugins: style
 ---
 ::: header {.topbar}

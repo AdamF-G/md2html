@@ -16,6 +16,10 @@ major version instead.
 
 ### Added
 
+- The built-in `proof` style, ink on proof paper: a cool page with
+  blue-black text and a peacock-teal accent in both themes, headings in a
+  book serif, and, on a site shell's `::: header`, a full-width band of
+  ink. Pick it with `--style proof` or `style: proof`.
 - Site mode. `--site shell.md` wraps every page of a build in a shell: an
   ordinary page whose front matter says `site: true` and which holds one
   `[[content]]`. Markers in the shell draw the site from the pages

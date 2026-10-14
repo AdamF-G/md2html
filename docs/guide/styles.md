@@ -14,6 +14,8 @@ claude-artifact: Looks from pages Claude publishes as Artifacts
   claude-artifact/claude-artifact  The rules every Artifact follows, …
 default: The stylesheet md2html uses when no style is selected
   default/default  Warm neutrals, system fonts, both themes
+proof: Ink on proof paper
+  proof/proof  A cool page, blue-black ink and a peacock-teal accent, in both themes
 ```
 
 ## Choosing styles
