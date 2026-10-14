@@ -2,7 +2,8 @@
 
 **Date:** 2026-10-13
 **Author:** AdamF-G
-**Status:** Draft for review
+**Status:** Shipped. See [As shipped](#as-shipped) for where the build
+differs from this draft.
 
 ## Purpose
 
@@ -326,7 +327,8 @@ every mark of the other categories:
 Under each chart, a collapsed `<details class="container">` titled with the
 chart's caption (or "Chart data") holds a table of the data the chart drew:
 one row per datum, one column per field the spec encodes, in encoding order,
-formatted as the axis formats them. It answers the dataviz skill's table
+with each value written as the data holds it, not as the axis formats it (the
+owner confirmed this). It answers the dataviz skill's table
 requirement and its contrast relief rule. It is the fallback where `:has()`
 is missing, and it is readable with no SVG support at all.
 
@@ -365,7 +367,8 @@ is missing, and it is readable with no SVG support at all.
 
 - **Binary size.** Stripped, md2html is 4.7 MB today. goja and the two
   bundles add about 9 MB, so the binary grows to roughly 13 to 14 MB.
-  Accepted (decision 14); the plan records the exact figure.
+  Accepted (decision 14). Measured: 5.1 MB to 17.2 MB (see
+  [As shipped](#as-shipped)).
 - **Build time.** The engine starts in about 55 ms, once per run and only
   when a page has a chart. Each chart then takes 30 to 50 ms. A page with no
   chart costs nothing.
@@ -424,6 +427,41 @@ block and the chart tokens.
 ## Open questions for review
 
 None. Decisions 13, 15 and 16 settled the three raised in the first draft.
+
+## As shipped
+
+Where the build differs from, or adds to, the sections above.
+
+- **Table view.** Values are written as the data holds them, not as the axis
+  formats them. The rows are the data the marks drew, so derived fields
+  (`fold`, `calculate`) are included, and aggregate, bin and timeUnit
+  columns carry Vega-Lite's names. A timeUnit column holds the truncated
+  value the chart drew. A line's points add no rows, while a layer drawing
+  other rows adds its own.
+- **Dates** render the same whatever the build machine's zone, with no
+  time-zone setting. A value with no zone (a date alone, or a timestamp
+  without an offset) shows exactly as written. A value that names an
+  instant (an explicit offset such as `+02:00`, or an epoch number) shows
+  in UTC.
+- **Image marks** accept only `data:` URLs. Anything else is a fault.
+- **Line and area tooltips** get nearest-point regions and boxes, with no
+  per-datum tab stops.
+- **Palettes.** `default`'s palette is "Hearth", chosen by the owner from
+  three validated candidates. `claude-artifact` uses the dataviz reference
+  palette.
+- **Style tokens.** Charts use the style's tokens only when the stylesheet
+  defines all 17. Otherwise they use `default`'s literal colours.
+- **Binary size.** 5.1 MB to 17.2 MB for a stripped darwin/arm64 build,
+  against the 13 to 14 MB estimated under Costs.
+
+### Follow-ups
+
+- Apply a variable font's `wght` axis through `HVAR`. Weight is currently a
+  constant factor per 100 of weight.
+- A data-defined chart-theme feature, with user-defined palettes validated at
+  build time (lightness band, contrast, adjacent distinctness, optional
+  colour-blind checks). Hearth, Kiln and Ember would be built-ins. The owner
+  asked for this after the plan ran.
 
 ## Spike evidence
 
