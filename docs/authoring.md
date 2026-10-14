@@ -331,6 +331,19 @@ breaks there. Use the directive form when a title ends in something shaped
 like `{…}`: in any other form a trailing brace group is read as
 attributes, so `::: card The {x}` is titled "The".
 
+**Titles.** A title is inline Markdown: code spans, emphasis, links and
+badges all work. A badge or link ends in a brace group or brackets, so
+put such a title in the directive form, whose brackets may nest:
+`:::card[Result [stable]{.chip}]`. A `]` inside a code span or written
+`\]` does not close the title.
+
+**Title as a heading.** A title is a paragraph unless the attribute
+block asks for a heading level, 2 to 6: `:::card[Result]{title-level=3}`
+gives `<h3 class="container-title">`, styled as before but in the page's
+outline, its contents list and its heading anchors. It warns on a
+collapsible kind, whose title is its `<summary>`, and on a container with
+no title.
+
 **Only the first class names the kind.** In the braced form,
 `{.warning .compact}` is a warning, but `{.compact .warning}` is a plain
 `<div class="compact warning">`, unstyled, with no warning. Put the kind

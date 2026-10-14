@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"slices"
 	"strings"
 
 	fences "github.com/AdamF-G/md2html/internal/fences"
@@ -29,6 +30,20 @@ type containerInfo = fences.Info
 // what lets a title hold code spans and emphasis without this package
 // converting Markdown a second time.
 func parseContainerInfo(info string) (containerInfo, bool) {
+	out, ok := splitContainerInfo(info)
+	out.Attrs = slices.DeleteFunc(out.Attrs, func(a fences.Attr) bool {
+		if strings.EqualFold(a.Name, "title-level") {
+			out.TitleLevel = a.Value
+			return true
+		}
+		return false
+	})
+	return out, ok
+}
+
+// splitContainerInfo is parseContainerInfo before title-level is taken out
+// of the attributes.
+func splitContainerInfo(info string) (containerInfo, bool) {
 	out := containerInfo{TitleStart: -1, TitleEnd: -1}
 
 	if strings.HasPrefix(info, "{") {
@@ -46,8 +61,7 @@ func parseContainerInfo(info string) (containerInfo, bool) {
 
 	// Label form: kind[Title], with an optional trailing attribute block.
 	if open := strings.IndexByte(info, '['); open > 0 && !strings.ContainsAny(info[:open], " \t{") {
-		if close := strings.IndexByte(info[open+1:], ']'); close >= 0 {
-			close += open + 1
+		if close := closingBracket(info, open); close >= 0 {
 			tail := strings.TrimLeft(info[close+1:], " \t")
 			var attrs []fences.Attr
 			owned := tail == ""
@@ -82,6 +96,41 @@ func parseContainerInfo(info string) (containerInfo, bool) {
 	}
 	out.Kind = word
 	return out, true
+}
+
+// closingBracket returns the index of the "]" that closes the "[" at open,
+// or -1. Brackets nest, so a title can hold a bracketed span such as
+// [stable]{.chip} or a link; a backslash escapes the next byte, and a code
+// span is skipped whole, so a "]" in either does not end the title. A
+// backtick run with no closing run of the same length is literal, as in
+// CommonMark.
+func closingBracket(s string, open int) int {
+	depth := 0
+	for i := open; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '`':
+			n := 1
+			for i+n < len(s) && s[i+n] == '`' {
+				n++
+			}
+			run := strings.Repeat("`", n)
+			if end := strings.Index(s[i+n:], run); end >= 0 {
+				i += n + end + n - 1
+			} else {
+				i += n - 1
+			}
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // readBracedPrefix reads a leading {...} attribute block, returning its

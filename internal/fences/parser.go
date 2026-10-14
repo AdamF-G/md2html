@@ -44,8 +44,8 @@ var fencedContainerInfoKey = parser.NewContextKey()
 
 // fenceAttrPrefix namespaces every attribute this parser uses to carry its
 // own state to the renderer and to a post-processing transform: data-fence
-// (the id that makes nested fences work), data-fence-kind and
-// data-fence-title.
+// (the id that makes nested fences work), data-fence-kind,
+// data-fence-title and data-fence-title-level.
 const fenceAttrPrefix = "data-fence"
 
 // reservedFenceAttr reports whether an attribute name belongs to the parser
@@ -143,6 +143,9 @@ func (b *fencedContainerParser) Open(parent ast.Node, reader text.Reader, pc par
 		}
 		if parsed.Kind != "" {
 			node.SetAttributeString("data-fence-kind", []byte(parsed.Kind))
+		}
+		if parsed.TitleLevel != "" {
+			node.SetAttributeString("data-fence-title-level", []byte(parsed.TitleLevel))
 		}
 		if parsed.TitleEnd > parsed.TitleStart {
 			t := NewFencedContainerTitle()

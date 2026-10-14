@@ -71,6 +71,10 @@ major version instead.
   colour roles of its own with `tokens` in its manifest's `charts` block,
   such as `"tokens": ["inject", "source"]` for `token:inject`.
 
+- A container's attribute block takes `title-level=2` to `6`, which
+  writes its title as a heading: in the outline, the contents list and the
+  heading anchors, and styled as the paragraph title was.
+
 ### Changed
 
 - `--version` names the commit when the build is not exactly a tagged
@@ -101,6 +105,10 @@ major version instead.
 
 ### Fixed
 
+- A directive-form container title, `:::card[…]`, ended at its first `]`,
+  so a title holding a badge, a link or a `]` in code was cut short and
+  the container lost its kind. Its brackets now nest, and a `]` in a code
+  span or escaped does not end it.
 - `.chip-ok`, which the guide's badge example used, was styled by no
   stylesheet, so `[shipped]{.chip .chip-ok}` rendered as a plain grey
   chip. The default stylesheet now gives a chip three tones, `.chip-ok`,

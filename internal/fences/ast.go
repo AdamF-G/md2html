@@ -42,11 +42,16 @@ type Attr struct {
 // split, half-open. TitleEnd <= TitleStart means the fence line carried no
 // title. Offsets are used rather than a string so the parser can point a
 // source segment at the title and let goldmark parse its inlines.
+//
+// TitleLevel is the fence line's title-level value, as written, or "": the
+// heading level the title asks to be. It travels apart from Attrs because
+// it is an instruction to md2html, not an attribute of the element.
 type Info struct {
 	Kind       string
 	Attrs      []Attr
 	TitleStart int
 	TitleEnd   int
+	TitleLevel string
 }
 
 // FencedContainerTitle is a container's title, as written on its fence

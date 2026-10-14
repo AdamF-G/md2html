@@ -261,6 +261,9 @@ details.container[open] > summary { margin-bottom: 0.75rem; }
 details.container.example { border-left: 3px solid var(--accent); }
 
 .container-title { font-weight: 600; margin: 0 0 0.5rem; }
+/* A title-level title is a heading for the outline, not a section break:
+   it keeps the size of the paragraph title it replaces. */
+:is(h2, h3, h4, h5, h6).container-title { font-size: inherit; line-height: inherit; }
 
 /* The stats, defs and group containers are the fig kinds of the same names
    promoted to block Markdown, and they share the fig rules below rather

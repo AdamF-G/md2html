@@ -1067,3 +1067,54 @@ func TestContainerStatsKeepsTermsSharingADefinitionTogether(t *testing.T) {
 		t.Errorf("shared-definition terms split\nwant: %s\ngot:  %s", want, got)
 	}
 }
+
+// title-level makes a known kind's title a heading, which then gets an id,
+// an anchor and a place in the contents list like any other.
+func TestContainerTitleLevel(t *testing.T) {
+	var warnings []string
+	got := convert(t, "[[toc]]\n\n:::card[Result [stable]{.chip}]{title-level=3 .x}\nBody.\n:::\n", func(w string) { warnings = append(warnings, w) })
+	if !strings.Contains(got, `<div class="card x"><h3 class="container-title" id="result">Result <span class="chip">stable</span><a class="anchor"`) {
+		t.Errorf("no h3 title\ngot: %s", got)
+	}
+	if !strings.Contains(got, `<a href="#result">Result</a>`) {
+		t.Errorf("the title is not in the contents list\ngot: %s", got)
+	}
+	if strings.Contains(got, "title-level") {
+		t.Errorf("title-level leaked into the output\ngot: %s", got)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warned: %v", warnings)
+	}
+	// The braced spelling of a kind takes it too.
+	if got := convert(t, "::: {.callout title-level=2} Note\nx\n:::\n", nil); !strings.Contains(got, `<h2 class="container-title" id="note">Note`) {
+		t.Errorf("braced kind: no h2 title\ngot: %s", got)
+	}
+}
+
+func TestContainerTitleLevelWarnsWhenItCannotApply(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{"::: card Title {title-level=1}\nx\n:::\n", `title-level "1" is not 2 to 6`},
+		{"::: card Title {title-level=three}\nx\n:::\n", `title-level "three" is not 2 to 6`},
+		{"::: aside Why {title-level=3}\nx\n:::\n", "collapsible kind"},
+		{"::: card {title-level=3}\nx\n:::\n", "no title"},
+		{"::: {.house title-level=3} Title\nx\n:::\n", "without a container kind"},
+	} {
+		var warnings []string
+		got := convert(t, c.src, func(w string) { warnings = append(warnings, w) })
+		if len(warnings) != 1 || !strings.Contains(warnings[0], c.want) {
+			t.Errorf("%q: warnings = %v, want one naming %q", c.src, warnings, c.want)
+		}
+		if strings.Contains(got, "<h") && strings.Contains(got, "container-title\" id") {
+			t.Errorf("%q: made a heading anyway\ngot: %s", c.src, got)
+		}
+	}
+}
+
+// A title-level written in data-fence's namespace is the parser's, not the
+// author's, so a document cannot set it that way.
+func TestContainerTitleLevelCannotBeForged(t *testing.T) {
+	got := convert(t, "::: card Title {data-fence-title-level=3}\nx\n:::\n", nil)
+	if strings.Contains(got, "<h3") {
+		t.Errorf("a forged data-fence-title-level made a heading\ngot: %s", got)
+	}
+}

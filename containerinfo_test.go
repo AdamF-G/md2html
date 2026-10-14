@@ -309,3 +309,34 @@ func TestParseFenceInfoKindThenTitleThenAttrs(t *testing.T) {
 		t.Errorf("attrs = %v, want id=w", got.Attrs)
 	}
 }
+
+// A label title's brackets nest, and a "]" escaped or inside a code span
+// does not end it, so a title can hold a chip, a link or code.
+func TestParseFenceInfoLabelTitleNests(t *testing.T) {
+	for _, c := range []struct{ info, title, class string }{
+		{"card[Result [stable]{.chip}]", "Result [stable]{.chip}", ""},
+		{"card[See [the docs](./a.md)]{.x}", "See [the docs](./a.md)", "x"},
+		{"card[Result `a]b`]", "Result `a]b`", ""},
+		{"card[Result ``a`]b``]", "Result ``a`]b``", ""},
+		{`card[A \] B]`, `A \] B`, ""},
+		{"card[Lone ` tick]", "Lone ` tick", ""},
+	} {
+		got, ok := parseContainerInfo(c.info)
+		if !ok || got.Kind != "card" {
+			t.Errorf("%q: ok %v kind %q", c.info, ok, got.Kind)
+			continue
+		}
+		if s := title(c.info, got); s != c.title {
+			t.Errorf("%q: title = %q, want %q", c.info, s, c.title)
+		}
+		class := ""
+		for _, a := range got.Attrs {
+			if a.Name == "class" {
+				class = a.Value
+			}
+		}
+		if class != c.class {
+			t.Errorf("%q: class = %q, want %q", c.info, class, c.class)
+		}
+	}
+}

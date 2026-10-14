@@ -3,6 +3,7 @@ package md2html
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -140,6 +141,8 @@ func Containers(warn func(string)) Transform {
 			// attribute namespace against author text (reservedFenceAttr).
 			_, titled := attr(div, "data-fence-title")
 			removeAttr(div, "data-fence-title")
+			level, leveled := attr(div, "data-fence-title-level")
+			removeAttr(div, "data-fence-title-level")
 
 			// The parser owns every fence line now, whichever form it took —
 			// bare, braced or label — and stamps data-fence-kind on the div
@@ -163,7 +166,8 @@ func Containers(warn func(string)) Transform {
 					declassParsedTitle(div, titled)
 					continue
 				}
-				applyKind(div, k, detachParsedTitle(div, titled))
+				title := detachParsedTitle(div, titled)
+				applyKind(div, k, title, titleTag(level, leveled, k, len(title) > 0, warn))
 				listKind(div, kind, k, warn)
 				continue
 			}
@@ -176,8 +180,11 @@ func Containers(warn func(string)) Transform {
 				if f := strings.Fields(cls); len(f) > 0 {
 					if k, known := containerKinds[f[0]]; known {
 						removeClassToken(div, f[0])
-						applyKind(div, k, detachParsedTitle(div, titled))
+						title := detachParsedTitle(div, titled)
+						applyKind(div, k, title, titleTag(level, leveled, k, len(title) > 0, warn))
 						listKind(div, f[0], k, warn)
+					} else if leveled {
+						warn("container title-level has no effect without a container kind")
 					}
 					continue
 				}
@@ -205,7 +212,10 @@ func Containers(warn func(string)) Transform {
 // merged class, and anything else like an id) forward onto the replacement
 // <details> element, so this merge is what a collapsible kind ends up
 // wearing too.
-func applyKind(div *html.Node, k containerKind, title []*html.Node) {
+//
+// tag is the element a title becomes on a kind that is not collapsible:
+// "p", or a heading (see titleTag).
+func applyKind(div *html.Node, k containerKind, title []*html.Node, tag string) {
 	existing, _ := attr(div, "class")
 	if tokens := mergeTokens(k.class, existing); len(tokens) > 0 {
 		setAttr(div, "class", strings.Join(tokens, " "))
@@ -224,7 +234,7 @@ func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 		return
 	}
 	if len(title) > 0 {
-		tp := &html.Node{Type: html.ElementNode, DataAtom: atom.P, Data: "p",
+		tp := &html.Node{Type: html.ElementNode, DataAtom: atom.Lookup([]byte(tag)), Data: tag,
 			Attr: []html.Attribute{{Key: "class", Val: "container-title"}}}
 		for _, n := range title {
 			tp.AppendChild(n)
@@ -234,6 +244,29 @@ func applyKind(div *html.Node, k containerKind, title []*html.Node) {
 	if k.tag != "div" {
 		retag(div, k.tag)
 	}
+}
+
+// titleTag is the element a container's title is written as: the heading
+// a title-level attribute asks for, so the title is in the page's outline,
+// its contents list and its anchors, or else a paragraph. h1 is the page's
+// own title, so the levels run from 2. A level with nothing to apply to, or
+// out of range, warns and leaves a paragraph.
+func titleTag(level string, set bool, k containerKind, titled bool, warn func(string)) string {
+	if !set {
+		return "p"
+	}
+	n, err := strconv.Atoi(level)
+	switch {
+	case err != nil || n < 2 || n > 6:
+		warn(fmt.Sprintf("container title-level %q is not 2 to 6; the title stays a paragraph", level))
+	case k.tag == "details":
+		warn("container title-level has no effect on a collapsible kind, whose title is its summary")
+	case !titled:
+		warn("container title-level has no effect on a container with no title")
+	default:
+		return "h" + strconv.Itoa(n)
+	}
+	return "p"
 }
 
 // retag rebuilds n as the same content and attributes under a different tag
