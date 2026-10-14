@@ -14,7 +14,8 @@ import (
 // becomes, the classes it carries, and — for the collapsible kinds — how a
 // title is presented in its summary line.
 type containerKind struct {
-	// tag is "div" or "details".
+	// tag is "div", "details", or a landmark element ("nav", "header",
+	// "footer") that applyKind retags.
 	tag string
 	// class is the kind's own class or classes, prepended to whatever the
 	// author already wrote (see applyKind).
@@ -50,6 +51,11 @@ var containerKinds = map[string]containerKind{
 	// stylesheet, and an author who wants to style theirs writes
 	// "::: nav {.sidebar}".
 	"nav": {tag: "nav", class: ""},
+	// header and footer are landmark kinds the same way: no class of their
+	// own, the element is the payload. They are the banner and contentinfo
+	// landmarks, so unlike nav they need no aria-label to be told apart.
+	"header": {tag: "header", class: ""},
+	"footer": {tag: "footer", class: ""},
 	// stats, defs and group are the fig kinds of the same names promoted to
 	// containers, so their content is block Markdown rather than a YAML
 	// string's worth of inline text. The fig forms keep working. stats has

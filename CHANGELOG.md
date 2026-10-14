@@ -36,6 +36,14 @@ major version instead.
   `{name}` or a `search-facets` key reads it.
 - The library: `BuildSite`, `Site`, `Options.Site`, `Site.SearchIndex`,
   `Site.IndexPath`, `IndexName`, `Doc.Meta` and `Doc.Title`.
+- `::: header` and `::: footer` containers render `<header>` and `<footer>`
+  landmarks, like `::: nav`.
+
+### Changed
+
+- A paragraph that is only `[[content]]`, `[[pages]]`, `[[breadcrumb]]`,
+  `[[prev-next]]` or `[[search]]` now warns in a build without `--site`,
+  where it needs a shell. It still renders as written.
 
 ## v0.10.0 — 2026-10-14
 

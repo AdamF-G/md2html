@@ -1118,3 +1118,14 @@ func TestContainerTitleLevelCannotBeForged(t *testing.T) {
 		t.Errorf("a forged data-fence-title-level made a heading\ngot: %s", got)
 	}
 }
+
+// header and footer join nav as the landmark kinds, so a site shell's
+// banner and footer are landmarks like its navigation.
+func TestContainerHeaderAndFooterKinds(t *testing.T) {
+	for _, kind := range []string{"header", "footer"} {
+		got := convert(t, "::: "+kind+" {.bar}\nbody\n:::\n", nil)
+		if !strings.Contains(got, "<"+kind+` class="bar">`) || !strings.Contains(got, "</"+kind+">") {
+			t.Errorf("%s: want a <%s> carrying only the author's class\ngot: %s", kind, kind, got)
+		}
+	}
+}

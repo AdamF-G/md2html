@@ -32,7 +32,7 @@ construct has other spellings, they are under
 | Any other badge | `[needs review]{.chip}` |
 | Aside or worked example | `::: aside Title` or `::: example Title` … `:::` |
 | Stat tiles, term grid, titled panel | `::: stats`, `::: defs`, `::: group Title` … `:::` |
-| Navigation block | `::: nav {aria-label="Section"}` … `:::` |
+| Nav, header or footer | `::: nav`/`header`/`footer` … `:::` |
 | Hand-laid-out figure | a ```` ```fig ```` fence with a YAML body |
 | Chart | a ```` ```vega-lite {caption="…"} ```` fence holding a Vega-Lite spec in YAML |
 | Chart colour by meaning | `color: {value: "token:status-good"}`, or `-warning`, `-serious`, `-critical`; see [Colours](#colours) |
@@ -329,6 +329,8 @@ a container that was never opened.
 | `defs` | `<div class="defs">` | A term/definition grid |
 | `group` | `<div class="group">` | A titled panel |
 | `nav` | `<nav>` | A navigation landmark; adds no class |
+| `header` | `<header>` | A banner landmark, such as a site's top bar; adds no class |
+| `footer` | `<footer>` | A contentinfo landmark, such as a site's foot; adds no class |
 | `wide` | `<div class="wide">` | A table, code block or card too wide for the text column |
 
 `details` with no title shows "Details"; `aside` with none shows "Aside".
@@ -427,6 +429,20 @@ apart. Mark the current page on its link:
 ::: nav {aria-label="Section contents"}
 - [One](./one.md){aria-current=page}
 - [Two](./two.md)
+:::
+```
+
+### header and footer
+
+`::: header` and `::: footer` make a `<header>` and a `<footer>`. As
+direct children of `<body>`, as in a site shell, they are the banner and
+contentinfo landmarks; inside `<main>` or another container they are not.
+Neither needs an `aria-label`, since a page has one of each. They suit a site shell's top
+bar and foot; add a class to style them:
+
+```markdown
+::: header {.topbar}
+**Acme**
 :::
 ```
 
@@ -977,7 +993,7 @@ site: true
 style: house-site
 search-facets: kind
 ---
-::: group {.topbar}
+::: header {.topbar}
 **Acme**
 
 [[pages depth="1"]]
@@ -994,6 +1010,10 @@ search-facets: kind
 [[content]]
 
 [[prev-next]]
+
+::: footer
+Built with md2html.
+:::
 ````
 
 The shell's content goes directly in `<body>`, and `[[content]]` becomes
@@ -1081,8 +1101,8 @@ works.
 
 ```markdown
 ---
-versions: v0.13, v0.12, v0.9
 version: v0.12
+versions: v0.13, v0.12, v0.9
 ---
 
 [[list key="versions" link="/docs/{item}/" current="{version}"]]
@@ -1834,11 +1854,11 @@ root.
 
 **… is not hidden** — `nav:` takes only `hidden`. The value is ignored.
 
-**… has no index.md** — a directory in the tree with no page of its own;
 **links to …, which the build does not write** — a link in the shell to a
 `.md` outside the build. It points at the Markdown file; build that page
 too, or link something else.
 
+**… has no index.md** — a directory in the tree with no page of its own;
 the site lists it by its directory name.
 
 **… outside the site's root** — a page pulled in from outside the run's
