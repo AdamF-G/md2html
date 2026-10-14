@@ -91,6 +91,12 @@ func TestRenderSpecStopsARunawaySpec(t *testing.T) {
 	if time.Since(start) > 5*time.Second {
 		t.Error("the budget did not stop the render promptly")
 	}
+	// The interrupt discards the runtime, so the next chart is the first
+	// on a fresh one, and under -race on a shared CI runner that alone can
+	// take longer than the shortened budget. Recovery is checked against
+	// the real budget: the question is whether the engine works again, not
+	// how fast a cold start is.
+	budget = old
 	if _, err := renderSpec([]byte(dotSpec), fixed{}, nil); err != nil {
 		t.Fatalf("the engine did not recover after an interrupt: %v", err)
 	}
