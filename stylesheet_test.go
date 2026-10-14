@@ -489,3 +489,127 @@ func TestDefaultCSSHasTheChartRules(t *testing.T) {
 		}
 	}
 }
+
+// StyleChosen hears the style list each page is drawn in, by qualified
+// name, and never the default chosen by default or a run's CSS.
+func TestStyleChosenNamesThePageStyle(t *testing.T) {
+	type call struct {
+		names, dirs []string
+		css         string
+	}
+	for _, c := range []struct {
+		name string
+		opt  Options
+		src  string
+		want []string // nil: no call
+	}{
+		{"run style", Options{Styles: []string{"claude-artifact"}}, "# A\n", []string{"claude-artifact/claude-artifact"}},
+		{"front matter", Options{}, "---\nstyle: claude-artifact\n---\n# A\n", []string{"claude-artifact/claude-artifact"}},
+		{"front matter falls back", Options{Styles: []string{"claude-artifact"}}, "---\nstyle: nosuch\n---\n# A\n", []string{"claude-artifact/claude-artifact"}},
+		{"default", Options{}, "# A\n", nil},
+		{"css", Options{CSS: "body{}"}, "# A\n", nil},
+	} {
+		var got []call
+		c.opt.StyleChosen = func(names, dirs []string, css string) { got = append(got, call{names, dirs, css}) }
+		if _, err := Convert([]byte(c.src), c.opt); err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		switch {
+		case c.want == nil && len(got) != 0:
+			t.Errorf("%s: called with %v", c.name, got[0].names)
+		case c.want != nil && len(got) != 1:
+			t.Errorf("%s: called %d times, want once", c.name, len(got))
+		case c.want != nil:
+			if strings.Join(got[0].names, ",") != strings.Join(c.want, ",") {
+				t.Errorf("%s: names %v, want %v", c.name, got[0].names, c.want)
+			}
+			if len(got[0].dirs) != 1 || got[0].dirs[0] != "" {
+				t.Errorf("%s: dirs %q, want one empty dir for a built-in", c.name, got[0].dirs)
+			}
+			if !strings.HasPrefix(got[0].css, defaultCSS) || !strings.Contains(got[0].css, "IBM Plex Sans") {
+				t.Errorf("%s: css is not claude-artifact stacked on the default", c.name)
+			}
+		}
+	}
+}
+
+// StyleChosen gets each style's plugin dir beside its name: "" for a
+// built-in, the real dir for a plugin loaded from disk.
+func TestStyleChosenGivesPluginDirs(t *testing.T) {
+	root := stylePlugins(t)
+	var names, dirs []string
+	opt := Options{SourcePath: filepath.Join(root, "docs/a.md"),
+		StyleChosen: func(n, d []string, _ string) { names, dirs = n, d }}
+	if _, err := Convert([]byte("---\nplugins: ./_p\nstyle: claude-artifact, p\n---\n# A\n"), opt); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(names, ",") != "claude-artifact/claude-artifact,page/p" {
+		t.Errorf("names %v", names)
+	}
+	if len(dirs) != 2 || dirs[0] != "" || dirs[1] != filepath.Join(root, "docs/_p") {
+		t.Errorf("dirs %q", dirs)
+	}
+}
+
+// An explicit style: default is a choice, so the hook hears it.
+func TestStyleChosenHearsExplicitDefault(t *testing.T) {
+	var names, dirs []string
+	calls := 0
+	opt := Options{StyleChosen: func(n, d []string, _ string) { names, dirs = n, d; calls++ }}
+	if _, err := Convert([]byte("---\nstyle: default\n---\n# A\n"), opt); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || strings.Join(names, ",") != "default/default" || len(dirs) != 1 || dirs[0] != "" {
+		t.Errorf("%d calls, names %v, dirs %q", calls, names, dirs)
+	}
+}
+
+// A run whose own style fails is an error, and nothing was chosen.
+func TestStyleChosenNotCalledWhenRunStyleFails(t *testing.T) {
+	called := false
+	opt := Options{Styles: []string{"nosuch"}, StyleChosen: func(_, _ []string, _ string) { called = true }}
+	if _, err := Convert([]byte("# A\n"), opt); err == nil {
+		t.Error("no error for a style that does not exist")
+	}
+	if called {
+		t.Error("hook called for a style that failed")
+	}
+}
+
+// Pages converting in parallel share one hook; run with -race.
+func TestStyleChosenConcurrent(t *testing.T) {
+	var mu sync.Mutex
+	var got []string
+	cache := NewPluginCache()
+	hook := func(n, _ []string, _ string) {
+		mu.Lock()
+		got = append(got, strings.Join(n, ","))
+		mu.Unlock()
+	}
+	var wg sync.WaitGroup
+	errs := make([]error, 20)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			src := "# A\n"
+			if i%2 == 1 {
+				src = "---\nstyle: default\n---\n# A\n"
+			}
+			_, errs[i] = Convert([]byte(src), Options{Styles: []string{"claude-artifact"}, PluginCache: cache, StyleChosen: hook})
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("page %d: %v", i, err)
+		}
+	}
+	count := map[string]int{}
+	for _, n := range got {
+		count[n]++
+	}
+	if len(got) != 20 || count["claude-artifact/claude-artifact"] != 10 || count["default/default"] != 10 {
+		t.Errorf("calls %v", count)
+	}
+}

@@ -60,6 +60,16 @@ type Options struct {
 	// plugin's fonts are read and inlined once rather than once per page.
 	// Nil loads afresh on every call.
 	PluginCache *PluginCache
+	// StyleChosen, if set, is called once per Convert after the page's
+	// style is chosen from Styles or its own "style:" front matter, with
+	// the styles' qualified names (plugin/style), the directory of each
+	// style's plugin ("" for a built-in), and the stylesheet they
+	// assemble. Two plugins can share a name, so the dirs tell them apart.
+	// It is not called when the page gets the default stylesheet by
+	// default, or CSS. The CLI checks each list's colours here. A caller
+	// converting pages in parallel shares it, so it must be safe for
+	// concurrent use.
+	StyleChosen func(names, dirs []string, css string)
 	// MermaidURL is the ES module a page containing a mermaid diagram
 	// imports at view time. Empty uses the pinned CDN build.
 	//

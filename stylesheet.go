@@ -37,17 +37,22 @@ func (c *PluginCache) Stylesheet(names []string, plugins []*Plugin, warn func(st
 	return ps.css, err
 }
 
-// pageStyle is what a page's style list resolves to: its stylesheet and
-// the settings its charts are drawn with.
+// pageStyle is what a page's style list resolves to: its stylesheet, the
+// settings its charts are drawn with, and the qualified names of the
+// styles, nil for the default chosen by default or a run's CSS. dirs is
+// each style's plugin dir, "" for a built-in, since two plugins can give
+// one qualified name.
 type pageStyle struct {
 	css    string
 	charts chartSettings
+	names  []string
+	dirs   []string
 }
 
 // style is Stylesheet, plus the chart settings of the same list.
 func (c *PluginCache) style(names []string, plugins []*Plugin, warn func(string)) (pageStyle, error) {
 	if len(names) == 0 {
-		return pageStyle{defaultCSS, c.chartStyle(nil)}, nil
+		return pageStyle{css: defaultCSS, charts: c.chartStyle(nil)}, nil
 	}
 	avail, err := AvailablePlugins(plugins)
 	if err != nil {
@@ -86,7 +91,12 @@ func (c *PluginCache) style(names []string, plugins []*Plugin, warn func(string)
 	}
 	c.mu.Unlock()
 	e.once.Do(func() { e.css, e.err = assemble(picks) })
-	return pageStyle{e.css, c.chartStyle(picks)}, e.err
+	qualified := make([]string, len(picks))
+	dirs := make([]string, len(picks))
+	for i, s := range picks {
+		qualified[i], dirs[i] = s.qualified(), s.plugin.dir
+	}
+	return pageStyle{css: e.css, charts: c.chartStyle(picks), names: qualified, dirs: dirs}, e.err
 }
 
 // assemble concatenates the default stylesheet, unless the first pick
@@ -206,7 +216,7 @@ func choosePageStyle(opt Options, meta map[string]string) (pageStyle, error) {
 	}
 	run := func() (pageStyle, error) {
 		if opt.CSS != "" {
-			return pageStyle{opt.CSS, cache.chartStyle(nil)}, nil
+			return pageStyle{css: opt.CSS, charts: cache.chartStyle(nil)}, nil
 		}
 		if len(opt.Styles) == 0 {
 			return cache.style(nil, nil, nil)
@@ -243,6 +253,9 @@ func choosePageStyle(opt Options, meta map[string]string) (pageStyle, error) {
 	}
 	if len(st.css) > maxStylesheet {
 		warn(fmt.Sprintf("stylesheet is %d KB, over 1 MB; every page carries it", len(st.css)/1024))
+	}
+	if opt.StyleChosen != nil && st.names != nil {
+		opt.StyleChosen(st.names, st.dirs, st.css)
 	}
 	return st, nil
 }
