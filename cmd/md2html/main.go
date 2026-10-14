@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 
@@ -249,6 +251,9 @@ Flags:
 	}
 	results := make([]outcome, len(res.Docs))
 
+	// Each style list a page is drawn in is checked once, as the pages
+	// convert, and reported with the other warnings below.
+	checks := newStyleChecks()
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, runtime.NumCPU())
 	for i := range res.Docs {
@@ -271,6 +276,7 @@ Flags:
 			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt, *noCharts, res.Base,
 				func(m string) { warnings = append(warnings, m) })
 			opts.Plugins, opts.Styles, opts.PluginCache = plugins, styles, cache
+			opts.StyleChosen = checks.chosen
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
 				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err, warnings: warnings}
@@ -302,6 +308,12 @@ Flags:
 				res.Docs[i].Out)
 		default:
 			written++
+		}
+	}
+	for _, l := range checks.lines() {
+		fmt.Fprintf(stderr, "md2html: %s\n", l.text)
+		if l.counts {
+			warned++
 		}
 	}
 	for _, w := range res.Warnings {
@@ -558,4 +570,113 @@ func installAuthoringSkill(dir string, project bool, stdout, stderr io.Writer) i
 		fmt.Fprintf(stdout, "md2html:   %s\n", p)
 	}
 	return 0
+}
+
+// styleChecks checks each style list a run's pages are drawn in, once
+// however many pages share it, as Options.StyleChosen. Pages convert in
+// parallel, so it locks; the check itself runs outside the lock. A list is
+// keyed by its names and its plugins' dirs, since two plugins can give
+// one qualified name.
+type styleChecks struct {
+	mu    sync.Mutex
+	found map[string]*checkedList
+}
+
+// checkedList is one style list and what its check found.
+type checkedList struct {
+	names, dirs []string
+	findings    []stylecheck.Finding
+}
+
+func newStyleChecks() *styleChecks {
+	return &styleChecks{found: map[string]*checkedList{}}
+}
+
+func (s *styleChecks) chosen(names, dirs []string, css string) {
+	key := strings.Join(names, "\x00") + "\x01" + strings.Join(dirs, "\x00")
+	s.mu.Lock()
+	if _, seen := s.found[key]; seen {
+		s.mu.Unlock()
+		return
+	}
+	l := &checkedList{names: names, dirs: dirs}
+	s.found[key] = l
+	s.mu.Unlock()
+	fs := stylecheck.Check(css)
+	s.mu.Lock()
+	l.findings = fs
+	s.mu.Unlock()
+}
+
+// styleLine is one style list's line for stderr, and whether it counts as
+// a warning: only a list with an error does.
+type styleLine struct {
+	text   string
+	counts bool
+}
+
+// lines are the lists with findings, in name order: each one's findings
+// when it has one or two, otherwise their counts and where to see them.
+// It runs after every conversion has finished, so it reads without the lock.
+// The hint names the list's own plugin dirs, so the command it gives loads
+// the same styles, whether the run or a page's front matter loaded them.
+func (s *styleChecks) lines() []styleLine {
+	keys := make([]string, 0, len(s.found))
+	for k, l := range s.found {
+		if len(l.findings) > 0 {
+			keys = append(keys, k)
+		}
+	}
+	name := func(k string) string { return strings.Join(s.found[k].names, ",") }
+	sort.Slice(keys, func(i, j int) bool {
+		if a, b := name(keys[i]), name(keys[j]); a != b {
+			return a < b
+		}
+		return keys[i] < keys[j]
+	})
+	// Two printed lists with one name came from different plugins, so
+	// each of their lines says which.
+	named := map[string]int{}
+	for _, k := range keys {
+		named[name(k)]++
+	}
+	out := make([]styleLine, len(keys))
+	for i, k := range keys {
+		l := s.found[k]
+		label := name(k)
+		if named[label] > 1 {
+			label += " (from " + strings.Join(pluginDirs(l.dirs), ", ") + ")"
+		}
+		text := fmt.Sprintf("style %s: %s", label, stylecheck.Short(l.findings))
+		if len(l.findings) > 2 {
+			var plugins strings.Builder
+			for _, d := range pluginDirs(l.dirs) {
+				fmt.Fprintf(&plugins, " --plugin %s", shellQuote(d))
+			}
+			text += fmt.Sprintf(" (md2html --check-style%s --style %s for details)", plugins.String(), name(k))
+		}
+		out[i] = styleLine{text, stylecheck.HasError(l.findings)}
+	}
+	return out
+}
+
+// pluginDirs are the distinct dirs of a list's plugins, in list order,
+// built-ins aside.
+func pluginDirs(dirs []string) []string {
+	var out []string
+	for _, d := range dirs {
+		if d != "" && !slices.Contains(out, d) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// shellQuote quotes s for a POSIX shell when it holds anything but the
+// characters a path is usually made of, so the hint can be pasted as is.
+func shellQuote(s string) string {
+	if s != "" && strings.Trim(s, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-") == "" {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
