@@ -1117,12 +1117,9 @@ Pick the smallest tier that gives the look you want:
 3. **A chart palette.** Set `--series-1` to `--series-8` in both themes.
    The default's series were chosen for its near-white and near-black
    backgrounds, and suit a palette of similar lightness, so this tier is
-   for a brand palette, not a requirement of tier 2. They are not all
-   above 3:1: on the default's light surface, series 5 and 8 are 2.40:1
-   and 2.93:1. A style that wants every series at 3:1 sets those two
-   itself. The four
-   status colours carry meaning (good, warning, serious, critical); change
-   them only if your series would be confused with them.
+   for a brand palette, not a requirement of tier 2. The four status
+   colours carry meaning (good, warning, serious, critical); change them
+   only if your series would be confused with them.
 4. **A different typeface.** Set `font-family` on `body`, and give the
    style a `charts` block, or chart labels are measured as the default's
    system sans and can clip or overlap. For a face the plugin ships, embed
@@ -1195,21 +1192,18 @@ Leave one out and that case shows the default's colours. In this palette
 
 #### Keeping it consistent
 
-- **Contrast.** `--fg` at least 7:1 on `--bg`; `--muted`, `--accent`,
-  `--ok` and `--warn` at least 4.5:1, on `--code-bg` as well as `--bg`.
-  The default's light `--warn` is 4.81:1 on its `--bg` and 4.35:1 on its
-  `--code-bg`, a little under; it is mostly used as a border and badge
-  colour, where less is needed, but a style used for body text in a
-  warning should do better.
-  Aim for 3:1 between each series and `--chart-surface`, most of all
-  for series drawn as thin lines. The default's light series 5 and 8 fall
-  short of this, as tier 3 says; a style can fix them by setting them.
-- **Status apart from series.** A series green next to `--status-good`
-  reads as "good". Keep the status hues out of the series, or far from
-  them in lightness.
+- **Contrast.** `--fg`, `--muted`, `--accent`, `--ok` and `--warn` at
+  least 4.5:1 on `--bg` and on `--code-bg`, with `--fg` well above it.
+  Series need 3:1 on `--chart-surface` in dark and 1.9:1 in light, where
+  the table under each chart carries the values for a reader who cannot
+  pick a pale series out.
+- **Status apart from series.** The status colours never share a chart
+  with series colours and come with a label, so they may sit near a
+  series, but not on one: keep each at least ΔE 4.5 from every series,
+  and the four at least 13 from each other.
 - **Series apart from each other.** Neighbouring series need different
-  lightness as well as hue, in both themes. Check them with a
-  colour-blindness simulator; hue alone fails for many readers.
+  lightness as well as hue, in both themes, so that colour-blind readers
+  can tell them apart too.
 - **All four blocks together.** Edit a colour in one block and the same
   colour in the other three, light pair and dark pair.
 - **Look at it.** After changing colours, run
@@ -1217,8 +1211,8 @@ Leave one out and that case shows the default's colours. In this palette
   a page with a chart, code, a callout and a diagram and view it in both
   themes at 400px wide, as [Checking a style](#checking-a-style) says.
 
-md2html does not check a style's contrast or chart colours yet, so these
-checks are yours.
+`md2html --check-style` measures every one of these; see
+[Checking a style](#checking-a-style).
 
 ### What a style can change
 
