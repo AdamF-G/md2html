@@ -46,6 +46,11 @@ major version instead.
   `--status-critical`, `--chart-surface`, `--chart-grid` and
   `--chart-axis`. `claude-artifact` defines them all, and charts use its
   embedded IBM Plex Sans metrics.
+- `--check-style` measures a style's colours: text contrast against WCAG,
+  and chart colours against the dataviz skill's rules, including
+  colour-blind separation. A build reports a style's problems in one line.
+  The built-in styles pass every rule; the default's light `--warn` and
+  its status colours moved slightly to get there.
 
 ### Changed
 

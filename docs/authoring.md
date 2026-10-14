@@ -1103,15 +1103,18 @@ Pick the smallest tier that gives the look you want:
    the contents list and the other accent touches change; the rest stays
    the default's. That includes `--series-1`, which is the default's
    accent rust set as a literal colour, not a reference to `--accent`.
-   A style that changes `--accent` should set `--series-1` to match, in
-   all four blocks, or single-series charts and the first colour of
-   every multi-series chart keep the old accent.
+   A style that changes `--accent` should set `--series-1` to a series
+   version of it, in all four blocks, or single-series charts and the
+   first colour of every multi-series chart keep the old accent. The
+   light accent usually works as it is. A dark accent is made pale to
+   read as text, which is too light and grey for a chart, so take a
+   mid-tone of the same hue; `--check-style` says when one is off.
 2. **The page palette.** Set all eight page colours in both themes. These
    travel together: `--fg`, `--muted`, `--accent`, `--ok` and `--warn` are
    all read on `--bg` and on `--code-bg`, so changing a background means
    checking every text colour against it. `--chart-surface` and the
-   figure cards follow `--bg` by themselves. Set `--series-1` to the new
-   `--accent`, as above. `--chart-grid` and
+   figure cards follow `--bg` by themselves. Set `--series-1` to follow
+   the new `--accent`, as above. `--chart-grid` and
    `--chart-axis` are line colours like `--rule`: move them with it when
    the neutrals change hue.
 3. **A chart palette.** Set `--series-1` to `--series-8` in both themes.
@@ -1165,13 +1168,13 @@ use `--plugin ./_style --style house`.
   :root:not([data-theme="light"]) {
     --bg: #12161c; --fg: #e6eaf0; --muted: #9aa5b3; --accent: #8ab4f0;
     --rule: #2a313b; --code-bg: #1b2129; --ok: #6fbe89; --warn: #f0915a;
-    --series-1: #8ab4f0; --chart-grid: #232a33; --chart-axis: #3a434f;
+    --series-1: #4d7fe8; --chart-grid: #232a33; --chart-axis: #3a434f;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12161c; --fg: #e6eaf0; --muted: #9aa5b3; --accent: #8ab4f0;
   --rule: #2a313b; --code-bg: #1b2129; --ok: #6fbe89; --warn: #f0915a;
-  --series-1: #8ab4f0; --chart-grid: #232a33; --chart-axis: #3a434f;
+  --series-1: #4d7fe8; --chart-grid: #232a33; --chart-axis: #3a434f;
 }
 :root[data-theme="light"] {
   --bg: #f8f9fb; --fg: #1b2430; --muted: #56606d; --accent: #1f5fa8;
@@ -1187,8 +1190,9 @@ the page's root, as a host page or a theme toggle does.
 Leave one out and that case shows the default's colours. In this palette
 `--fg` is about 15:1 on `--bg` in both themes, and `--muted` and
 `--accent` are 5.6:1 or better on both `--bg` and `--code-bg`. Its
-`--series-1` is the accent again, so it is 6.1:1 on the light surface and
-8.5:1 on the dark.
+`--series-1` is the accent in light, 6.1:1 on the surface, and a mid-tone
+of the accent's blue in dark, 4.8:1, since the pale dark accent is too
+light for a chart.
 
 #### Keeping it consistent
 
@@ -1196,18 +1200,20 @@ Leave one out and that case shows the default's colours. In this palette
   least 4.5:1 on `--bg` and on `--code-bg`, with `--fg` well above it.
   Series need 3:1 on `--chart-surface` in dark and 1.9:1 in light, where
   the table under each chart carries the values for a reader who cannot
-  pick a pale series out.
+  pick a pale series out. Status colours need 3:1 in dark and 1.6:1 in
+  light.
 - **Status apart from series.** The status colours never share a chart
   with series colours and come with a label, so they may sit near a
   series, but not on one: keep each at least ΔE 4.5 from every series,
   and the four at least 13 from each other.
 - **Series apart from each other.** Neighbouring series need different
   lightness as well as hue, in both themes, so that colour-blind readers
-  can tell them apart too.
+  can tell them apart too. Keep each series' OKLCH lightness within
+  0.43–0.77 in light and 0.48–0.67 in dark, and its chroma at least 0.10.
 - **All four blocks together.** Edit a colour in one block and the same
   colour in the other three, light pair and dark pair.
 - **Look at it.** After changing colours, run
-  `--plugin ./_style --list-styles`, then build
+  `md2html --plugin ./_style --check-style`, then build
   a page with a chart, code, a callout and a diagram and view it in both
   themes at 400px wide, as [Checking a style](#checking-a-style) says.
 
@@ -1322,9 +1328,35 @@ write it in the Markdown as raw HTML, or say it isn't possible yet.
 ### Checking a style
 
 Run `md2html --plugin ./_style --list-styles` to check a plugin loads and
-every style in it builds; a broken one exits with the reason. Then build a page and look at it at 400px
-wide and in both themes. A front matter `style:` that fails warns and the
-page falls back to the run's style, so read the warnings.
+every style in it builds; a broken one exits with the reason.
+
+Then run `md2html --plugin ./_style --check-style` to measure each style's
+colours, stacked on the default as a page would use it. `--style a,b`
+checks that stack instead, and with neither flag the built-in styles are
+checked. Each style gets a line, then its findings:
+
+    acme/plain: 1 error, 1 warning
+      error    dark --muted on --code-bg is 2.60:1, under 3:1
+      warning  light --muted on --code-bg is 4.21:1, under 4.5:1 (WCAG AA)
+
+| Severity | Means |
+|---|---|
+| error | Broken or unreadable: a colour missing from one theme, or different when the reader picks the theme their system already shows; a value that is not a colour; text under 3:1; chart series out of the lightness band, grey, or too alike for readers with normal or colour-blind vision |
+| warning | Short of a target: text under 4.5:1; series or status colours faint on `--chart-surface`; status colours too close to each other or to a series; a colour the check cannot measure, such as `color-mix()`; a colour set in neither theme; a colour in a plain `:root` inside the dark media query that never shows, with the block that outranks it |
+| note | Advice: neighbouring series that colour-blind readers can only just tell apart |
+
+It exits 1 if any style has an error, 2 if a plugin or style fails to
+load, and 0 otherwise. The chart rules
+are the dataviz skill's, and the built-in styles pass all of them.
+
+A build checks each style its pages use and prints one line per style
+with problems: the findings themselves when there are one or two, or
+their counts. Only a style with an error adds to the run's warnings, and
+a page always builds.
+
+Then build a page and look at it at 400px wide and in both themes. A
+front matter `style:` that fails warns and the page falls back to the
+run's style, so read the warnings.
 
 ## Warnings
 

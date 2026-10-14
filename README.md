@@ -387,6 +387,7 @@ recipient's agent anyway.
 | `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
 | `--plugin DIR` | load a local plugin for its styles (repeatable) |
 | `--list-styles` | list the styles available, including any `--plugin`'s, and exit |
+| `--check-style` | check the colours of each `--plugin` style, the `--style` list, or the built-in styles, and exit; 1 if any has an error, 2 if a plugin or style fails to load |
 | `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
 | `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`, or `float` with `--autotoc`. Ignored with `--fragment` |
 | `--autotoc MODE` | give pages without a `[[toc]]` marker a contents list, after the title: `all` for every page, `long` for pages over 1000 lines or 5 headings. A page's own marker wins, and `toc: none` in its front matter opts it out |

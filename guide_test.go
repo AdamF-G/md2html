@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/AdamF-G/md2html/internal/charts"
+	"github.com/AdamF-G/md2html/internal/stylecheck"
 )
 
 // guide returns docs/authoring.md, the text `md2html --guide` prints.
@@ -810,8 +811,8 @@ func TestGuideStarterStyleBuilds(t *testing.T) {
 		}
 	}
 	for theme, c := range themes {
-		if c["series-1"] != c["accent"] {
-			t.Errorf("%s: --series-1 %s is not the accent %s", theme, c["series-1"], c["accent"])
+		if theme == "light" && c["series-1"] != c["accent"] {
+			t.Errorf("light: --series-1 %s is not the accent %s", c["series-1"], c["accent"])
 		}
 		for _, surface := range []string{"bg", "code-bg"} {
 			for tok, min := range map[string]float64{"fg": 7, "muted": 5.6, "accent": 5.6, "ok": 4.5, "warn": 4.5} {
@@ -823,6 +824,20 @@ func TestGuideStarterStyleBuilds(t *testing.T) {
 		if r := contrast(c["fg"], c["bg"]); r < 14 || r > 16 {
 			t.Errorf("%s: --fg on --bg is %.2f:1, not about 15:1", theme, r)
 		}
+	}
+
+	// The starter passes the style check with nothing to report.
+	cache := NewPluginCache()
+	p, err := cache.Load(filepath.Join(root, "_style"), "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sheet, err := cache.Stylesheet([]string{"house"}, []*Plugin{p}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs := stylecheck.Check(sheet); len(fs) != 0 {
+		t.Errorf("%s", stylecheck.Report("house", fs))
 	}
 }
 
