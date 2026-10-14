@@ -1,5 +1,11 @@
 bindir := env('HOME') / '.local/bin'
 
+# The first recipe is the one a bare `just` runs, so this one is first.
+
+# List the recipes.
+list:
+    @just --list --unsorted
+
 # GOBIN defaults to $HOME/go/bin, which is often not on PATH, so a plain
 # `go install` can leave a second binary that nothing ever runs.
 #
