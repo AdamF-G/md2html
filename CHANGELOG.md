@@ -9,6 +9,34 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- Site mode. `--site shell.md` wraps every page of a build in a shell: an
+  ordinary page whose front matter says `site: true` and which holds one
+  `[[content]]`. Markers in the shell draw the site from the pages
+  themselves, with no config: `[[pages]]` (`depth`, `from`),
+  `[[breadcrumb]]` and `[[prev-next]]` follow a tree derived from the
+  directories, each `index.md`, `nav-order`, `nav-title` and `nav: hidden`,
+  and `[[search]]` searches an index written as `md2html-search.js`, with
+  `search-facets` to show front matter keys on results. A page with
+  `shell: none` is built without the shell. Pages built with a shell get
+  Copy buttons on code blocks, and `<html>` carries `data-section`, the
+  slug of the page's top-level node. md2html styles what the markers draw
+  plainly, ahead of the page's style and only on a page that has them, so
+  every style gets it and a style's own rules win. A build without
+  `--site` is unchanged. `md2html --guide sites` documents it.
+- `[[list]]` and `[[subdirs]]` markers, which work on any page: links built
+  from a comma-separated front matter value or from a directory's
+  subdirectories, with `link`, `text`, `current`, `as`, and for
+  `[[subdirs]]` `match` and `sort`.
+- `@file#key` front matter references: a value taken from another file's
+  front matter, followed where a `[[list]]` key, a marker template's
+  `{name}` or a `search-facets` key reads it.
+- The library: `BuildSite`, `Site`, `Options.Site`, `Site.SearchIndex`,
+  `Site.IndexPath`, `IndexName`, `Doc.Meta` and `Doc.Title`.
+
 ## v0.10.0 — 2026-10-14
 
 ### Added

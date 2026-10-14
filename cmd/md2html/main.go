@@ -70,6 +70,9 @@ Styling the page: md2html --list-styles lists the styles available, and
 explains both, and how to write a plugin that adds a style.
 md2html --check-style checks a style's colours.
 
+Building a site: --site shell.md wraps every page in a shell page whose
+markers draw navigation and search; md2html --guide sites explains it.
+
 Flags:
 `)
 		fs.PrintDefaults()

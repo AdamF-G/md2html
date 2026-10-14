@@ -135,7 +135,12 @@ with no page shell, ready to drop into a Claude Artifact.
 - **Callouts and containers.** GitHub alerts (`> [!NOTE]`,
   `> [!WARNING]`) for notes and warnings, and fenced containers
   (`::: callout Title` … `:::`) for titled callouts, cards, collapsible
-  asides and examples, and named `<nav>` landmarks.
+  asides and examples, and `<nav>`, `<header>` and `<footer>` landmarks.
+- **A site, when you want one.** `--site shell.md` wraps every page in a
+  shell page whose markers draw navigation from the pages themselves, a
+  breadcrumb, previous and next links, and a search that works from disk.
+  There is no config file: the tree is the directories, and each page's
+  front matter orders and names it. `md2html --guide sites` explains it.
 - **Document furniture.** A `[[toc]]` or `[TOC]` marker for a per-page
   contents list, inline or floating beside the text, `title`/`subtitle`/`date` front matter, `{caption="…"}` on
   code fences, `[proven]`-style status chips, and `§4.2` cross-references
@@ -385,6 +390,7 @@ recipient's agent anyway.
 | `--preview-runtime` | with `--fragment`, add the mermaid runtime a full page has to a fragment with a diagram, to preview it in a browser; leave it off for output a host will render (`Options.PreviewRuntime`) |
 | `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
 | `--no-charts` | leave `vega-lite` fences as code blocks instead of drawing charts |
+| `--site FILE` | wrap every page in this shell page, whose front matter says `site: true`, and write the search index `md2html-search.js` at the output root; not with `--fragment` or `--toc float` |
 | `--css FILE` | replace the stylesheet; not with `--style` |
 | `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
 | `--plugin DIR` | load a local plugin for its styles (repeatable) |
@@ -441,6 +447,28 @@ command sets it to the common ancestor of its entry points.
 `Options.MermaidURL` names the ES module a page with a diagram imports at
 view time, for a docs build that must not reach a CDN. Empty keeps the
 pinned build.
+
+A site is built in three steps. `Crawl` finds the pages, `BuildSite` lays
+out the tree around the shell (and drops the shell from the pages to
+write), and each page converts with `Options.Site` set, in parallel if you
+like. Then write `SearchIndex()` to `IndexPath()`:
+
+```go
+copt := md2html.CrawlOptions{Entries: []string{"docs"}, OutDir: "site", Depth: -1, LinkDepth: -1}
+res, err := md2html.Crawl(copt)
+site, err := md2html.BuildSite(res, "shell.md", copt)
+for _, d := range res.Docs {
+    src, err := os.ReadFile(d.Src)
+    out, err := md2html.Convert(src, md2html.Options{SourcePath: d.Src, LinkMap: d.LinkMap, Site: site})
+    _, err = md2html.SafeWrite(d.Out, out)
+}
+_, err = md2html.SafeWrite(site.IndexPath(), site.SearchIndex())
+```
+
+A problem in the shell itself is reported once, in `site.Warnings`, not
+through each page's `Options.Warn`; read it after every `Convert` call has
+returned, with the layout warnings `BuildSite` found. It arrives in no
+fixed order: sort it for stable output.
 
 Add a transform by writing a `func(*html.Node) error`:
 
