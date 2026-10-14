@@ -109,7 +109,15 @@ func InstallSkill(parent string) ([]string, error) {
 // understands and the traps that render wrong without a warning. It is what
 // `md2html --guide` prints, and what the skill sends its reader to.
 func AuthoringGuide() []byte {
-	return bytes.Clone(authoringDoc)
+	return bytes.Clone(guideSource())
+}
+
+// guideSource is the authoring guide without its front matter, which only
+// places the page in md2html's documentation site and is no part of the
+// guide a reader gets.
+func guideSource() []byte {
+	_, body, _ := splitFrontMatter(authoringDoc)
+	return body
 }
 
 // skillFiles returns the skill's files, keyed by the name each takes inside

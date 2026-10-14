@@ -185,13 +185,18 @@ func read(t *testing.T, p string) string {
 }
 
 // --guide prints the repo's own guide, not a summary that drifts: it is
-// what the skill sends every reader to.
+// what the skill sends every reader to. Only the front matter, which places
+// the page in the documentation site, is left out.
 func TestAuthoringGuideIsTheRepositoryGuide(t *testing.T) {
-	want, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
+	src, err := os.ReadFile(filepath.Join("docs", "authoring.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, want, _ := splitFrontMatter(src)
 	if string(AuthoringGuide()) != string(want) {
-		t.Error("AuthoringGuide is not docs/authoring.md verbatim")
+		t.Error("AuthoringGuide is not docs/authoring.md verbatim, less its front matter")
+	}
+	if strings.HasPrefix(string(AuthoringGuide()), "---") {
+		t.Error("AuthoringGuide carries the page's front matter")
 	}
 }

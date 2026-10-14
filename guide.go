@@ -42,7 +42,7 @@ type guidePart struct {
 // here either, so the cut follows the parser rather than lines that start
 // with #.
 var guideSections = sync.OnceValue(func() []guidePart {
-	return splitGuide(authoringDoc)
+	return splitGuide(guideSource())
 })
 
 // splitGuide returns the guide's `##` sections, in document order.
@@ -82,7 +82,7 @@ func splitGuide(src []byte) []guidePart {
 // followed by an index naming every other section for GuideSection. It is
 // what `md2html --guide` prints.
 func GuideSummary() []byte {
-	return guideSummary(authoringDoc, guideSections())
+	return guideSummary(guideSource(), guideSections())
 }
 
 func guideSummary(src []byte, parts []guidePart) []byte {
@@ -124,7 +124,7 @@ func guideSummary(src []byte, parts []guidePart) []byte {
 // name, its anchor on the rendered page. It is what
 // `md2html --guide <name>` prints; a name matching no section is an error.
 func GuideSection(name string) ([]byte, error) {
-	return guideSection(authoringDoc, guideSections(), name)
+	return guideSection(guideSource(), guideSections(), name)
 }
 
 func guideSection(src []byte, parts []guidePart, name string) ([]byte, error) {
