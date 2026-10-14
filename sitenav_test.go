@@ -107,3 +107,25 @@ func TestContentMarkerInAPageBodyWarns(t *testing.T) {
 		t.Errorf("warnings: %q", warnings)
 	}
 }
+
+// On the root page the trail would be the page alone, which says nothing:
+// [[breadcrumb]] draws no trail there, and still does one level down.
+func TestBreadcrumbIsOmittedOnTheRootPage(t *testing.T) {
+	files := map[string]string{"shell/site.md": "---\nsite: true\n---\n[[breadcrumb]]\n\n[[content]]\n"}
+	for k, v := range treeFiles {
+		if k != "shell/site.md" {
+			files[k] = v
+		}
+	}
+	s, res, root := siteFixture(t, files, "shell/site.md")
+	home, warnings := sitePage(t, s, res, root, "docs/index.md")
+	if strings.Contains(home, `aria-label="Breadcrumb"`) || strings.Contains(home, "[[breadcrumb]]") {
+		t.Errorf("the root page has a breadcrumb:\n%s", home)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("warnings: %q", warnings)
+	}
+	if page, _ := sitePage(t, s, res, root, "docs/start/install.md"); !strings.Contains(page, `aria-label="Breadcrumb"`) {
+		t.Errorf("a page below the root lost its breadcrumb:\n%s", page)
+	}
+}

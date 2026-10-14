@@ -1075,7 +1075,7 @@ shell; without one they warn and stay as written.
 |---|---|
 | `[[content]]` | The current page's body. Exactly one per shell. |
 | `[[pages]]` | The tree below the root as a nested list of links, the current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node, `from="root"` (the default) at the top. |
-| `[[breadcrumb]]` | The current page's ancestors, in a `<nav aria-label="Breadcrumb">`. |
+| `[[breadcrumb]]` | The current page's ancestors, in a `<nav aria-label="Breadcrumb">`; nothing on the root page. |
 | `[[prev-next]]` | The previous and next page in tree order, in a `<nav aria-label="Previous and next">`. |
 
 `[[pages]]` is a bare list, since a shell may show it twice, as tabs and

@@ -121,7 +121,7 @@ without one they warn and stay as written.
 |---|---|
 | `[[content]]` | The current page's body. Exactly one per shell. |
 | `[[pages]]` | The tree as a nested list of links, current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node; `from="root"` (default) at the top. |
-| `[[breadcrumb]]` | The current page's ancestors as a list of links, in its own `<nav aria-label="Breadcrumb">`. |
+| `[[breadcrumb]]` | The current page's ancestors as a list of links, in its own `<nav aria-label="Breadcrumb">`. A trail that would hold only the current page, as on the root page, is not drawn. |
 | `[[prev-next]]` | Links to the previous and next page in tree order, in its own `<nav aria-label="Previous and next">`. |
 | `[[toc]]` | The current page's contents list, as today. |
 | `[[search]]` | A search box over the build's index (§6). |

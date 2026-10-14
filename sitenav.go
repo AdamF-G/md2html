@@ -140,6 +140,11 @@ func (s *Site) breadcrumb(page *siteNode, from string) *html.Node {
 		li.AppendChild(s.nodeLink(n, page, from))
 		ol.AppendChild(li)
 	}
+	// A trail of one entry is the page alone, as on the root page: it says
+	// nothing, so nothing is drawn.
+	if ol.FirstChild == ol.LastChild {
+		return nil
+	}
 	// Its own landmark: a breadcrumb appears once and has one obvious name,
 	// unlike [[pages]], which a shell may show twice with two labels.
 	nav := elem("nav", "aria-label", "Breadcrumb")

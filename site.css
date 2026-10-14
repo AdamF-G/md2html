@@ -16,7 +16,8 @@
 .md2html-prev-next .md2html-dir { display: block; font-size: 0.8em; color: var(--muted); }
 .md2html-next { margin-left: auto; text-align: right; }
 .md2html-search-input { font: inherit; width: 100%; box-sizing: border-box; padding: 0.4em 0.6em; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--fg); }
-.md2html-search-results { list-style: none; margin: 0.3em 0 0; padding: 0; }
+.md2html-search { position: relative; }
+.md2html-search-results { list-style: none; margin: 0.3em 0 0; padding: 0; position: absolute; z-index: 10; left: 0; right: 0; background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; }
 .md2html-search-results:empty { display: none; }
 .md2html-search-results li { padding: 0.3em 0.6em; }
 .md2html-search-kind { color: var(--muted); font-size: 0.85em; }
