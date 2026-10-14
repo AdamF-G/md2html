@@ -25,6 +25,10 @@ type Style struct {
 	// own colours are not tokens is rendered once with each, and the two
 	// copies are switched by the stylesheet's theme rules.
 	Light, Dark map[string]string
+	// Tokens are colour tokens the style adds, which a spec may name after
+	// the chart and page tokens. Literal, Light and Dark hold their values
+	// too.
+	Tokens []string
 }
 
 // Request is one chart to render.
@@ -56,7 +60,8 @@ func Render(req Request) (string, []string, error) {
 		}
 		return "", nil, errors.New("the spec is not a mapping of Vega-Lite keys")
 	}
-	v, warns := substituteTokenNames(spec)
+	ts := newTokenSet(req.Style.Tokens)
+	v, warns := substituteTokenNames(spec, ts)
 	spec = mergeConfig(v, themeConfig(req.Style.FontFamily)).(map[string]any)
 	// A build has no container to measure, so "container" is no width or
 	// height: the width is the style's, and the height Vega-Lite's default.
@@ -103,17 +108,17 @@ func Render(req Request) (string, []string, error) {
 	}
 	switch {
 	case st.Literal != nil:
-		layer("", withColours(r.SVG, st.Literal), prefix, st.Literal)
+		layer("", withColours(r.SVG, st.Literal, ts), prefix, st.Literal)
 	default:
-		svg, literal, err := tokenize(r.SVG)
+		svg, literal, err := tokenize(r.SVG, ts)
 		if err != nil {
 			return "", nil, err
 		}
 		if literal && st.Light != nil && st.Dark != nil {
 			// The second copy takes its own prefix, so no id is on the
 			// page twice.
-			layer("md2html-chart-light", withColours(r.SVG, st.Light), prefix, st.Light)
-			layer("md2html-chart-dark", withColours(r.SVG, st.Dark), prefix+"-dark", st.Dark)
+			layer("md2html-chart-light", withColours(r.SVG, st.Light, ts), prefix, st.Light)
+			layer("md2html-chart-dark", withColours(r.SVG, st.Dark, ts), prefix+"-dark", st.Dark)
 		} else {
 			layer("", svg, prefix, nil)
 		}

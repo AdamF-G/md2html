@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"sort"
+
+	"github.com/AdamF-G/md2html/internal/charts"
 )
 
 // ManifestName is the file that makes a directory an md2html plugin. It is
@@ -195,6 +198,12 @@ func parseCharts(data json.RawMessage, unknown, note func(string)) (*chartSettin
 			return nil, fmt.Errorf("width %d is not between 100 and 2000", cs.Width)
 		}
 	}
+	if _, err := take(raw, "tokens", &cs.Tokens); err != nil {
+		return nil, fmt.Errorf("tokens: %v", err)
+	}
+	if err := checkChartTokens(cs.Tokens); err != nil {
+		return nil, err
+	}
 	if cs.Font != "" && cs.Metrics != "" {
 		return nil, errors.New("font and metrics are both set; name one, since a font's widths are exact")
 	}
@@ -205,6 +214,28 @@ func parseCharts(data json.RawMessage, unknown, note func(string)) (*chartSettin
 		unknown(k)
 	}
 	return cs, nil
+}
+
+// checkChartTokens holds a style's added chart tokens to custom property
+// names a spec can write after "token:", none already a chart or page
+// token, none twice, and few enough to number.
+func checkChartTokens(tokens []string) error {
+	if len(tokens) > charts.MaxStyleTokens {
+		return fmt.Errorf("tokens names %d tokens; the most is %d", len(tokens), charts.MaxStyleTokens)
+	}
+	seen := map[string]bool{}
+	for _, t := range tokens {
+		switch {
+		case !pluginName.MatchString(t):
+			return fmt.Errorf("token %q is not lowercase letters, digits and hyphens starting with a letter", t)
+		case slices.Contains(charts.Tokens, t) || slices.Contains(charts.PageTokens, t):
+			return fmt.Errorf("token %q is already a token every chart can name", t)
+		case seen[t]:
+			return fmt.Errorf("token %q is named twice", t)
+		}
+		seen[t] = true
+	}
+	return nil
 }
 
 // checkName holds a plugin or style name to pluginName, and keeps the

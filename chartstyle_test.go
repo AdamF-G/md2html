@@ -1,6 +1,8 @@
 package md2html
 
 import (
+	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -121,5 +123,103 @@ func TestChartsPadZeroOverridesTheDefault(t *testing.T) {
 		if got := c.chartStyle([]selected{{ps[0], ps[0].Styles["z"]}}); got.Pad != 0 || got.Metrics != systemSansMetrics {
 			t.Errorf("%s over default = %+v, want pad 0", charts, got)
 		}
+	}
+}
+
+const tokenBar = "```vega-lite\ndata: {values: [{a: x, b: 1}]}\nmark: {type: bar, color: \"token:%s\"}\nencoding: {x: {field: a, type: nominal}, y: {field: b, type: quantitative}}\n```\n"
+
+// A page token is a chart token like any other: it draws as a var() and
+// so the chart follows the theme in a single copy.
+func TestChartsNameAPageToken(t *testing.T) {
+	var warns []string
+	out, err := Convert([]byte(fmt.Sprintf(tokenBar, "accent")), Options{Fragment: true, Warn: func(s string) { warns = append(warns, s) }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	got = got[strings.Index(got, "<main"):]
+	if len(warns) != 0 {
+		t.Errorf("warns: %v", warns)
+	}
+	if !strings.Contains(got, "fill: var(--accent)") || strings.Contains(got, "md2html-chart-dark") {
+		t.Errorf("token:accent did not draw as one copy in var(--accent): %.400s", got)
+	}
+}
+
+// A token a style declares in its charts block can be named too, and adds
+// to the tokens of the style under it.
+func TestChartsNameAStyleToken(t *testing.T) {
+	root := pluginDir(t, map[string]string{
+		"house/md2html-plugin.json": `{"format": 1, "name": "house", "styles": {"house": {"css": ["h.css"], "charts": {"tokens": ["inject"]}}}}`,
+		"house/h.css":               ":root { --inject: #c03 } :root[data-theme=\"light\"] { --inject: #c03 } :root[data-theme=\"dark\"] { --inject: #f69 }",
+	})
+	var warns []string
+	opt := Options{Fragment: true, Plugins: []string{filepath.Join(root, "house")}, Styles: []string{"house"},
+		Warn: func(s string) { warns = append(warns, s) }}
+	out, err := Convert([]byte(fmt.Sprintf(tokenBar, "inject")), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 0 || !strings.Contains(string(out), "fill: var(--inject)") {
+		t.Errorf("warns %v; got %.400s", warns, out)
+	}
+
+	// Beside a literal colour the chart is drawn once per theme, each copy
+	// in that theme's value of the style's token.
+	warns = nil
+	both := "```vega-lite\ndata: {values: [{a: x, b: 1}]}\nlayer:\n  - {mark: {type: bar, color: \"token:inject\"}, encoding: {x: {field: a, type: nominal}, y: {field: b, type: quantitative}}}\n  - {mark: {type: rule, color: \"#123456\"}, encoding: {y: {datum: 0}}}\n```\n"
+	out, err = Convert([]byte(both), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.ToLower(string(out))
+	got = got[strings.Index(got, "<main"):]
+	if !strings.Contains(got, "#c03") || !strings.Contains(got, "#f69") || strings.Contains(got, "#0a0b") {
+		t.Errorf("warns %v; the copies do not hold each theme's value: %.600s", warns, got)
+	}
+
+	// Without the style, the name is unknown.
+	warns = nil
+	if _, err := Convert([]byte(fmt.Sprintf(tokenBar, "inject")), Options{Fragment: true, Warn: func(s string) { warns = append(warns, s) }}); err != nil {
+		t.Fatal(err)
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], `"token:inject" names no token`) {
+		t.Errorf("warns = %v", warns)
+	}
+}
+
+func TestStackedStyleTokensAddUp(t *testing.T) {
+	root := pluginDir(t, map[string]string{
+		"a/md2html-plugin.json": `{"format": 1, "name": "a", "styles": {"a": {"css": ["a.css"], "charts": {"tokens": ["inject", "source"]}}}}`,
+		"a/a.css":               "a{}",
+		"b/md2html-plugin.json": `{"format": 1, "name": "b", "styles": {"b": {"css": ["b.css"], "charts": {"tokens": ["source", "sink"]}}}}`,
+		"b/b.css":               "b{}",
+	})
+	c := NewPluginCache()
+	ps, err := c.LoadAll([]string{"a", "b"}, root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := c.chartStyle([]selected{{ps[0], ps[0].Styles["a"]}, {ps[1], ps[1].Styles["b"]}})
+	if strings.Join(got.Tokens, ",") != "inject,source,sink" {
+		t.Errorf("tokens = %v", got.Tokens)
+	}
+}
+
+func TestManifestChartsTokensRefusesBadNames(t *testing.T) {
+	for _, c := range []struct{ name, tokens, want string }{
+		{"shape", `["Inject"]`, "lowercase"},
+		{"chart token", `["series-1"]`, "already a token"},
+		{"page token", `["accent"]`, "already a token"},
+		{"twice", `["a", "a"]`, "named twice"},
+		{"not a list", `"a"`, "tokens"},
+		{"too many", `["a1","a2","a3","a4","a5","a6","a7","a8","a9","a10","a11","a12","a13","a14","a15","a16","a17","a18","a19","a20","a21","a22","a23","a24","a25","a26","a27","a28","a29","a30","a31","a32","a33"]`, "the most is 32"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := parseManifest([]byte(`{"format": 1, "name": "a", "styles": {"s": {"css": ["x.css"], "charts": {"tokens": `+c.tokens+`}}}}`), "a", false, nil)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("err = %v, want it to mention %q", err, c.want)
+			}
+		})
 	}
 }

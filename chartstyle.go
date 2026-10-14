@@ -3,6 +3,7 @@ package md2html
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/AdamF-G/md2html/internal/charts"
@@ -15,12 +16,13 @@ const systemSansMetrics = "builtin:system-sans"
 // chartSettings is a style's charts block, and, once a page's styles are
 // stacked, the settings its charts are drawn with.
 type chartSettings struct {
-	Font, Metrics string  // a font file in the plugin, or the built-in proxy; never both
-	Pad           float64 // widen proxy-measured text by this fraction
-	padSet        bool    // the block sets pad, 0 included
-	Width         int     // plot width in px when a spec sets none
-	FontFamily    string  // the CSS stack chart text renders in
-	plugin        *Plugin // the plugin Font is in
+	Font, Metrics string   // a font file in the plugin, or the built-in proxy; never both
+	Pad           float64  // widen proxy-measured text by this fraction
+	padSet        bool     // the block sets pad, 0 included
+	Width         int      // plot width in px when a spec sets none
+	FontFamily    string   // the CSS stack chart text renders in
+	Tokens        []string // colour tokens the style adds for specs to name
+	plugin        *Plugin  // the plugin Font is in
 
 	// measurer is Font, parsed when its plugin loaded. It is kept with the
 	// plugin, so the plugin cache is also the measurer cache: a font is
@@ -88,6 +90,18 @@ func (c *PluginCache) chartStyle(picks []selected) chartSettings {
 		if b.FontFamily != "" {
 			out.FontFamily = b.FontFamily
 		}
+		// Tokens add up across the stack, so a style on top keeps the
+		// roles of the one under it.
+		for _, t := range b.Tokens {
+			if !slices.Contains(out.Tokens, t) {
+				out.Tokens = append(out.Tokens[:len(out.Tokens):len(out.Tokens)], t)
+			}
+		}
+	}
+	// Each style is held to the limit, but a stack can exceed it; the
+	// tokens past it are unknown to a spec, which warns if it names one.
+	if len(out.Tokens) > charts.MaxStyleTokens {
+		out.Tokens = out.Tokens[:charts.MaxStyleTokens]
 	}
 	return out
 }
@@ -111,12 +125,15 @@ type chartContext struct {
 	n     *int
 }
 
-// defaultLight is the default stylesheet's light token values, the
-// colours a chart is written in under a stylesheet that defines none.
-var defaultLight = sync.OnceValue(func() map[string]string {
-	light, _, _ := charts.TokenValues(defaultCSS)
-	return light
+// defaultTokens is the default stylesheet's light and dark token values,
+// the colours a chart is written in under a stylesheet that defines none.
+var defaultTokens = sync.OnceValues(func() (map[string]string, map[string]string) {
+	light, dark, _ := charts.TokenValues(defaultCSS)
+	return light, dark
 })
+
+func defaultLight() map[string]string { l, _ := defaultTokens(); return l }
+func defaultDark() map[string]string  { _, d := defaultTokens(); return d }
 
 // complete reports whether values holds every chart token.
 func complete(values map[string]string) bool {
@@ -142,9 +159,26 @@ func newChartContext(opt Options, st pageStyle) chartContext {
 	// so it waits for a page that has a chart.
 	ctx.style = sync.OnceValue(func() charts.Style {
 		cs := st.charts
-		s := charts.Style{Measurer: cs.measure(), FontFamily: cs.FontFamily, Width: cs.Width}
-		light, dark, _ := charts.TokenValues(st.css)
+		s := charts.Style{Measurer: cs.measure(), FontFamily: cs.FontFamily, Width: cs.Width, Tokens: cs.Tokens}
+		light, dark, _ := charts.TokenValues(st.css, cs.Tokens...)
+		// A page or style token a theme block leaves unset still needs a
+		// colour wherever the chart is drawn in literal colours: the
+		// default's for a page token, --fg for one the style added.
+		fill := func(values, defaults map[string]string) {
+			for _, t := range charts.PageTokens {
+				if values[t] == "" {
+					values[t] = defaults[t]
+				}
+			}
+			for _, t := range cs.Tokens {
+				if values[t] == "" {
+					values[t] = values["fg"]
+				}
+			}
+		}
 		if complete(light) && complete(dark) {
+			fill(light, defaultLight())
+			fill(dark, defaultDark())
 			s.Light, s.Dark = light, dark
 			return s
 		}
@@ -159,6 +193,7 @@ func newChartContext(opt Options, st pageStyle) chartContext {
 		for k, v := range light {
 			s.Literal[k] = v
 		}
+		fill(s.Literal, defaultLight())
 		return s
 	})
 	return ctx

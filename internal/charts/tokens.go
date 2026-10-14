@@ -13,8 +13,29 @@ var Tokens = []string{"chart-surface", "fg", "muted", "chart-grid", "chart-axis"
 	"series-1", "series-2", "series-3", "series-4", "series-5", "series-6", "series-7", "series-8",
 	"status-good", "status-warning", "status-serious", "status-critical"}
 
-func placeholder(token string) string {
-	for i, t := range Tokens {
+// PageTokens are the page's own colour tokens, which a spec may name as
+// well, so a chart can match the text's accent or warning colour. Their
+// placeholders follow the chart tokens'.
+var PageTokens = []string{"accent", "warn", "ok", "rule", "bg", "code-bg"}
+
+// MaxStyleTokens bounds the tokens a style may add, which number their
+// placeholders after the page tokens' within the placeholder range.
+const MaxStyleTokens = 32
+
+// tokenSet is the tokens one chart can be drawn with: the chart tokens,
+// the page tokens, then any its style adds. A token's placeholder is its
+// position, so a set is fixed for the whole chart.
+type tokenSet []string
+
+func newTokenSet(extra []string) tokenSet {
+	return append(append(append(tokenSet{}, Tokens...), PageTokens...), extra...)
+}
+
+// baseTokens is the set with no style tokens.
+var baseTokens = newTokenSet(nil)
+
+func (ts tokenSet) placeholder(token string) string {
+	for i, t := range ts {
 		if t == token {
 			return fmt.Sprintf("#0a0b%02x", i+1)
 		}
@@ -22,14 +43,15 @@ func placeholder(token string) string {
 	return ""
 }
 
-func tokenOfPlaceholder(hex string) (string, bool) {
-	for _, t := range Tokens {
-		if placeholder(t) == hex {
-			return t, true
-		}
+func (ts tokenSet) tokenOf(hex string) (string, bool) {
+	var i int
+	if _, err := fmt.Sscanf(hex, "#0a0b%02x", &i); err != nil || len(hex) != 7 || i < 1 || i > len(ts) {
+		return "", false
 	}
-	return "", false
+	return ts[i-1], true
 }
+
+func placeholder(token string) string { return baseTokens.placeholder(token) }
 
 // themeConfig is merged under a spec's own config, so the author's
 // explicit choices win.
@@ -63,7 +85,7 @@ var placeholderRe = regexp.MustCompile(`#0a0b[0-9a-f]{2}`)
 // spec names itself. Data, under any "data" or "datasets" key, is the
 // author's values, not colours, and is left alone. The warnings are
 // sorted, so their order does not follow map iteration.
-func substituteTokenNames(v any) (any, []string) {
+func substituteTokenNames(v any, ts tokenSet) (any, []string) {
 	var warns []string
 	var walk func(any) any
 	walk = func(v any) any {
@@ -81,10 +103,10 @@ func substituteTokenNames(v any) (any, []string) {
 			}
 		case string:
 			if name, ok := strings.CutPrefix(x, "token:"); ok {
-				if p := placeholder(name); p != "" {
+				if p := ts.placeholder(name); p != "" {
 					return p
 				}
-				warns = append(warns, fmt.Sprintf("chart: %q names no chart token; the tokens are %s", x, strings.Join(Tokens, ", ")))
+				warns = append(warns, fmt.Sprintf("chart: %q names no token; the tokens are %s", x, strings.Join(ts, ", ")))
 			} else if placeholderRe.MatchString(strings.ToLower(x)) {
 				warns = append(warns, fmt.Sprintf("chart: the colour %s is reserved by md2html for a chart token; it will render as that token", x))
 			}
@@ -102,7 +124,7 @@ var tagAttr = regexp.MustCompile(`(\s)(fill|stroke|style)="([^"]*)"`)
 // tokenize rewrites each placeholder fill or stroke into a style
 // declaration. Per start tag it merges those with any existing style
 // attribute, so an element never carries two.
-func tokenize(svg string) (string, bool, error) {
+func tokenize(svg string, ts tokenSet) (string, bool, error) {
 	literal := false
 	out := startTag.ReplaceAllStringFunc(svg, func(tag string) string {
 		var rewritten []string
@@ -113,7 +135,7 @@ func tokenize(svg string) (string, bool, error) {
 			case m[2] == "style":
 				existing = append(existing, strings.TrimRight(strings.TrimSpace(m[3]), ";"))
 			default:
-				if tok, ok := tokenOfPlaceholder(v); ok {
+				if tok, ok := ts.tokenOf(v); ok {
 					rewritten = append(rewritten, fmt.Sprintf("%s: var(--%s)", m[2], tok))
 				} else if v != "none" && v != "transparent" && !strings.HasPrefix(v, "url(") {
 					literal = true
@@ -128,7 +150,7 @@ func tokenize(svg string) (string, bool, error) {
 		return tagAttr.ReplaceAllStringFunc(tag, func(s string) string {
 			m := tagAttr.FindStringSubmatch(s)
 			if m[2] != "style" {
-				if _, ok := tokenOfPlaceholder(strings.ToLower(m[3])); !ok {
+				if _, ok := ts.tokenOf(strings.ToLower(m[3])); !ok {
 					return s
 				}
 			}
@@ -152,19 +174,18 @@ var themeBlock = regexp.MustCompile(`:root\[data-theme="(light|dark)"\]\s*\{([^}
 var declRe = regexp.MustCompile(`--([a-z0-9-]+)\s*:\s*([^;}]+)(?:;|$)`)
 var varRef = regexp.MustCompile(`^var\(\s*--([a-z0-9-]+)\s*\)$`)
 
-// boxBorder is the page colour a tooltip box's border is drawn in. It is
-// not a chart token, but a chart written in literal colours needs its value.
-const boxBorder = "rule"
-
-// TokenValues reads each token's light and dark value from an assembled
-// stylesheet, and --rule's, for the tooltip box border. ok is false when
-// the stylesheet defines none of the tokens. A value of var(--x) becomes
+// TokenValues reads the light and dark value of each chart token, page
+// token and extra token from an assembled stylesheet. ok is false when the
+// stylesheet defines none of the chart tokens. A value of var(--x) becomes
 // --x's value from the same block.
-func TokenValues(css string) (light, dark map[string]string, ok bool) {
+func TokenValues(css string, extra ...string) (light, dark map[string]string, ok bool) {
 	light, dark = map[string]string{}, map[string]string{}
-	want := map[string]bool{boxBorder: true}
-	for _, t := range Tokens {
+	want, chart := map[string]bool{}, map[string]bool{}
+	for _, t := range newTokenSet(extra) {
 		want[t] = true
+	}
+	for _, t := range Tokens {
+		chart[t] = true
 	}
 	// Every declaration of each theme, tokens or not, so a reference such
 	// as var(--bg) can be resolved.
@@ -180,7 +201,7 @@ func TokenValues(css string) (light, dark map[string]string, ok bool) {
 			decls[d[1]] = v // later blocks win, as the cascade does
 			if want[d[1]] {
 				dst[d[1]] = v
-				ok = ok || d[1] != boxBorder
+				ok = ok || chart[d[1]]
 			}
 		}
 	}
@@ -207,9 +228,9 @@ func resolveVar(v string, decls map[string]string) string {
 	return v
 }
 
-func withColours(svg string, values map[string]string) string {
+func withColours(svg string, values map[string]string, ts tokenSet) string {
 	return placeholderRe.ReplaceAllStringFunc(svg, func(p string) string {
-		if t, ok := tokenOfPlaceholder(p); ok {
+		if t, ok := ts.tokenOf(p); ok {
 			if v, ok := values[t]; ok {
 				return v
 			}

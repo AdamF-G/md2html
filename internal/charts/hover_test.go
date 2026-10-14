@@ -82,13 +82,13 @@ var goldenSpecs = []struct {
 func TestGolden(t *testing.T) {
 	for _, g := range goldenSpecs {
 		t.Run(g.name, func(t *testing.T) {
-			spec, _ := substituteTokenNames(mustJSON(t, g.spec))
+			spec, _ := substituteTokenNames(mustJSON(t, g.spec), baseTokens)
 			withTheme := mergeConfig(spec, themeConfig(`"IBM Plex Sans", sans-serif`))
 			r, err := renderSpec(marshal(t, withTheme), plex(t), nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			tok, _, err := tokenize(r.SVG)
+			tok, _, err := tokenize(r.SVG, baseTokens)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -232,7 +232,7 @@ func TestLegendEntriesAndMarksShareASeriesClass(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, _, _ := tokenize(r.SVG)
+	tok, _, _ := tokenize(r.SVG, baseTokens)
 	out, _ := hoverLayer(tok, r, "md2html-c1", fixed{})
 	for _, c := range []string{"md2html-legend-s1", "md2html-legend-s2", "md2html-s1", "md2html-s2"} {
 		if !strings.Contains(out, c) {
@@ -267,7 +267,7 @@ func themed(t *testing.T, s string) (string, rendered) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tok, _, err := tokenize(r.SVG)
+	tok, _, err := tokenize(r.SVG, baseTokens)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -65,6 +65,12 @@ major version instead.
   has, so it can be previewed in a browser. Fragments stay script-free
   without it.
 
+- Charts can name the page's own colours, `token:accent`, `token:warn`,
+  `token:ok`, `token:rule`, `token:bg` and `token:code-bg`, so a mark can
+  match the text around it and still follow the theme. A style can add
+  colour roles of its own with `tokens` in its manifest's `charts` block,
+  such as `"tokens": ["inject", "source"]` for `token:inject`.
+
 ### Changed
 
 - `--version` names the commit when the build is not exactly a tagged

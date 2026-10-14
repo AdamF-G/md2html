@@ -686,8 +686,11 @@ mark: {type: bar, color: "token:status-critical"}
 | `chart-surface` | The surface a chart sits on, which rings and gaps between marks show |
 | `chart-grid`, `chart-axis` | Gridlines, and the axis or baseline |
 | `fg`, `muted` | Chart text, as on the page |
+| `accent`, `warn`, `ok`, `rule`, `bg`, `code-bg` | The page's own colours, so a mark can match the text around it |
 
-A name outside this list warns. `token:` is read only in the spec's
+A style can add tokens of its own, such as `token:inject`, by listing
+them in its manifest; see [Chart settings](#chart-settings). A name outside
+these warns. `token:` is read only in the spec's
 settings, never in its data: a data value that reads `token:fg` stays text.
 Colours of the form `#0a0bNN` are reserved: md2html draws each token in
 one while it builds a chart, so a spec that names one warns and gets that
@@ -1329,6 +1332,7 @@ and the width charts are laid out at:
 | `pad` | 0 to 1: how much room to add to text measured by `metrics`, for a system face wider than the estimate. The default style's is 0.1; `0` adds none. Not with `font`, whose widths are exact: the pair warns. |
 | `width` | The plot width in pixels, 100 to 2000, for a spec that sets none. |
 | `font-family` | The CSS font stack chart text renders in. Put the face `font` measures first. |
+| `tokens` | Colour roles of the style's own that a chart spec can name, such as `["inject", "source"]` for `token:inject`. Each is a custom property the stylesheet sets four times like the others, so a chart that uses it follows the theme. Up to 32 lowercase names, none already a chart or page token. |
 
 Each key a style's block leaves out comes from the style below it, and
 every page starts from the default style's block: system-sans metrics, a
@@ -1337,7 +1341,10 @@ how text is measured, padding included. A `pad` applies only while text
 is measured by `metrics`: stacked over a style whose block names `font`,
 it does nothing. `claude-artifact` measures its
 embedded IBM Plex Sans. A `font` that is missing, or is not a font, fails
-the plugin's load; an unknown key warns.
+the plugin's load; an unknown key warns. `tokens` add up through the stack, so a
+style on top keeps the roles of the one below. A token a theme block does
+not set is drawn in `--fg` wherever a chart has to be drawn in fixed
+colours.
 
 ### What a plugin cannot do yet
 
@@ -1475,8 +1482,9 @@ rest of the message names the fault:
 - Anything else is Vega-Lite's or Vega's own error. Check the spec against
   the [Vega-Lite documentation](https://vega.github.io/vega-lite/docs/).
 
-**vega-lite fence …: … names no chart token** — a `token:` name outside
-the list in [Colours](#colours). The message lists the names.
+**vega-lite fence …: … names no token** — a `token:` name outside the
+list in [Colours](#colours), or the style's own. The message lists the
+names.
 
 **vega-lite fence …: … is reserved by md2html for a chart token** — a
 `#0a0bNN` colour. Use a `token:` name, or another colour.

@@ -7,7 +7,7 @@ import (
 
 func TestTokenizeRewritesEveryPlaceholder(t *testing.T) {
 	in := `<path fill="` + placeholder("series-1") + `" stroke="` + placeholder("chart-surface") + `"/>`
-	out, literal, err := tokenize(in)
+	out, literal, err := tokenize(in, baseTokens)
 	if err != nil || literal {
 		t.Fatalf("err %v literal %v", err, literal)
 	}
@@ -18,12 +18,12 @@ func TestTokenizeRewritesEveryPlaceholder(t *testing.T) {
 
 func TestTokenizeMergesIntoAnExistingStyle(t *testing.T) {
 	in := `<path fill="` + placeholder("series-1") + `" d="M0 0" style="opacity: 0.5"/>`
-	out, _, err := tokenize(in)
+	out, _, err := tokenize(in, baseTokens)
 	if err != nil || out != `<path style="fill: var(--series-1); opacity: 0.5" d="M0 0"/>` {
 		t.Errorf("err %v got %s", err, out)
 	}
 	in = `<rect fill="` + placeholder("series-2") + `" x="1" style="opacity: 0.5;" stroke="` + placeholder("fg") + `"/>`
-	out, _, err = tokenize(in)
+	out, _, err = tokenize(in, baseTokens)
 	if err != nil || strings.Count(out, "style=") != 1 ||
 		!strings.Contains(out, `style="fill: var(--series-2); stroke: var(--fg); opacity: 0.5"`) {
 		t.Errorf("err %v got %s", err, out)
@@ -31,12 +31,12 @@ func TestTokenizeMergesIntoAnExistingStyle(t *testing.T) {
 }
 
 func TestTokenizeFlagsALiteralColour(t *testing.T) {
-	_, literal, _ := tokenize(`<path fill="#ff0000"/>`)
+	_, literal, _ := tokenize(`<path fill="#ff0000"/>`, baseTokens)
 	if !literal {
 		t.Error("a literal colour was not reported")
 	}
 	for _, ok := range []string{`fill="none"`, `fill="transparent"`, `stroke="none"`} {
-		if _, l, _ := tokenize(`<path ` + ok + `/>`); l {
+		if _, l, _ := tokenize(`<path `+ok+`/>`, baseTokens); l {
 			t.Errorf("%s is not a colour but was reported as one", ok)
 		}
 	}
@@ -44,7 +44,7 @@ func TestTokenizeFlagsALiteralColour(t *testing.T) {
 
 func TestTokenNamesInASpec(t *testing.T) {
 	spec := map[string]any{"mark": map[string]any{"type": "bar", "color": "token:status-critical", "stroke": "token:serie-1"}}
-	out, warns := substituteTokenNames(spec)
+	out, warns := substituteTokenNames(spec, baseTokens)
 	m := out.(map[string]any)["mark"].(map[string]any)
 	if m["color"] != placeholder("status-critical") {
 		t.Errorf("color %v", m["color"])
@@ -56,7 +56,7 @@ func TestTokenNamesInASpec(t *testing.T) {
 
 // A spec that names a placeholder colour itself would be silently recoloured.
 func TestAPlaceholderInTheSpecIsWarnedAbout(t *testing.T) {
-	_, warns := substituteTokenNames(map[string]any{"mark": map[string]any{"color": placeholder("series-3")}})
+	_, warns := substituteTokenNames(map[string]any{"mark": map[string]any{"color": placeholder("series-3")}}, baseTokens)
 	if len(warns) != 1 {
 		t.Errorf("want a warning, got %v", warns)
 	}
@@ -109,7 +109,7 @@ func TestTokenNamesInDataAreLeftAlone(t *testing.T) {
 		"layer":    []any{map[string]any{"data": map[string]any{"values": []any{map[string]any{"k": "token:fg"}}}, "mark": "point"}},
 		"mark":     map[string]any{"color": "token:zz-b", "stroke": "token:zz-a", "fill": "token:zz-c"},
 	}
-	out, warns := substituteTokenNames(spec)
+	out, warns := substituteTokenNames(spec, baseTokens)
 	o := out.(map[string]any)
 	if v := o["data"].(map[string]any)["values"].([]any)[0].(map[string]any)["k"]; v != "token:fg" {
 		t.Errorf("data value rewritten to %v", v)
