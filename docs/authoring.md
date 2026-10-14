@@ -973,7 +973,10 @@ column, so the `<main>` keeps the column's width, and the stylesheet styles
 only that element, never the host's own `<main>`. A fragment has no script: no
 mermaid runtime, no floating contents list, no click-to-expand, and no
 embedded source. A mermaid fence arrives as `<pre class="mermaid">`, which
-an Artifact draws and other hosts show as text.
+an Artifact draws and other hosts show as text. To preview a fragment in a
+browser, add `--preview-runtime`: a fragment with a diagram then ends in
+the same mermaid runtime a full page has. Publish without it, since the
+host draws diagrams in its own theme.
 
 md2html suits document-shaped pages: a report, a spec, a guide. A page that
 wants an app-like layout or a bespoke look is better written as HTML.

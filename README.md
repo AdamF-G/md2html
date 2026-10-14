@@ -171,8 +171,9 @@ legibly rather than corrupting it.
 The one thing a generated page fetches at view time is MermaidJS, and only
 a page that actually contains a diagram: it loads a pinned build from a CDN.
 Pages without diagrams reference nothing external, and `--fragment` output
-never loads it at all, because a fragment's host — a Claude Artifact, for
-one — renders mermaid itself. A build
+does not load it, because a fragment's host — a Claude Artifact, for
+one — renders mermaid itself. `--preview-runtime` adds it to a fragment
+for previewing outside that host. A build
 that must not reach a CDN can name its own copy — see `Options.MermaidURL`
 below.
 
@@ -381,6 +382,7 @@ recipient's agent anyway.
 | `--depth N` | directory levels to seed from a directory entry; `-1` (default) unlimited |
 | `--link-depth N` | hops from a seed that link-following may travel; `-1` (default) unlimited, `0` follows none |
 | `--fragment` | emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages |
+| `--preview-runtime` | with `--fragment`, add the mermaid runtime a full page has to a fragment with a diagram, to preview it in a browser; leave it off for output a host will render (`Options.PreviewRuntime`) |
 | `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
 | `--no-charts` | leave `vega-lite` fences as code blocks instead of drawing charts |
 | `--css FILE` | replace the stylesheet; not with `--style` |

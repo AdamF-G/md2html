@@ -132,6 +132,31 @@ func TestRunFragmentMode(t *testing.T) {
 	}
 }
 
+// --preview-runtime gives a fragment with a diagram the mermaid runtime,
+// and without --fragment it is a usage error, since a page has it already.
+func TestRunPreviewRuntime(t *testing.T) {
+	root := tree(t, map[string]string{"docs/a.md": "# A\n\n```mermaid\ngraph LR\n  A-->B\n```\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "site"), "--fragment", "--preview-runtime"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	b, err := os.ReadFile(filepath.Join(root, "site/a.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "import mermaid from") {
+		t.Errorf("no mermaid runtime in the preview fragment: %s", b)
+	}
+
+	errb.Reset()
+	if code := run([]string{filepath.Join(root, "docs"), "-o", filepath.Join(root, "page"), "--preview-runtime"}, &out, &errb); code != 2 {
+		t.Errorf("exit %d without --fragment, want 2", code)
+	}
+	if !strings.Contains(errb.String(), "--preview-runtime needs --fragment") {
+		t.Errorf("stderr: %s", errb.String())
+	}
+}
+
 func TestRunErrorsOnMissingEntryPoint(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := run([]string{"/definitely/not/here.md"}, &out, &errb); code == 0 {

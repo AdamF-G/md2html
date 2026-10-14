@@ -76,9 +76,15 @@ type Options struct {
 	// It is the only thing a generated page ever fetches, so this is the
 	// knob for a docs build that must not reach a CDN: point it at a copy
 	// you serve yourself. Nothing else changes — a page with no diagram
-	// still imports nothing, and Fragment output never imports at all,
-	// because Artifacts render mermaid themselves.
+	// still imports nothing, and Fragment output imports nothing unless
+	// PreviewRuntime asks, because Artifacts render mermaid themselves.
 	MermaidURL string
+	// PreviewRuntime adds to Fragment output, when it has a mermaid diagram,
+	// the runtime a full page loads from MermaidURL, so the fragment can be
+	// previewed in a browser outside the host that would draw it. Output
+	// meant for that host should leave it off: the host renders mermaid
+	// itself, in its own theme. A full page ignores it.
+	PreviewRuntime bool
 	// Lang is the page's language, written as <html lang>. A document's own
 	// "lang:" front matter key overrides it; empty means "en". A value not
 	// shaped like a BCP 47 language tag is warned about and skipped in
@@ -325,12 +331,16 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		return nil, err
 	}
 	css := style.css
-	if opt.Fragment {
-		return renderFragment(body, title, css), nil
-	}
 	mermaidURL := opt.MermaidURL
 	if mermaidURL == "" {
 		mermaidURL = mermaidCDN
+	}
+	if opt.Fragment {
+		runtime := ""
+		if opt.PreviewRuntime && hasMermaid(body) {
+			runtime = mermaidRuntime(mermaidURL)
+		}
+		return renderFragment(body, title, css, runtime), nil
 	}
 	return renderPage(body, title, pageLang(meta["lang"], opt.Lang, opt.Warn), css, mermaidURL, source), nil
 }

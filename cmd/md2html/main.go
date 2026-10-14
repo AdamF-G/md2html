@@ -80,6 +80,7 @@ Flags:
 		depth     = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
 		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
 		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
+		preview   = fs.Bool("preview-runtime", false, "with --fragment, add the mermaid runtime a full page has, to preview a fragment outside its host")
 		noSource  = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
 		cssPath   = fs.String("css", "", "replace the stylesheet with this file (not with --style)")
 		lang      = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
@@ -210,6 +211,12 @@ Flags:
 		fmt.Fprint(stderr, "md2html: give only one of --style and --css\n")
 		return 2
 	}
+	// A full page already has the runtime, so the flag alone would do
+	// nothing, and silently.
+	if *preview && !*fragment {
+		fmt.Fprint(stderr, "md2html: --preview-runtime needs --fragment; a full page already has the mermaid runtime\n")
+		return 2
+	}
 	// Plugins and styles are checked once, up front, so a typo stops the run
 	// before any page is written rather than costing a warning per page.
 	// Their load warnings are reported here, once; Convert stays quiet about
@@ -278,6 +285,7 @@ Flags:
 				func(m string) { warnings = append(warnings, m) })
 			opts.Plugins, opts.Styles, opts.PluginCache = plugins, styles, cache
 			opts.StyleChosen = checks.chosen
+			opts.PreviewRuntime = *preview
 			out, err := md2html.Convert(src, opts)
 			if err != nil {
 				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err, warnings: warnings}

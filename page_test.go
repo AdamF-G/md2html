@@ -35,7 +35,7 @@ func TestPageShellIsCompleteDocument(t *testing.T) {
 // Artifact shape: marker, title, style, body — and none of the document
 // wrapper tags, which the Artifact tool supplies itself.
 func TestFragmentShellOmitsDocumentWrapper(t *testing.T) {
-	got := string(renderFragment([]byte(`<p>hi</p>`), "T", "body{}"))
+	got := string(renderFragment([]byte(`<p>hi</p>`), "T", "body{}", ""))
 	for _, banned := range []string{"<!doctype", "<html", "<head>", "<body"} {
 		if strings.Contains(strings.ToLower(got), banned) {
 			t.Errorf("fragment must not contain %q\ngot: %s", banned, got)
@@ -52,7 +52,7 @@ func TestFragmentShellOmitsDocumentWrapper(t *testing.T) {
 // whole viewport. The content sits in <main>, as on a full page, so every
 // stylesheet rule scoped to main (the measure, wide figures) holds in both.
 func TestFragmentWrapsBodyInMain(t *testing.T) {
-	got := string(renderFragment([]byte(`<p>hi</p>`), "T", "body{}"))
+	got := string(renderFragment([]byte(`<p>hi</p>`), "T", "body{}", ""))
 	if !strings.Contains(got, "</style>\n<main class=\"md2html\">\n<p>hi</p>\n</main>\n") {
 		t.Errorf("fragment body is not wrapped in <main> after the style\ngot: %s", got)
 	}
@@ -61,7 +61,7 @@ func TestFragmentWrapsBodyInMain(t *testing.T) {
 func TestBothShellsStartWithMarker(t *testing.T) {
 	for name, got := range map[string][]byte{
 		"page":     renderPage([]byte(`<p>x</p>`), "T", "en", "", mermaidCDN, nil),
-		"fragment": renderFragment([]byte(`<p>x</p>`), "T", ""),
+		"fragment": renderFragment([]byte(`<p>x</p>`), "T", "", ""),
 	} {
 		if !strings.HasPrefix(string(got), MarkerPrefix) {
 			t.Errorf("%s does not start with marker prefix\ngot: %.80s", name, got)
@@ -97,6 +97,8 @@ func TestMermaidRuntimeInjectedOnlyForPagesThatNeedIt(t *testing.T) {
 		{"page with a diagram", diagram, Options{}, true},
 		{"page without a diagram", "# Plain\n\ntext\n", Options{}, false},
 		{"fragment with a diagram", diagram, Options{Fragment: true}, false},
+		{"preview fragment with a diagram", diagram, Options{Fragment: true, PreviewRuntime: true}, true},
+		{"preview fragment without a diagram", "# Plain\n\ntext\n", Options{Fragment: true, PreviewRuntime: true}, false},
 	} {
 		got, err := Convert([]byte(c.src), c.opt)
 		if err != nil {
@@ -105,6 +107,20 @@ func TestMermaidRuntimeInjectedOnlyForPagesThatNeedIt(t *testing.T) {
 		if has := strings.Contains(string(got), mermaidCDN); has != c.want {
 			t.Errorf("%s: mermaid runtime present = %v, want %v", c.name, has, c.want)
 		}
+	}
+}
+
+// A preview fragment's runtime goes after its content, outside <main>, as
+// on a full page, and honours MermaidURL.
+func TestPreviewRuntimeFollowsFragmentContent(t *testing.T) {
+	got, err := Convert([]byte("```mermaid\ngraph TD; A-->B;\n```\n"),
+		Options{Fragment: true, PreviewRuntime: true, MermaidURL: "./mermaid.mjs"})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	s := string(got)
+	if main, script := strings.Index(s, "</main>"), strings.Index(s, `import mermaid from "./mermaid.mjs"`); main < 0 || script < main {
+		t.Errorf("runtime not after </main>\ngot: %s", s)
 	}
 }
 

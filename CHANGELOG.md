@@ -60,6 +60,11 @@ major version instead.
   title, as an eyebrow line such as `Team A · Project B`, instead of
   under it. They keep their classes and also carry `eyebrow`.
 
+- **`--preview-runtime`** (`Options.PreviewRuntime`), with `--fragment`,
+  ends a fragment that has a mermaid diagram in the runtime a full page
+  has, so it can be previewed in a browser. Fragments stay script-free
+  without it.
+
 ### Changed
 
 - `--version` names the commit when the build is not exactly a tagged

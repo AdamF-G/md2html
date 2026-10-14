@@ -68,7 +68,8 @@ const mermaidCDN = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.es
 // runs with NoScript, so nothing else loads MermaidJS and a ```mermaid fence
 // would otherwise sit on the page as inert preformatted text.
 //
-// Fragments never get this: they are published as Artifacts, which render
+// Fragments do not get this unless they are built for a preview (see
+// Options.PreviewRuntime): they are published as Artifacts, which render
 // mermaid natively, with the host's theme rather than the page's. The theme test mirrors the stylesheet's two signals —
 // an explicit [data-theme] wins, otherwise the OS preference decides.
 //
@@ -412,7 +413,10 @@ func renderPage(body []byte, title, lang, css, mermaidURL string, source []byte)
 // whole viewport), so the measure must apply here too. The class keeps the
 // stylesheet, which a fragment carries into its host, off the host's own
 // <main>.
-func renderFragment(body []byte, title, css string) []byte {
+//
+// runtime is script to follow the content, empty but for a preview (see
+// Options.PreviewRuntime).
+func renderFragment(body []byte, title, css, runtime string) []byte {
 	var b strings.Builder
 	b.WriteString(Marker())
 	b.WriteString("\n")
@@ -422,6 +426,7 @@ func renderFragment(body []byte, title, css string) []byte {
 	b.WriteString("\n</style>\n<main class=\"md2html\">\n")
 	b.Write(body)
 	b.WriteString("\n</main>\n")
+	b.WriteString(runtime)
 	return []byte(b.String())
 }
 
