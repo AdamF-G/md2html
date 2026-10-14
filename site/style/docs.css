@@ -36,11 +36,16 @@ nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
   body {
     display: grid;
     grid-template-columns: 15rem minmax(0, 1fr);
+    /* The empty row under previous/next takes whatever height a sidebar
+       taller than the page adds, so the rows beside it stay the height of
+       their content instead of stretching. */
+    grid-template-rows: auto auto auto auto 1fr auto;
     grid-template-areas:
       "top    top"
       "side   crumbs"
       "side   main"
       "side   pn"
+      "side   ."
       "foot   foot";
     column-gap: 3rem;
     max-width: 78rem;
