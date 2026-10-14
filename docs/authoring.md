@@ -319,6 +319,7 @@ a container that was never opened.
 | `defs` | `<div class="defs">` | A term/definition grid |
 | `group` | `<div class="group">` | A titled panel |
 | `nav` | `<nav>` | A navigation landmark; adds no class |
+| `wide` | `<div class="wide">` | A table, code block or card too wide for the text column |
 
 `details` with no title shows "Details"; `aside` with none shows "Aside".
 
@@ -834,6 +835,21 @@ cell; write `\|`.
 | Option | Default |
 |---|---|
 | `--depth` | unlimited |
+```
+
+A table is as wide as the text column, and scrolls when it needs more.
+To give one more room, wrap it in a `wide` container, which extends past
+the column the way a [wide figure](#layout) does, with the same limits:
+it has no effect inside another container, or in `--fragment` output that
+its host places inside a box of its own. The same works for a code block;
+`{.wide}` on the fence itself classes the `<code>`, not the block.
+
+```markdown
+::: wide
+| Option | Default | Notes |
+|---|---|---|
+| `--link-depth` | unlimited | … |
+:::
 ```
 
 ### Footnotes, definition lists, task lists

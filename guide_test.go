@@ -425,7 +425,8 @@ func TestGuideConvertsCleanly(t *testing.T) {
 // of <body>, which is what makes the guide's claim true: inside a
 // container the figure is not a child of <main>, and a fragment embedded
 // in a host's box has a <main> that is not a child of <body>. A rule
-// naming fig-wide any other way would break it.
+// naming fig-wide any other way would break it. The wide container shares
+// the rule, and so the same scope.
 func TestGuideWideNeedsMain(t *testing.T) {
 	if !strings.Contains(guide(t), "It has no effect inside a container, or in `--fragment` output that its\nhost places inside a box of its own") {
 		t.Error("the guide no longer states where wide has no effect")
@@ -435,7 +436,9 @@ func TestGuideWideNeedsMain(t *testing.T) {
 		t.Error("no stylesheet rule names fig-wide")
 	}
 	for _, r := range rules {
-		if !strings.HasPrefix(strings.TrimSpace(r), "body > main.md2html > figure.fig-wide") {
+		r = strings.TrimSpace(r)
+		if !strings.HasPrefix(r, "body > main.md2html > figure.fig-wide") &&
+			!strings.HasPrefix(r, "body > main.md2html > :is(figure.fig-wide, .wide)") {
 			t.Errorf("fig-wide rule %q is not scoped to body > main.md2html > figure", r)
 		}
 	}

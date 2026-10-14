@@ -57,6 +57,10 @@ var containerKinds = map[string]containerKind{
 	"stats": {tag: "div", class: "stats", list: true},
 	"defs":  {tag: "div", class: "defs", list: true},
 	"group": {tag: "div", class: "group"},
+	// wide is a plain wrapper: it adds nothing but the class the stylesheet
+	// breaks out of the measure column, the same breakout a wide fig figure
+	// gets, so a table or a code block too wide for the column can opt in.
+	"wide": {tag: "div", class: "wide"},
 }
 
 // fenceDivs collects every container the fence extension produced, before

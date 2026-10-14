@@ -51,6 +51,19 @@ func TestContainerCardKind(t *testing.T) {
 	}
 }
 
+// wide is a known kind, so it neither warns nor drops its class, and the
+// table inside it keeps its own scroll wrapper.
+func TestContainerWideKind(t *testing.T) {
+	var warnings []string
+	got := convert(t, "::: wide\n| a | b |\n|---|---|\n| 1 | 2 |\n:::\n", func(w string) { warnings = append(warnings, w) })
+	if !strings.Contains(got, `<div class="wide">`+"\n"+`<div class="table-scroll">`) {
+		t.Errorf("no wide wrapper round the table\ngot: %s", got)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("wide warned: %v", warnings)
+	}
+}
+
 // A braced kind from the shipped vocabulary gets the same treatment as the
 // bare spelling, so the two forms cannot drift apart.
 func TestContainerBracedWarningGetsVariantClass(t *testing.T) {

@@ -52,6 +52,10 @@ major version instead.
   The built-in styles pass every rule; the default's light `--warn` and
   its status colours moved slightly to get there.
 
+- A `wide` container (`::: wide`) lets a table, code block or card extend
+  past the text column, the way a wide figure does. A top-level block with
+  the `wide` class, such as `::: {.card .wide}`, does the same.
+
 ### Changed
 
 - `--version` names the commit when the build is not exactly a tagged
