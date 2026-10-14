@@ -19,7 +19,8 @@ major version instead.
   page's `plugins:` load local plugins, and `--list-styles` lists what is
   available. Fonts and images a style uses are inlined, so pages still load
   nothing. `md2html --guide styles` documents all of it, including how to
-  write a plugin.
+  write a plugin and a walkthrough for making your own style, with a
+  starter to copy.
 - The built-in `claude-artifact` style follows the rules every page Claude
   publishes as an Artifact does.
 - Charts: a `vega-lite` fence holds a Vega-Lite spec in YAML or JSON, with

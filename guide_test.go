@@ -3,6 +3,8 @@ package md2html
 import (
 	"go/scanner"
 	"go/token"
+	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -724,6 +726,127 @@ func TestGuideStylesExampleLoads(t *testing.T) {
 	if err != nil || !strings.HasPrefix(css, defaultCSS) {
 		t.Errorf("err %v; stacked on the default? %v", err, strings.HasPrefix(css, defaultCSS))
 	}
+}
+
+// The starter style in "Making your own style" must be one an author can
+// copy as it stands: saved where its captions say, it loads, a page with a
+// chart, code, a callout and a diagram converts under it with no warning,
+// every block sets every page colour, and its colours meet the contrast
+// the guide claims for them.
+func TestGuideStarterStyleBuilds(t *testing.T) {
+	sec, err := GuideSection("styles")
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := func(caption string) string {
+		m := regexp.MustCompile("(?s)```[a-z]+ \\{caption=\"" + regexp.QuoteMeta(caption) + "\"\\}\n(.*?)```").FindStringSubmatch(string(sec))
+		if m == nil {
+			t.Fatalf("the styles section has no block captioned %s", caption)
+		}
+		return m[1]
+	}
+	manifest, css := block("_style/md2html-plugin.json"), block("_style/house.css")
+	root := pluginDir(t, map[string]string{
+		"_style/md2html-plugin.json": manifest,
+		"_style/house.css":           css,
+	})
+
+	var warnings []string
+	if _, err := NewPluginCache().Load("_style", root, func(w string) { warnings = append(warnings, w) }); err != nil || len(warnings) > 0 {
+		t.Fatalf("loading: err %v, warnings %q", err, warnings)
+	}
+	page := "# Sample\n\nA [link](#sample) and `code`.\n\n```go {caption=\"main.go\"}\npackage main\n```\n\n" +
+		"::: callout A callout\nBody.\n:::\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n" +
+		"```vega-lite {caption=\"Requests\"}\ndata:\n  values:\n    - {region: North, requests: 120}\n    - {region: South, requests: 80}\n" +
+		"mark: bar\nencoding:\n  x: {field: region, type: nominal}\n  y: {field: requests, type: quantitative}\n  color: {field: region, type: nominal}\n```\n"
+	out, err := Convert([]byte(page), Options{
+		Plugins: []string{filepath.Join(root, "_style")},
+		Styles:  []string{"house"},
+		Warn:    func(w string) { warnings = append(warnings, w) },
+	})
+	if err != nil || len(warnings) > 0 {
+		t.Fatalf("converting: err %v, warnings %q", err, warnings)
+	}
+	for _, want := range []string{"--bg: #f8f9fb", `<figure class="md2html-chart"`, `class="mermaid"`} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("the page lacks %s", want)
+		}
+	}
+	if regexp.MustCompile(`(?i)#0a0b[0-9a-f]{2}`).Match(out) {
+		t.Error("a placeholder colour survives in the chart")
+	}
+
+	// Each of the four blocks sets every page colour; collect each theme's.
+	blocks := regexp.MustCompile(`(?s)(:root[^{]*)\{([^{}]*)\}`).FindAllStringSubmatch(css, -1)
+	if len(blocks) != 4 {
+		t.Fatalf("the starter has %d colour blocks, want 4", len(blocks))
+	}
+	decl := regexp.MustCompile(`--([a-z0-9-]+):\s*(#[0-9a-f]{6})`)
+	themes := map[string]map[string]string{}
+	for _, b := range blocks {
+		theme := "light"
+		if strings.Contains(b[1], "not(") || strings.Contains(b[1], `"dark"`) {
+			theme = "dark"
+		}
+		got := map[string]string{}
+		for _, d := range decl.FindAllStringSubmatch(b[2], -1) {
+			got[d[1]] = d[2]
+		}
+		for _, tok := range []string{"bg", "fg", "muted", "accent", "rule", "code-bg", "ok", "warn", "series-1", "chart-grid", "chart-axis"} {
+			if got[tok] == "" {
+				t.Errorf("%s does not set --%s", strings.TrimSpace(b[1]), tok)
+			}
+		}
+		if prev, ok := themes[theme]; ok && !maps.Equal(prev, got) {
+			t.Errorf("the two %s blocks differ: %v and %v", theme, prev, got)
+		}
+		themes[theme] = got
+	}
+
+	// The contrast the guide claims for the starter.
+	for _, q := range []string{"about 15:1", "5.6:1 or better"} {
+		if !strings.Contains(string(sec), q) {
+			t.Errorf("the guide no longer says %q; update this test", q)
+		}
+	}
+	for theme, c := range themes {
+		if c["series-1"] != c["accent"] {
+			t.Errorf("%s: --series-1 %s is not the accent %s", theme, c["series-1"], c["accent"])
+		}
+		for _, surface := range []string{"bg", "code-bg"} {
+			for tok, min := range map[string]float64{"fg": 7, "muted": 5.6, "accent": 5.6, "ok": 4.5, "warn": 4.5} {
+				if r := contrast(c[tok], c[surface]); r < min {
+					t.Errorf("%s: --%s on --%s is %.2f:1, under %.1f", theme, tok, surface, r, min)
+				}
+			}
+		}
+		if r := contrast(c["fg"], c["bg"]); r < 14 || r > 16 {
+			t.Errorf("%s: --fg on --bg is %.2f:1, not about 15:1", theme, r)
+		}
+	}
+}
+
+// contrast is the WCAG contrast ratio between two #rrggbb colours.
+func contrast(a, b string) float64 {
+	lum := func(h string) float64 {
+		var l float64
+		for i, w := range []float64{0.2126, 0.7152, 0.0722} {
+			v, _ := strconv.ParseUint(h[1+2*i:3+2*i], 16, 8)
+			c := float64(v) / 255
+			if c <= 0.04045 {
+				c /= 12.92
+			} else {
+				c = math.Pow((c+0.055)/1.055, 2.4)
+			}
+			l += w * c
+		}
+		return l
+	}
+	la, lb := lum(a), lum(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
 }
 
 // The section names flags and front matter keys; each must exist.

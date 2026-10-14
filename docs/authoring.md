@@ -1074,6 +1074,152 @@ Write the file's path itself.
 CSS containing `</style`, even in a comment or a string, is an error: it
 would end the page's `<style>` element early.
 
+### Making your own style
+
+A consistent look is a small set of decisions. A style built on the
+default inherits every one of them, so you make only the ones you want
+to change and leave the rest alone.
+
+The settings that make a look:
+
+| Group | Settings | Where they are listed |
+|---|---|---|
+| Page colours | `--bg`, `--fg`, `--muted`, `--accent`, `--rule`, `--code-bg`, `--ok`, `--warn` | [What a style can change](#what-a-style-can-change) |
+| Status colours | `--status-good`, `--status-warning`, `--status-serious`, `--status-critical` | [Chart settings](#chart-settings) |
+| Chart colours | `--series-1` … `--series-8`, `--chart-surface`, `--chart-grid`, `--chart-axis` | [Chart settings](#chart-settings) |
+| Type and width | the `font-family` on `body` (tier 4 below), and `--measure` | [What a style can change](#what-a-style-can-change) |
+| Chart text | the manifest's `charts` block | [Chart settings](#chart-settings) |
+
+That is 23 colours, each with a light and a dark value. Mermaid diagrams
+take theirs from the page colours, so in a full page they follow without
+more work.
+
+#### What you decide, and what you inherit
+
+Pick the smallest tier that gives the look you want:
+
+1. **Just the accent.** Set `--accent` in both themes, as the example
+   under [Writing a plugin](#writing-a-plugin) does. Links, callout rules,
+   the contents list and the other accent touches change; the rest stays
+   the default's. That includes `--series-1`, which is the default's
+   accent rust set as a literal colour, not a reference to `--accent`.
+   A style that changes `--accent` should set `--series-1` to match, in
+   all four blocks, or single-series charts and the first colour of
+   every multi-series chart keep the old accent.
+2. **The page palette.** Set all eight page colours in both themes. These
+   travel together: `--fg`, `--muted`, `--accent`, `--ok` and `--warn` are
+   all read on `--bg` and on `--code-bg`, so changing a background means
+   checking every text colour against it. `--chart-surface` and the
+   figure cards follow `--bg` by themselves. Set `--series-1` to the new
+   `--accent`, as above. `--chart-grid` and
+   `--chart-axis` are line colours like `--rule`: move them with it when
+   the neutrals change hue.
+3. **A chart palette.** Set `--series-1` to `--series-8` in both themes.
+   The default's series were chosen for its near-white and near-black
+   backgrounds, and suit a palette of similar lightness, so this tier is
+   for a brand palette, not a requirement of tier 2. They are not all
+   above 3:1: on the default's light surface, series 5 and 8 are 2.40:1
+   and 2.93:1. A style that wants every series at 3:1 sets those two
+   itself. The four
+   status colours carry meaning (good, warning, serious, critical); change
+   them only if your series would be confused with them.
+4. **A different typeface.** Set `font-family` on `body`, and give the
+   style a `charts` block, or chart labels are measured as the default's
+   system sans and can clip or overlap. For a face the plugin ships, embed
+   it with `@font-face` and name the same file as `font`; for a system
+   face, the inherited `metrics` stays and you raise `pad` if its letters
+   run wider. Either way set the block's `font-family` to the stack the
+   body uses.
+   `claude-artifact` is a complete example of this tier.
+
+You can leave alone: `--measure` unless the column feels wrong,
+`--chart-surface`, the status colours, and the `charts` block while the
+body keeps the system sans.
+
+#### A starter style
+
+A complete tier 2 style, with every page colour, `--series-1` and the
+chart line colours set in all four blocks. It is a fresh plugin, not the
+`acme` example grown, so it has no `--measure`. Save the manifest as
+`_style/md2html-plugin.json` and the CSS as `_style/house.css`, then
+use `--plugin ./_style --style house`.
+
+```json {caption="_style/md2html-plugin.json"}
+{
+  "format": 1,
+  "name": "house",
+  "description": "A house look for our documents",
+  "styles": {
+    "house": {
+      "description": "Slate neutrals and a blue accent, both themes",
+      "css": ["house.css"]
+    }
+  }
+}
+```
+
+```css {caption="_style/house.css"}
+:root {
+  --bg: #f8f9fb; --fg: #1b2430; --muted: #56606d; --accent: #1f5fa8;
+  --rule: #dde2e8; --code-bg: #eef1f5; --ok: #2c6e45; --warn: #a8500c;
+  --series-1: #1f5fa8; --chart-grid: #e4e8ed; --chart-axis: #c3cad3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161c; --fg: #e6eaf0; --muted: #9aa5b3; --accent: #8ab4f0;
+    --rule: #2a313b; --code-bg: #1b2129; --ok: #6fbe89; --warn: #f0915a;
+    --series-1: #8ab4f0; --chart-grid: #232a33; --chart-axis: #3a434f;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161c; --fg: #e6eaf0; --muted: #9aa5b3; --accent: #8ab4f0;
+  --rule: #2a313b; --code-bg: #1b2129; --ok: #6fbe89; --warn: #f0915a;
+  --series-1: #8ab4f0; --chart-grid: #232a33; --chart-axis: #3a434f;
+}
+:root[data-theme="light"] {
+  --bg: #f8f9fb; --fg: #1b2430; --muted: #56606d; --accent: #1f5fa8;
+  --rule: #dde2e8; --code-bg: #eef1f5; --ok: #2c6e45; --warn: #a8500c;
+  --series-1: #1f5fa8; --chart-grid: #e4e8ed; --chart-axis: #c3cad3;
+}
+```
+
+The bare `:root` block is the light look for a browser with no theme
+preference; the media block is the dark look the reader's system asks
+for; the two `data-theme` blocks win when something sets `data-theme` on
+the page's root, as a host page or a theme toggle does.
+Leave one out and that case shows the default's colours. In this palette
+`--fg` is about 15:1 on `--bg` in both themes, and `--muted` and
+`--accent` are 5.6:1 or better on both `--bg` and `--code-bg`. Its
+`--series-1` is the accent again, so it is 6.1:1 on the light surface and
+8.5:1 on the dark.
+
+#### Keeping it consistent
+
+- **Contrast.** `--fg` at least 7:1 on `--bg`; `--muted`, `--accent`,
+  `--ok` and `--warn` at least 4.5:1, on `--code-bg` as well as `--bg`.
+  The default's light `--warn` is 4.81:1 on its `--bg` and 4.35:1 on its
+  `--code-bg`, a little under; it is mostly used as a border and badge
+  colour, where less is needed, but a style used for body text in a
+  warning should do better.
+  Aim for 3:1 between each series and `--chart-surface`, most of all
+  for series drawn as thin lines. The default's light series 5 and 8 fall
+  short of this, as tier 3 says; a style can fix them by setting them.
+- **Status apart from series.** A series green next to `--status-good`
+  reads as "good". Keep the status hues out of the series, or far from
+  them in lightness.
+- **Series apart from each other.** Neighbouring series need different
+  lightness as well as hue, in both themes. Check them with a
+  colour-blindness simulator; hue alone fails for many readers.
+- **All four blocks together.** Edit a colour in one block and the same
+  colour in the other three, light pair and dark pair.
+- **Look at it.** After changing colours, run
+  `--plugin ./_style --list-styles`, then build
+  a page with a chart, code, a callout and a diagram and view it in both
+  themes at 400px wide, as [Checking a style](#checking-a-style) says.
+
+md2html does not check a style's contrast or chart colours yet, so these
+checks are yours.
+
 ### What a style can change
 
 The default stylesheet draws every colour from these custom properties.
