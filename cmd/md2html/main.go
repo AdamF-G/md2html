@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/AdamF-G/md2html"
+	"github.com/AdamF-G/md2html/internal/stylecheck"
 )
 
 func main() {
@@ -65,6 +66,7 @@ one construct, and md2html --guide all the whole guide.
 Styling the page: md2html --list-styles lists the styles available, and
 --style or a page's style: front matter picks them. md2html --guide styles
 explains both, and how to write a plugin that adds a style.
+md2html --check-style checks a style's colours.
 
 Flags:
 `)
@@ -92,6 +94,7 @@ Flags:
 		guide     = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
 
 		listStyles = fs.Bool("list-styles", false, "list the styles available, from built-in plugins and any --plugin, and exit")
+		checkStyle = fs.Bool("check-style", false, "check the colours of the styles from any --plugin, or the --style list, or every built-in style, print a report, and exit (1 if any has an error)")
 
 		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
 		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
@@ -148,6 +151,17 @@ Flags:
 	// invocation. It honours --plugin, so a plugin can be checked before use.
 	if *listStyles {
 		return listAvailableStyles(plugins, styles, stdout, stderr)
+	}
+	// Like --list-styles, the whole invocation, and ahead of the entry
+	// check: it checks styles, not documents.
+	if *checkStyle {
+		// Said rather than ignored: a report on the built-ins would read as
+		// a pass for the file or CSS named.
+		if len(entries) > 0 || *cssPath != "" {
+			fmt.Fprint(stderr, "md2html: --check-style checks styles; it takes no files or --css\n")
+			return 2
+		}
+		return checkStyles(plugins, styles, stdout, stderr)
 	}
 	// Also ahead of the entry check, and for the same reasons: installing
 	// the skill is the whole invocation, not something done alongside a
@@ -394,6 +408,57 @@ func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 		}
 	}
 	return 0
+}
+
+// checkStyles is --check-style. It reports on each style list a run could
+// draw pages in, measured by the style check: the --style list if there is
+// one, stacked as a page stacks it; otherwise each style of each --plugin,
+// alone on the default; otherwise every built-in style. Plugins load as
+// they do for a run, so a broken one exits 2 with the reason. Otherwise it
+// exits 1 if any list has an error, and 0 if none does, however many
+// warnings and notes there are.
+func checkStyles(dirs, styles []string, stdout, stderr io.Writer) int {
+	cache := md2html.NewPluginCache()
+	if _, err := checkPlugins(cache, dirs, styles, stderr); err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
+		return 2
+	}
+	loaded, err := cache.LoadAll(dirs, "", nil)
+	if err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
+		return 2
+	}
+	var lists [][]string
+	switch {
+	case len(styles) > 0:
+		lists = [][]string{styles}
+	case len(dirs) > 0:
+		for _, p := range loaded {
+			for _, n := range p.StyleNames() {
+				lists = append(lists, []string{p.Name + "/" + n})
+			}
+		}
+	default:
+		for _, p := range md2html.BuiltinPlugins() {
+			for _, n := range p.StyleNames() {
+				lists = append(lists, []string{p.Name + "/" + n})
+			}
+		}
+	}
+	code := 0
+	for _, l := range lists {
+		css, err := cache.Stylesheet(l, loaded, nil)
+		if err != nil {
+			fmt.Fprintf(stderr, "md2html: %v\n", err)
+			return 2
+		}
+		fs := stylecheck.Check(css)
+		fmt.Fprint(stdout, stylecheck.Report(strings.Join(l, ","), fs))
+		if stylecheck.HasError(fs) {
+			code = 1
+		}
+	}
+	return code
 }
 
 // buildOptions assembles per-document conversion options from the flags.
