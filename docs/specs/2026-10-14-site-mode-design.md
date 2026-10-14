@@ -2,7 +2,7 @@
 
 **Date:** 2026-10-14
 **Author:** AdamF-G
-**Status:** Draft for review
+**Status:** Shipped in v0.11.0.
 
 ## Purpose
 
