@@ -313,6 +313,11 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// autolink GFM made it, and the links it expands to then get the same
 	// treatment as any others (external-link marking, for one).
 	transforms = append([]Transform{listMarkers(meta, filepath.Dir(opt.SourcePath), opt.Warn)}, transforms...)
+	if opt.Fragment {
+		transforms = append([]Transform{themeToggleMarkerWarning(opt.Warn)}, transforms...)
+	} else {
+		transforms = append([]Transform{themeToggleMarkers()}, transforms...)
+	}
 	if opt.Site != nil && !opt.Fragment {
 		transforms = append([]Transform{opt.Site.navMarkers(opt.SourcePath, opt.Warn), contentMarkerWarning(opt.Warn)}, transforms...)
 	}

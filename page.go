@@ -98,6 +98,22 @@ const dark = explicit === "dark" ||
   (explicit !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
 mermaid.initialize({ startOnLoad: true, ...diagramTheme(dark) });
 
+// A [[theme-toggle]] fires md2html-theme when it flips the theme. Mermaid
+// replaces each diagram's source with its SVG, so the sources are kept
+// here to draw again from in the new theme's colours.
+const diagrams = [...document.querySelectorAll("pre.mermaid")];
+const sources = diagrams.map((d) => d.textContent);
+document.addEventListener("md2html-theme", () => {
+  const theme = document.documentElement.dataset.theme;
+  const dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  diagrams.forEach((d, i) => {
+    d.removeAttribute("data-processed");
+    d.textContent = sources[i];
+  });
+  mermaid.initialize({ startOnLoad: false, ...diagramTheme(dark) });
+  mermaid.run({ nodes: diagrams });
+});
+
 // diagramTheme builds mermaid's theme from the stylesheet's colour tokens,
 // so a diagram matches whichever style the page uses. Each token is drawn
 // to a one-pixel canvas and read back as sRGB hex, the only form mermaid's
@@ -469,10 +485,10 @@ func hasFloatingTOC(body []byte) bool {
 }
 
 // needsSiteCSS reports whether a page carries marker output siteCSS draws:
-// any page built with a site shell, and any page with a [[list]] or
-// [[subdirs]], which work without one.
+// any page built with a site shell, and any page with a [[list]],
+// [[subdirs]] or [[theme-toggle]], which work without one.
 func needsSiteCSS(body []byte, wrapped bool) bool {
-	return wrapped || bytes.Contains(body, []byte(`class="md2html-list`))
+	return wrapped || bytes.Contains(body, []byte(`class="md2html-list`)) || hasThemeToggle(body)
 }
 
 // renderPage wraps body in a complete HTML document. mermaidURL is the
@@ -499,6 +515,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	b.WriteString(`<meta charset="utf-8">` + "\n")
 	b.WriteString(`<meta name="viewport" content="width=device-width, initial-scale=1">` + "\n")
 	fmt.Fprintf(&b, "<title>%s</title>\n", html.EscapeString(title))
+	if hasThemeToggle(body) {
+		b.WriteString(themeInitRuntime)
+	}
 	b.WriteString("<style>\n")
 	if needsSiteCSS(body, wrapped) {
 		b.WriteString(siteCSS)
@@ -528,6 +547,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	}
 	if bytes.Contains(body, []byte(`class="md2html-search"`)) {
 		b.WriteString(searchRuntime)
+	}
+	if hasThemeToggle(body) {
+		b.WriteString(themeToggleRuntime)
 	}
 	if wrapped {
 		b.WriteString(copyRuntime)

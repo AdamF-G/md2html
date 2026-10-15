@@ -39,6 +39,20 @@ md2html says when you need to.
 `--css mine.css` still replaces the stylesheet outright. It cannot be
 combined with `--style`, and a page's `style:` overrides it.
 
+### A light and dark toggle
+
+Every style has a light and a dark theme, and a page follows the
+reader's system. `[[theme-toggle]]` alone in its paragraph draws a
+button that switches between them. It works on any page, or in a site
+shell to give every page one. The choice is kept in the browser, so it
+holds across a site's pages and on the next visit; choosing what the
+system already prefers drops it, and the page follows the system again.
+Charts and mermaid diagrams switch with the page.
+
+The button is a small inline script, included only where the marker is.
+Without scripts it stays hidden. A fragment ignores the marker and warns:
+an Artifact's host sets the theme.
+
 ## Loading a plugin
 
 Styles come from plugins. The built-in ones are always loaded. Load

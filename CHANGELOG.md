@@ -12,6 +12,16 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- `[[theme-toggle]]`, a button that switches a page between its style's
+  light and dark themes, on any page or in a site shell. The choice is
+  remembered in the browser, applied before the page paints, and dropped
+  when it matches the system's. Mermaid diagrams redraw in the new
+  theme's colours.
+
 ## v0.11.0 — 2026-10-14
 
 ### Added

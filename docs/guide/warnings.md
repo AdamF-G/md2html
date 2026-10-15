@@ -162,6 +162,9 @@ written; build with `--site`.
 **… belongs in the site's shell** — a `[[content]]` in a page's body. It
 stays as written; put it in the shell.
 
+**… has no effect in a fragment** — a `[[theme-toggle]]` in `--fragment`
+output, whose host sets the theme. It stays as written.
+
 **front matter … is not @file#key** — a reference needs a path, a `#` and
 a key. The value is used as written.
 

@@ -1,7 +1,7 @@
-/* Site mode, and the list markers on any page. md2html puts these rules
-   ahead of the page's style, and only on a page built with a site shell or
-   one holding a [[list]] or [[subdirs]], so a page without either is as it
-   was. They draw what the markers produce plainly, in the theme's custom
+/* Site mode, and the markers that work on any page. md2html puts these
+   rules ahead of the page's style, and only on a page built with a site
+   shell or one holding a [[list]], [[subdirs]] or [[theme-toggle]], so a
+   page without any is as it was. They draw what the markers produce plainly, in the theme's custom
    properties, so they suit any style; a style's own rules for the same
    classes come later and win. Where each piece sits is the style's choice. */
 .md2html-pages, .md2html-pages ul, ul.md2html-list, .md2html-breadcrumb { list-style: none; margin: 0; padding: 0; }
@@ -24,3 +24,5 @@
 pre.md2html-copyable { position: relative; }
 .md2html-copy { position: absolute; top: 0.4em; right: 0.4em; font: inherit; font-size: 0.8em; padding: 0.1em 0.6em; border: 1px solid var(--rule); border-radius: 4px; background: var(--bg); color: var(--muted); cursor: pointer; }
 .md2html-copy:hover, .md2html-copy:focus-visible { color: var(--accent); }
+.md2html-theme-toggle { font: inherit; line-height: 1; padding: 0.3em 0.5em; border: 1px solid var(--rule); border-radius: 6px; background: var(--bg); color: var(--muted); cursor: pointer; }
+.md2html-theme-toggle:hover, .md2html-theme-toggle:focus-visible { color: var(--accent); }
