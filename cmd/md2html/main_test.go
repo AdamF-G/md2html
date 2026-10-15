@@ -1131,3 +1131,24 @@ func TestRunSiteIsByteIdentical(t *testing.T) {
 		}
 	}
 }
+
+// A plugin that provides only grammars has no styles, so --list-styles
+// leaves it out rather than printing a heading with nothing beneath it.
+func TestListStylesSkipsStylelessPlugins(t *testing.T) {
+	root := tree(t, map[string]string{
+		"gram/md2html-plugin.json": `{"format": 1, "name": "gram", "grammars": {"fab": {"file": "fab.json"}}}`,
+		"gram/fab.json":            `{"scopeName": "source.fab", "patterns": [{"match": "fab", "name": "keyword.fab"}]}`,
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-styles", "--plugin", filepath.Join(root, "gram")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	for _, line := range strings.Split(out.String(), "\n") {
+		if line == "gram" || strings.HasPrefix(line, "gram:") {
+			t.Errorf("grammar-only plugin listed:\n%s", out.String())
+		}
+	}
+	if !strings.Contains(out.String(), "default") {
+		t.Errorf("styles missing:\n%s", out.String())
+	}
+}

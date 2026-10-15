@@ -33,10 +33,11 @@ var pluginName = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 const reservedName = "default"
 
 // Plugin is one loaded plugin: its manifest's identity and what it
-// provides. In this release that is styles only.
+// provides: styles, grammars, or both.
 type Plugin struct {
 	Name, Description string
 	Styles            map[string]*Style
+	Grammars          map[string]*Grammar
 
 	key  string // cache identity: "builtin:<name>", or the real directory
 	fsys fs.FS  // the plugin's files, rooted at its directory
@@ -90,7 +91,7 @@ func parseManifest(data []byte, where string, builtin bool, warn func(string)) (
 		return fail("format %d is not supported by md2html %s, which reads format %d", format, Version, pluginFormat)
 	}
 
-	p := &Plugin{Styles: map[string]*Style{}}
+	p := &Plugin{Styles: map[string]*Style{}, Grammars: map[string]*Grammar{}}
 	if ok, err := take(top, "name", &p.Name); err != nil {
 		return fail("%s: name: %v", ManifestName, err)
 	} else if !ok {
@@ -107,13 +108,17 @@ func parseManifest(data []byte, where string, builtin bool, warn func(string)) (
 	if _, err := take(top, "styles", &styles); err != nil {
 		return fail("%s: styles: %v", ManifestName, err)
 	}
+	var grammars map[string]map[string]json.RawMessage
+	if _, err := take(top, "grammars", &grammars); err != nil {
+		return fail("%s: grammars: %v", ManifestName, err)
+	}
 	for _, k := range sortedJSONKeys(top) {
 		if warn != nil {
 			warn(fmt.Sprintf("plugin %s: unknown key %q in %s; ignoring it", where, k, ManifestName))
 		}
 	}
-	if len(styles) == 0 {
-		return fail("provides nothing: %s needs a non-empty styles", ManifestName)
+	if len(styles) == 0 && len(grammars) == 0 {
+		return fail("provides nothing: %s needs a non-empty styles or grammars", ManifestName)
 	}
 
 	for _, name := range sortedJSONKeys(styles) {
@@ -164,6 +169,9 @@ func parseManifest(data []byte, where string, builtin bool, warn func(string)) (
 			}
 		}
 		p.Styles[name] = s
+	}
+	if err := parseGrammars(p, grammars, where, builtin, warn); err != nil {
+		return nil, err
 	}
 	return p, nil
 }

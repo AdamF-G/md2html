@@ -467,6 +467,11 @@ func listAvailableStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 	}
 	label := styleLabels(all)
 	for _, p := range all {
+		// A grammar-only plugin has no styles to list; --list-languages
+		// shows it.
+		if len(p.Styles) == 0 {
+			continue
+		}
 		if p.Description != "" {
 			fmt.Fprintf(stdout, "%s: %s\n", p.Name, p.Description)
 		} else {

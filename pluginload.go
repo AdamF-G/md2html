@@ -115,6 +115,9 @@ func loadDir(real, where string, warn func(string)) (*Plugin, error) {
 	if err := p.loadChartFonts(); err != nil {
 		return nil, err
 	}
+	if err := p.checkGrammars(); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 

@@ -42,6 +42,7 @@ func TestParseManifestRefuses(t *testing.T) {
 		{"reserved name", `{"format": 1, "name": "default", "styles": {"s": {"css": ["x.css"]}}}`, "reserved"},
 		{"no styles", `{"format": 1, "name": "a"}`, "provides nothing"},
 		{"empty styles", `{"format": 1, "name": "a", "styles": {}}`, "provides nothing"},
+		{"styles and grammars empty", `{"format": 1, "name": "a", "styles": {}, "grammars": {}}`, "provides nothing"},
 		{"bad style name", `{"format": 1, "name": "a", "styles": {"Big": {"css": ["x.css"]}}}`, `style name "Big" is not`},
 		{"reserved style", `{"format": 1, "name": "a", "styles": {"default": {"css": ["x.css"]}}}`, "reserved"},
 		{"no css", `{"format": 1, "name": "a", "styles": {"s": {}}}`, `style "s" has no css`},
