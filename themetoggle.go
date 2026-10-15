@@ -9,13 +9,17 @@ import (
 // themeToggleMarkers expands [[theme-toggle]], which works on any page,
 // shell or not, into a button that switches the page between its style's
 // light and dark themes. The button is hidden until themeToggleRuntime
-// shows it, so a page read without scripts has no dead control.
+// shows it, so a page read without scripts has no dead control. The
+// glyph sits in its own span, so a style can hide it, move it, or make
+// the span the knob of a switch drawn on the button.
 func themeToggleMarkers() Transform {
 	return Transform{Name: "themeToggleMarkers", Fn: func(root *html.Node) error {
 		for _, m := range findMarkers(root) {
 			if m.name == "theme-toggle" {
-				replaceMarker(m, elem("button", "type", "button", "class", "md2html-theme-toggle",
-					"hidden", "", "aria-label", "Dark theme", "aria-pressed", "false"))
+				b := elem("button", "type", "button", "class", "md2html-theme-toggle",
+					"hidden", "", "aria-label", "Dark theme", "aria-pressed", "false")
+				b.AppendChild(elem("span", "class", "md2html-theme-icon", "aria-hidden", "true"))
+				replaceMarker(m, b)
 			}
 		}
 		return nil
@@ -70,7 +74,7 @@ const themeToggleRuntime = `<script>
     const d = dark();
     for (const b of buttons) {
       b.setAttribute("aria-pressed", String(d));
-      b.textContent = d ? "☀" : "☾";
+      b.querySelector(".md2html-theme-icon").textContent = d ? "☀" : "☾";
     }
   };
   for (const b of buttons) {

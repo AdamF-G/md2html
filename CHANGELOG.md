@@ -20,7 +20,8 @@ major version instead.
   light and dark themes, on any page or in a site shell. The choice is
   remembered in the browser, applied before the page paints, and dropped
   when it matches the system's. Mermaid diagrams redraw in the new
-  theme's colours.
+  theme's colours. Its glyph sits in its own span, so a style can draw
+  the button as a switch, and `proof` does.
 
 ## v0.11.0 — 2026-10-14
 

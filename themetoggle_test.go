@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const toggleButton = `<button type="button" class="md2html-theme-toggle" hidden="" aria-label="Dark theme" aria-pressed="false"></button>`
+const toggleButton = `<button type="button" class="md2html-theme-toggle" hidden="" aria-label="Dark theme" aria-pressed="false"><span class="md2html-theme-icon" aria-hidden="true"></span></button>`
 
 func TestThemeToggleOnAPlainPage(t *testing.T) {
 	out, warnings := pageWith(t, t.TempDir(), "p.md", "# Page\n\n[[theme-toggle]]\n")

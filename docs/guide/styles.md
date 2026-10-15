@@ -49,6 +49,12 @@ holds across a site's pages and on the next visit; choosing what the
 system already prefers drops it, and the page follows the system again.
 Charts and mermaid diagrams switch with the page.
 
+A style draws the button however it likes. It is a
+`button.md2html-theme-toggle` with `aria-pressed="true"` in the dark
+theme, and its ☀ or ☾ sits in a `span.md2html-theme-icon`, so a style
+can hide the glyph or make the span the knob of a switch. `proof` does
+that.
+
 The button is a small inline script, included only where the marker is.
 Without scripts it stays hidden. A fragment ignores the marker and warns:
 an Artifact's host sets the theme.

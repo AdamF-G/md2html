@@ -124,3 +124,40 @@ body > header .md2html-search-input {
 }
 body > header .md2html-search-input::placeholder { color: var(--band-fg); opacity: 0.6; }
 body > header .md2html-search-results { color: var(--fg); }
+
+/* The theme toggle as a switch: the button is the track and its icon
+   span the knob, which carries the glyph and slides right in the dark
+   theme. */
+.md2html-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  width: 2.75rem;
+  height: 1.5rem;
+  padding: 0 0.15rem;
+  border-radius: 999px;
+  background: var(--code-bg);
+  vertical-align: middle;
+}
+.md2html-theme-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.md2html-theme-icon {
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.75rem;
+  transition: transform 0.15s ease;
+}
+.md2html-theme-toggle[aria-pressed="true"] .md2html-theme-icon { transform: translateX(1.2rem); color: var(--accent); }
+.md2html-theme-toggle:hover .md2html-theme-icon,
+.md2html-theme-toggle:focus-visible .md2html-theme-icon { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .md2html-theme-icon { transition: none; }
+}
+body > header .md2html-theme-toggle {
+  background: color-mix(in srgb, var(--band-fg) 15%, var(--band));
+  border-color: color-mix(in srgb, var(--band-fg) 30%, var(--band));
+}
+body > header .md2html-theme-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }

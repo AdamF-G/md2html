@@ -9,6 +9,8 @@ plugins: style
 [[pages depth="1"]]
 
 [[search]]
+
+[[theme-toggle]]
 :::
 
 ::: nav {.sidebar aria-label="Section"}
