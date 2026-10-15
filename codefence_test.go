@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+// convertPlain is convert with highlighting off, for tests of how a fence's
+// caption and attributes render, which must not depend on whether its
+// language has a grammar. TestCaptionsIdsAndClassesSurvive covers the
+// highlighted path.
+func convertPlain(t *testing.T, src string, warn func(string)) string {
+	t.Helper()
+	out, err := Convert([]byte(src), Options{Fragment: true, CSS: "/**/", Warn: warn, NoHighlight: true})
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	return string(out)
+}
+
 func TestSplitFenceInfo(t *testing.T) {
 	cases := []struct{ in, lang, caption string }{
 		{"go", "go", ""},
@@ -31,7 +44,7 @@ func TestSplitFenceInfo(t *testing.T) {
 
 // The whole point: today this caption vanishes without a word.
 func TestCodeFenceCaptionRendersAsFigcaption(t *testing.T) {
-	got := convert(t, "```go caption=\"server.go\"\nfoo()\n```\n", nil)
+	got := convertPlain(t, "```go caption=\"server.go\"\nfoo()\n```\n", nil)
 	if !strings.Contains(got, `<figure class="code-figure"><figcaption>server.go</figcaption>`) {
 		t.Errorf("no caption bar\ngot: %s", got)
 	}
@@ -58,7 +71,7 @@ func TestCodeFenceCaptionWithoutLanguage(t *testing.T) {
 
 // A fence with no caption must render byte-identically to before.
 func TestCodeFenceWithoutCaptionIsUnchanged(t *testing.T) {
-	got := convert(t, "```go\nfoo()\n```\n", nil)
+	got := convertPlain(t, "```go\nfoo()\n```\n", nil)
 	if strings.Contains(got, "figure") {
 		t.Errorf("wrapped an uncaptioned block\ngot: %s", got)
 	}
@@ -127,7 +140,7 @@ func TestCodeFenceOverrideLeavesMermaidAlone(t *testing.T) {
 // if the wrapping changed shape entirely — with want updated to the
 // rendering the braced form is now specified to produce.
 func TestCodeFenceBracedAttributeIsParsed(t *testing.T) {
-	got := convert(t, "```go {.wide}\nfoo()\n```\n", nil)
+	got := convertPlain(t, "```go {.wide}\nfoo()\n```\n", nil)
 	want := Marker() + "\n" +
 		"<title>Untitled</title>\n<style>\n/**/\n</style>\n<main class=\"md2html\">\n" +
 		"<pre><code class=\"language-go wide\">foo()\n</code></pre>\n\n</main>\n"
@@ -161,7 +174,7 @@ func TestSplitFenceInfoBracedForm(t *testing.T) {
 }
 
 func TestCodeFenceBracedCaptionRendersAsFigcaption(t *testing.T) {
-	got := convert(t, "```{.go caption=\"server.go\"}\nfoo()\n```\n", nil)
+	got := convertPlain(t, "```{.go caption=\"server.go\"}\nfoo()\n```\n", nil)
 	if !strings.Contains(got, "<figcaption>server.go</figcaption>") {
 		t.Errorf("braced caption not rendered\ngot: %s", got)
 	}
@@ -173,7 +186,7 @@ func TestCodeFenceBracedCaptionRendersAsFigcaption(t *testing.T) {
 // An extra class in the block is the author's own styling hook and must
 // reach the element, not be swallowed.
 func TestCodeFenceBracedExtraClassReachesElement(t *testing.T) {
-	got := convert(t, "```go {.wide}\nfoo()\n```\n", nil)
+	got := convertPlain(t, "```go {.wide}\nfoo()\n```\n", nil)
 	if !strings.Contains(got, `class="language-go wide"`) {
 		t.Errorf("extra class not emitted\ngot: %s", got)
 	}

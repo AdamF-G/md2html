@@ -1,11 +1,17 @@
 package md2html
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	gohtml "html"
+	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/AdamF-G/md2html/internal/charts"
+	"github.com/AdamF-G/md2html/internal/highlight"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/renderer"
 	goldhtml "github.com/yuin/goldmark/renderer/html"
@@ -166,13 +172,149 @@ func fenceTokens(s string) []string {
 type codeFenceRenderer struct {
 	warn   func(string)
 	charts chartContext
+	hl     highlightContext
 }
 
-func newCodeFenceRenderer(warn func(string), charts chartContext) renderer.NodeRenderer {
+func newCodeFenceRenderer(warn func(string), charts chartContext, hl highlightContext) renderer.NodeRenderer {
 	if warn == nil {
 		warn = func(string) {}
 	}
-	return &codeFenceRenderer{warn: warn, charts: charts}
+	return &codeFenceRenderer{warn: warn, charts: charts, hl: hl}
+}
+
+// highlightContext is how the fence renderer highlights: the page's
+// language set, or nil when highlighting is off for the page.
+type highlightContext struct {
+	langs      *langSet
+	lineOffset int             // lines of front matter above the body
+	warned     map[string]bool // local grammars already reported on this page
+	budget     time.Duration   // tests only: a budget other than the default
+}
+
+// newHighlightContext also loads the run's plugins, and returns the error
+// when one does not load: a plugin can supply grammars with no style, so a
+// broken one is an error even on a run that names no style, or turns
+// highlighting off, as it is for the command line.
+func newHighlightContext(opt Options, meta map[string]string, lineOffset int) (highlightContext, error) {
+	cache := opt.PluginCache
+	if cache == nil {
+		cache = NewPluginCache()
+	}
+	run, err := cache.LoadAll(opt.Plugins, "", nil)
+	if err != nil {
+		return highlightContext{}, err
+	}
+	switch v := meta["highlight"]; v {
+	case "false":
+		return highlightContext{}, nil
+	case "", "true":
+	default:
+		if opt.Warn != nil {
+			opt.Warn(fmt.Sprintf("front matter highlight %q is not true or false; highlighting the page's fences", v))
+		}
+	}
+	if opt.NoHighlight {
+		return highlightContext{}, nil
+	}
+	// Two plugins claiming one language is said on the page that brings
+	// its own plugins, since that page's set is its own. Clashes among the
+	// run's plugins alone are the run's to report, once, not every page's.
+	ps, own := pageGrammarPlugins(cache, run, opt, meta)
+	var warn func(string)
+	if own {
+		warn = opt.Warn
+	}
+	return highlightContext{langs: cache.languages(ps, warn),
+		lineOffset: lineOffset, warned: map[string]bool{}}, nil
+}
+
+// pageGrammarPlugins is the run's plugins, run, and the page's own, the
+// page's resolved against its directory, and whether the page brought any.
+// The page's load warnings and errors were said when the style was chosen
+// (see choosePageStyle), so this stays quiet: a page plugin that does not
+// load leaves the run's.
+func pageGrammarPlugins(cache *PluginCache, run []*Plugin, opt Options, meta map[string]string) ([]*Plugin, bool) {
+	baseDir := ""
+	if opt.SourcePath != "" {
+		baseDir = filepath.Dir(opt.SourcePath)
+	}
+	own, err := cache.LoadAll(splitList(meta["plugins"]), baseDir, nil)
+	if err != nil || len(own) == 0 {
+		return run, false
+	}
+	return append(run, own...), true
+}
+
+// spans highlights one fence's lines, or returns nil for a plain fence:
+// highlighting off, a language no grammar names, or a fault, which is
+// said. line is the fence's line in the file, for messages.
+func (h highlightContext) spans(lang string, classes []string, lines []string, line int, warn func(string)) [][]highlight.Span {
+	if h.langs == nil || lang == "" || slices.Contains(classes, "no-highlight") || allBlank(lines) {
+		return nil
+	}
+	g := h.langs.lookup(lang)
+	if g == nil {
+		if m := h.langs.nearMiss(lang); m != "" {
+			warn(fmt.Sprintf("fence at line %d: no grammar for %q; did you mean %q?", line, lang, m))
+		}
+		return nil
+	}
+	engine := h.langs.engine
+	if h.budget != 0 {
+		engine = highlight.NewTextMate(func(s string) ([]byte, error) {
+			if g := h.langs.byScope[s]; g != nil {
+				return g.raw()
+			}
+			return nil, nil
+		}, highlight.Options{Budget: h.budget})
+	}
+	toks, err := engine.Tokenize(g.Scope, lines)
+	switch {
+	case errors.Is(err, highlight.ErrBudget):
+		warn(fmt.Sprintf("fence at line %d: highlighting %q took over %s; showing it plain", line, lang, highlight.DefaultBudget))
+		return nil
+	case err != nil:
+		warn(fmt.Sprintf("fence at line %d: highlighting %q failed: %v; showing it plain", line, lang, err))
+		return nil
+	}
+	if lg := h.langs.local(g.Scope); lg != nil && !h.warned[g.Scope] {
+		if d := engine.Diagnostics(g.Scope); len(d) > 0 {
+			h.warned[g.Scope] = true
+			noun := "patterns cannot be translated and are skipped"
+			if len(d) == 1 {
+				noun = "pattern cannot be translated and is skipped"
+			}
+			// The engine's diagnostics for a scope cover the grammars it
+			// includes too, without saying which, so the message says so.
+			warn(fmt.Sprintf("grammar %q from plugin %s, or a grammar it includes: %d %s: %s", lg.Name, lg.PluginName(), len(d), noun, strings.Join(d, "; ")))
+		}
+	}
+	// A fence with nothing to colour is a plain fence, byte for byte: the
+	// page then carries no highlighting it does not use.
+	out := make([][]highlight.Span, len(toks))
+	coloured := false
+	for i, t := range toks {
+		out[i] = highlight.Spans(t)
+		coloured = coloured || len(out[i]) > 0
+	}
+	if !coloured {
+		return nil
+	}
+	return out
+}
+
+func allBlank(lines []string) bool {
+	for _, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// fenceLine is the line in the file a fence opens on, for messages.
+func (r *codeFenceRenderer) fenceLine(n *ast.FencedCodeBlock, source []byte) int {
+	return 1 + r.hl.lineOffset + bytes.Count(source[:n.Info.Segment.Start], []byte("\n"))
 }
 
 func (r *codeFenceRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
@@ -245,6 +387,32 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 		r.warn(fmt.Sprintf("vega-lite fence %d: %v; showing its source", idx, err))
 	}
 
+	// Anything else is code, highlighted when a grammar names its language.
+	// The lines are split from their endings so a span never runs past one:
+	// a string open across lines is closed at each end and reopened.
+	// A fence with no language has no info string to place it by, and
+	// nothing to highlight. A figure, chart or diagram that fell back to a
+	// code block stays plain: its source is shown so the author can fix it,
+	// and a mermaid fence that reaches here was written to be shown as
+	// code.
+	special := strings.EqualFold(lang, "fig") || strings.EqualFold(lang, "vega-lite") || strings.EqualFold(lang, "mermaid")
+	var spans [][]highlight.Span
+	var text [][]byte // each line without its line ending
+	var ends [][]byte // the line ending
+	if !special && lang != "" {
+		lines := n.Lines()
+		strs := make([]string, lines.Len())
+		for i := 0; i < lines.Len(); i++ {
+			seg := lines.At(i)
+			v := seg.Value(source)
+			body := bytes.TrimSuffix(bytes.TrimSuffix(v, []byte("\n")), []byte("\r"))
+			text = append(text, body)
+			ends = append(ends, v[len(body):])
+			strs[i] = string(body)
+		}
+		spans = r.hl.spans(lang, f.classes, strs, r.fenceLine(n, source), r.warn)
+	}
+
 	if caption != "" {
 		w.WriteString(`<figure class="code-figure"><figcaption>`)
 		// The caption is author text, HTML-escaped here because it is
@@ -267,16 +435,33 @@ func (r *codeFenceRenderer) render(w util.BufWriter, source []byte, node ast.Nod
 		w.WriteString(`"`)
 	}
 	w.WriteString("><code")
-	if classes := codeClasses(lang, f.classes); classes != "" {
+	if classes := codeClasses(lang, f.classes, spans != nil); classes != "" {
 		w.WriteString(` class="`)
 		w.Write(util.EscapeHTML([]byte(classes)))
 		w.WriteString(`"`)
 	}
 	w.WriteByte('>')
-	lines := n.Lines()
-	for i := 0; i < lines.Len(); i++ {
-		line := lines.At(i)
-		goldhtml.DefaultWriter.RawWrite(w, line.Value(source))
+	if spans != nil {
+		for i := range text {
+			pos := 0
+			for _, s := range spans[i] {
+				goldhtml.DefaultWriter.RawWrite(w, text[i][pos:s.Start])
+				w.WriteString(`<span class="` + s.Kind.Class() + `">`)
+				goldhtml.DefaultWriter.RawWrite(w, text[i][s.Start:s.End])
+				w.WriteString("</span>")
+				pos = s.End
+			}
+			// Past the last span: plain text, and the part of an overlong
+			// line that was not tokenized.
+			goldhtml.DefaultWriter.RawWrite(w, text[i][pos:])
+			goldhtml.DefaultWriter.RawWrite(w, ends[i])
+		}
+	} else {
+		lines := n.Lines()
+		for i := 0; i < lines.Len(); i++ {
+			line := lines.At(i)
+			goldhtml.DefaultWriter.RawWrite(w, line.Value(source))
+		}
 	}
 	w.WriteString("</code></pre>")
 	if caption != "" {
@@ -304,11 +489,15 @@ func fenceBody(n *ast.FencedCodeBlock, source []byte) []byte {
 // in goldmark's language-<name> spelling, followed by whatever else the
 // author's attribute block named. An extra class is a styling hook they
 // wrote deliberately, so it reaches the element instead of being dropped.
-func codeClasses(lang string, extra []string) string {
+// A highlighted block ends with md2html-hl, the hook its colours hang on.
+func codeClasses(lang string, extra []string, hl bool) string {
 	var out []string
 	if lang != "" {
 		out = append(out, "language-"+lang)
 	}
 	out = append(out, extra...)
+	if hl {
+		out = append(out, "md2html-hl")
+	}
 	return strings.Join(out, " ")
 }

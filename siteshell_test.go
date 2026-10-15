@@ -249,8 +249,10 @@ func TestSiteShellLinksReachTheirTargetFromEveryPage(t *testing.T) {
 // are ignored, and said so, as without a site.
 func TestSitePagePluginsWithoutStyleWarn(t *testing.T) {
 	s, res, root := siteFixture(t, map[string]string{
-		"shell/site.md": "---\nsite: true\nstyle: claude-artifact\n---\n[[content]]\n",
-		"docs/index.md": "---\nplugins: ./_p\n---\n# Home\n",
+		"shell/site.md":               "---\nsite: true\nstyle: claude-artifact\n---\n[[content]]\n",
+		"docs/index.md":               "---\nplugins: ./_p\n---\n# Home\n",
+		"docs/_p/md2html-plugin.json": `{"format": 1, "name": "page", "styles": {"p": {"css": ["p.css"]}}}`,
+		"docs/_p/p.css":               "/*page*/",
 	}, "shell/site.md")
 	_, warnings := sitePage(t, s, res, root, "docs/index.md")
 	if len(warnings) != 1 || warnings[0] != "front matter plugins has no effect without style; ignoring it" {

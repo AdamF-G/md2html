@@ -101,8 +101,8 @@ func parseDoc(src []byte) (*html.Node, error) {
 	var buf bytes.Buffer
 	// nil: discovery only needs the tree to extract links, and has no
 	// per-document warning sink of its own to hand a `fig` fence. Charts
-	// are off, so discovery never starts the chart engine.
-	if err := newParser(nil, chartContext{off: true}).Convert(src, &buf); err != nil {
+	// and highlighting are off, so discovery never starts either engine.
+	if err := newParser(nil, chartContext{off: true}, highlightContext{}).Convert(src, &buf); err != nil {
 		return nil, err
 	}
 	return parseFragment(buf.Bytes())

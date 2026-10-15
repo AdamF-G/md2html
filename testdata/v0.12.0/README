@@ -1,0 +1,64 @@
+These are md2html v0.12.0's own output, kept so TestUnchangedOutput
+(highlight_test.go) can check that a page with no highlighted fence is
+still what v0.12.0 wrote, once its stylesheet's --syntax-* declarations
+are taken out.
+
+Made on 2026-10-15 from tag v0.12.0 (9574390) in a temporary worktree,
+with the program below placed at cmd/goldengen/main.go there and run as
+
+    git worktree add --detach /tmp/v0120 v0.12.0
+    cd /tmp/v0120 && go run ./cmd/goldengen <this directory>
+    git worktree remove --force /tmp/v0120
+
+Each case is converted the way the test's convertBody does: Fragment on
+and a Warn function, with no style named, so the default style applies.
+v0.12.0 had no NoHighlight option, so "option-off" is converted with
+plain options there; today's side turns highlighting off.
+
+Each golden starts with v0.12.0's provenance marker, which names that
+version. The test swaps that one marker for today's Marker() before
+comparing, so bumping Version does not break it; nothing else in a
+golden is rewritten.
+
+The sources must stay the same as the test's. If one changes, or a case
+is added, remake the goldens this way rather than editing them by hand.
+
+----- cmd/goldengen/main.go -----
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/AdamF-G/md2html"
+)
+
+func main() {
+	out := os.Args[1]
+	cases := []struct {
+		name, src string
+		opt       md2html.Options
+	}{
+		{"no-language", "```\nfunc x\n```\n", md2html.Options{}},
+		{"unknown-language", "```text\nfunc x\n```\n", md2html.Options{}},
+		{"no-highlight", "```{.go .no-highlight}\nfunc x\n```\n", md2html.Options{}},
+		{"front-matter-off", "---\nhighlight: false\n---\n```go\nfunc x\n```\n", md2html.Options{}},
+		{"option-off", "```go\nfunc x\n```\n", md2html.Options{}},
+		{"no-code", "# Title\n\nText.\n", md2html.Options{}},
+		{"fig-falls-back", "```fig\nnot: [a figure\n```\n", md2html.Options{}},
+		{"vega-lite-off", "```vega-lite\n{\"mark\": \"bar\"}\n```\n", md2html.Options{NoCharts: true}},
+		{"mermaid-any-case", "```Mermaid\ngraph LR\n```\n", md2html.Options{}},
+	}
+	for _, c := range cases {
+		c.opt.Fragment = true
+		c.opt.Warn = func(s string) { fmt.Fprintf(os.Stderr, "%s: %s\n", c.name, s) }
+		b, err := md2html.Convert([]byte(c.src), c.opt)
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(filepath.Join(out, c.name+".html"), b, 0o644); err != nil {
+			panic(err)
+		}
+	}
+}

@@ -236,9 +236,10 @@ func choosePageStyle(opt Options, meta map[string]string) (pageStyle, error) {
 	case len(names) == 0:
 		// The page's plugins only widen what its own style: can name; the
 		// run's list resolves against the run's plugins, so loading one here
-		// can never make the run's bare name ambiguous on this page.
+		// can never make the run's bare name ambiguous on this page. They
+		// can still bring languages.
 		if len(pageDirs) > 0 {
-			warn("front matter plugins has no effect without style; ignoring it")
+			warnPagePluginsWithoutStyle(opt, pageDirs)
 		}
 		st, err = run()
 	default:
@@ -258,6 +259,44 @@ func choosePageStyle(opt Options, meta map[string]string) (pageStyle, error) {
 		opt.StyleChosen(st.names, st.dirs, st.css)
 	}
 	return st, nil
+}
+
+// warnPagePluginsWithoutStyle loads a page's plugins when the page names no
+// style, and says so when they do not load or bring nothing a page without
+// a style can use: they widen only its own style:, but their languages
+// highlight its fences.
+func warnPagePluginsWithoutStyle(opt Options, pageDirs []string) {
+	warn := func(s string) {
+		if opt.Warn != nil {
+			opt.Warn(s)
+		}
+	}
+	cache := opt.PluginCache
+	if cache == nil {
+		cache = NewPluginCache()
+	}
+	baseDir := ""
+	if opt.SourcePath != "" {
+		baseDir = filepath.Dir(opt.SourcePath)
+	}
+	own, err := cache.LoadAll(pageDirs, baseDir, warn)
+	switch {
+	case err != nil:
+		warn(fmt.Sprintf("front matter plugins: %v; ignoring it", err))
+	case !anyGrammars(own):
+		warn("front matter plugins has no effect without style; ignoring it")
+	}
+}
+
+// anyGrammars reports whether any of ps provides a language, which a
+// page's plugins: can bring without a style.
+func anyGrammars(ps []*Plugin) bool {
+	for _, p := range ps {
+		if len(p.Grammars) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // frontMatterStyle assembles a page's own style list from the run's plugins

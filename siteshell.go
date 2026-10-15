@@ -38,7 +38,7 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	} else {
 		transforms = withWarn(transforms, s.shellWarn)
 	}
-	if err := newParser(s.shellWarn, chartContext{off: true}).Convert(s.shellBody, &buf); err != nil {
+	if err := newParser(s.shellWarn, chartContext{off: true}, highlightContext{}).Convert(s.shellBody, &buf); err != nil {
 		return nil, err
 	}
 	shell, err := parseFragment(buf.Bytes())
