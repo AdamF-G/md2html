@@ -14,6 +14,10 @@ github.com/dlclark/regexp2/v2 v2.8.1 h1:I1jbaCbXeOxdVN8z3fb55Mvtgb94/6+Dh0zjmXjK
 github.com/dlclark/regexp2/v2 v2.8.1/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
 github.com/dop251/goja v0.0.0-20261013122152-245c54f48cfc h1:61HkuIYSu9uC5wQnXcuGUEnZXVxJaOZNmKhn6B6LytU=
 github.com/dop251/goja v0.0.0-20261013122152-245c54f48cfc/go.mod h1:Cp9NYOLrEKg/ypIRkUWYXWLuKAyyFGkDmGeJ95Sw0zI=
+github.com/eugenioenko/regexp2/v2 v2.8.2 h1:FK5xiQNuz6TCgNeMXGGIUfH89ZJ2pxmu9n8qvT9v0XQ=
+github.com/eugenioenko/regexp2/v2 v2.8.2/go.mod h1:59/YhHVxgrxxHgjTuG4YFRRxynIz4E0bI+rqNBzwOrs=
+github.com/eugenioenko/textmate-go v0.2.2 h1:IFdXOZcY4GHFm4JDERuOfyS+UqZJY9DzSBIMK9Mhdjk=
+github.com/eugenioenko/textmate-go v0.2.2/go.mod h1:cYY9RpILD0oRBWCBIW1Z9GMlv0GAGvSdvv/iRvnkiNM=
 github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 h1:KZaTBSyshWX3MP5jukJcNSuXDQTO+rNpt0J564dX/eg=
 github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68/go.mod h1:tphK2c80bpPhMOI4v6bIc2xWywPfbqi1Z06+RcrMkDg=
 github.com/go-sourcemap/sourcemap v2.1.3+incompatible h1:W1iEw64niKVGogNgBN3ePyLFfuisuzeidWPMPWmECqU=

@@ -22,6 +22,8 @@ require (
 	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.8.1 // indirect
 	github.com/dop251/goja v0.0.0-20261013122152-245c54f48cfc // indirect
+	github.com/eugenioenko/regexp2/v2 v2.8.2 // indirect
+	github.com/eugenioenko/textmate-go v0.2.2 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
