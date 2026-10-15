@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/AdamF-G/md2html/internal/highlight"
 )
 
 func TestExtractTitlePrefersFirstH1(t *testing.T) {
@@ -795,5 +797,53 @@ func TestSiteStylesheetOnlyWhereNeeded(t *testing.T) {
 	}
 	if frag := string(renderFragment([]byte("<p>x</p>"), "T", css, "")); strings.Contains(frag, "md2html-pages") {
 		t.Errorf("a fragment without markers gained the site rules:\n%s", frag)
+	}
+}
+
+func TestHighlightCSSOnlyWhenNeeded(t *testing.T) {
+	hl, err := Convert([]byte("```go\nfunc x\n```\n"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := Convert([]byte("```text\nfunc x\n```\n"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(hl), ".hl-keyword") {
+		t.Error("a highlighted page lacks the span rules")
+	}
+	if strings.Contains(string(plain), ".hl-keyword") {
+		t.Error("a page with no highlighted fence carries the span rules")
+	}
+	// Ahead of the style, so a style's own rules for the same classes win.
+	if i, j := strings.Index(string(hl), ".hl-keyword"), strings.Index(string(hl), "--bg:"); i > j {
+		t.Error("the span rules come after the style")
+	}
+}
+
+func TestHighlightCSSInFragments(t *testing.T) {
+	out, err := Convert([]byte("```go\nfunc x\n```\n"), Options{Fragment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), ".hl-keyword") {
+		t.Error("fragment lacks the span rules")
+	}
+}
+
+// Every rule falls back to the surrounding colour, so a stylesheet with no
+// syntax tokens shows readable, plain code.
+func TestHighlightCSSFallsBack(t *testing.T) {
+	for _, k := range highlight.Kinds {
+		want := fmt.Sprintf(".%s { color: var(--syntax-%s, inherit)", k.Class(), k.Name())
+		if !strings.Contains(highlightCSS, want) {
+			t.Errorf("highlight.css lacks %q", want)
+		}
+	}
+	if !strings.Contains(highlightCSS, "font-style: italic") || strings.Count(highlightCSS, "font-style") != 1 {
+		t.Error("only comments are italic")
+	}
+	if strings.Contains(highlightCSS, "font-weight") {
+		t.Error("no kind changes weight")
 	}
 }

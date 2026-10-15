@@ -34,6 +34,10 @@ func convertBodyErr(src string, opt Options) (string, []string, error) {
 
 var spanTags = regexp.MustCompile(`</?span[^>]*>`)
 
+// A fragment carries its stylesheet, and the stylesheet is not the page's
+// text, so the comparisons below look at the body alone.
+var styleBlock = regexp.MustCompile(`(?s)<style>.*?</style>`)
+
 func TestGoFenceIsHighlighted(t *testing.T) {
 	out, w := convertBody(t, "```go\nfunc main() { fmt.Println(\"hi\", 42) } // ok\n```\n", Options{})
 	if len(w) != 0 {
@@ -56,6 +60,7 @@ func TestHighlightKeepsTextExactly(t *testing.T) {
 	} {
 		hl, _ := convertBody(t, src, Options{})
 		plain, _ := convertBody(t, src, Options{NoHighlight: true})
+		hl, plain = styleBlock.ReplaceAllString(hl, ""), styleBlock.ReplaceAllString(plain, "")
 		stripped := strings.Replace(spanTags.ReplaceAllString(hl, ""), " md2html-hl", "", 1)
 		if stripped != plain {
 			t.Errorf("text changed for %q:\n got %s\nwant %s", src, stripped, plain)
@@ -179,6 +184,7 @@ func TestHighlightInsideContainers(t *testing.T) {
 		t.Errorf("want two highlighted fences:\n%s", out)
 	}
 	plain, _ := convertBody(t, src, Options{NoHighlight: true})
+	out, plain = styleBlock.ReplaceAllString(out, ""), styleBlock.ReplaceAllString(plain, "")
 	if strings.ReplaceAll(spanTags.ReplaceAllString(out, ""), " md2html-hl", "") != plain {
 		t.Error("text changed inside containers")
 	}
@@ -410,6 +416,7 @@ func TestLongLineIsPlainPastTheLimitAndSilent(t *testing.T) {
 		t.Errorf("want the line's head a comment and its tail plain:\n%.300s ... %s", out, out[len(out)-300:])
 	}
 	plain, _ := convertBody(t, src, Options{NoHighlight: true})
+	out, plain = styleBlock.ReplaceAllString(out, ""), styleBlock.ReplaceAllString(plain, "")
 	if strings.Replace(spanTags.ReplaceAllString(out, ""), " md2html-hl", "", 1) != plain {
 		t.Error("text changed")
 	}

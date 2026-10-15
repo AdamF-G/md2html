@@ -22,6 +22,13 @@ var defaultCSS string
 //go:embed site.css
 var siteCSS string
 
+// highlightCSS colours highlighted code. Like siteCSS it is not part of any
+// style: renderPage puts it ahead of the page's style when the page has a
+// highlighted fence (see needsHighlightCSS).
+//
+//go:embed highlight.css
+var highlightCSS string
+
 // builtinFS holds every built-in plugin, one directory each under plugins/.
 // A contributor adds a plugin by adding a directory; nothing here changes.
 //

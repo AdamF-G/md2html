@@ -1,0 +1,18 @@
+/* Highlighted code: md2html wraps each token of a fence whose language a
+   grammar names in a span classed by its kind. Each colour is the page
+   style's --syntax-* token, falling back to the surrounding text, so a
+   stylesheet that defines none still shows readable code. Only comments
+   change style, so metrics in a code block never change. */
+.hl-comment { color: var(--syntax-comment, inherit); font-style: italic; }
+.hl-keyword { color: var(--syntax-keyword, inherit); }
+.hl-string { color: var(--syntax-string, inherit); }
+.hl-number { color: var(--syntax-number, inherit); }
+.hl-constant { color: var(--syntax-constant, inherit); }
+.hl-function { color: var(--syntax-function, inherit); }
+.hl-type { color: var(--syntax-type, inherit); }
+.hl-property { color: var(--syntax-property, inherit); }
+.hl-tag { color: var(--syntax-tag, inherit); }
+.hl-attribute { color: var(--syntax-attribute, inherit); }
+.hl-inserted { color: var(--syntax-inserted, inherit); }
+.hl-deleted { color: var(--syntax-deleted, inherit); }
+.hl-heading { color: var(--syntax-heading, inherit); }

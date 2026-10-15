@@ -491,6 +491,11 @@ func needsSiteCSS(body []byte, wrapped bool) bool {
 	return wrapped || bytes.Contains(body, []byte(`class="md2html-list`)) || hasThemeToggle(body)
 }
 
+// needsHighlightCSS reports whether a page has a highlighted fence.
+func needsHighlightCSS(body []byte) bool {
+	return bytes.Contains(body, []byte(` md2html-hl"`)) || bytes.Contains(body, []byte(` md2html-hl `))
+}
+
 // renderPage wraps body in a complete HTML document. mermaidURL is the
 // build the mermaid runtime imports, and is only consulted for a body that
 // actually carries a diagram. A non-nil source is embedded after the
@@ -521,6 +526,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	b.WriteString("<style>\n")
 	if needsSiteCSS(body, wrapped) {
 		b.WriteString(siteCSS)
+	}
+	if needsHighlightCSS(body) {
+		b.WriteString(highlightCSS)
 	}
 	b.WriteString(css)
 	b.WriteString("\n</style>\n</head>\n<body>\n")
@@ -579,6 +587,9 @@ func renderFragment(body []byte, title, css, runtime string) []byte {
 	b.WriteString("<style>\n")
 	if needsSiteCSS(body, false) {
 		b.WriteString(siteCSS)
+	}
+	if needsHighlightCSS(body) {
+		b.WriteString(highlightCSS)
 	}
 	b.WriteString(css)
 	b.WriteString("\n</style>\n<main class=\"md2html\">\n")
