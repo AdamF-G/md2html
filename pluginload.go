@@ -20,6 +20,7 @@ type PluginCache struct {
 	mu      sync.Mutex
 	plugins map[string]*pluginEntry // by real directory
 	sheets  map[string]*sheetEntry  // by resolved style list; see stylesheet.go
+	langs   map[string]*langEntry   // by plugin list; see langset.go
 }
 
 // pluginEntry is one directory's load, done once. Its warnings are kept so
@@ -34,7 +35,7 @@ type pluginEntry struct {
 
 // NewPluginCache returns an empty cache.
 func NewPluginCache() *PluginCache {
-	return &PluginCache{plugins: map[string]*pluginEntry{}, sheets: map[string]*sheetEntry{}}
+	return &PluginCache{plugins: map[string]*pluginEntry{}, sheets: map[string]*sheetEntry{}, langs: map[string]*langEntry{}}
 }
 
 // Load reads and validates the plugin in dir. A relative dir is taken
