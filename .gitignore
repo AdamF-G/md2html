@@ -12,3 +12,6 @@ docs/**/*.html
 
 # The documentation site, built by `just site`.
 /_site/
+
+# The generator's Node tools, installed by `just grammars`.
+internal/highlight/gen/node/node_modules/

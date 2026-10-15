@@ -1,0 +1,15 @@
+{
+  "license": {
+    "yaml": {
+      "spdx": "LicenseRef-TextMate-Bundle",
+      "text": "Permission to copy, use, modify, sell and distribute this software is granted. This software is provided \"as is\" without express or implied warranty, and with no claim as to its suitability for any purpose.",
+      "from": "https://github.com/textmate/yaml.tmbundle/blob/e54ceae3b719506dba7e481a77cea4a8b576ae46/README.mdown"
+    },
+    "toml": {
+      "spdx": "LicenseRef-TextMate-Bundle",
+      "text": "Permission to copy, use, modify, sell and distribute this software is granted. This software is provided \"as is\" without express or implied warranty, and with no claim as to its suitability for any purpose.",
+      "from": "https://github.com/textmate/toml.tmbundle/blob/e82b64c1e86396220786846201e9aa3f0a2d9ca2/README.mdown"
+    }
+  },
+  "exclude": {}
+}

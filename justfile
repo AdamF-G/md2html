@@ -41,6 +41,29 @@ e2e:
 compat:
     cd compat && go test -count=1 ./...
 
+# The built-in grammars are generated, never hand-edited: this reads the
+# pinned tm-grammars release and its samples, keeps the permissively
+# licensed grammars that match VS Code's own tokenizer on their sample,
+# and rewrites plugins/grammars/, the conformance goldens and the
+# grammars' notices. It is the only thing that needs Node or the network.
+
+# Regenerate the built-in grammars (needs node, npm and network).
+grammars:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work=$(mktemp -d)
+    trap 'rm -rf "$work"' EXIT
+    (cd internal/highlight/gen/node && npm ci --ignore-scripts --no-audit --no-fund)
+    pkg=internal/highlight/gen/node/node_modules/tm-grammars
+    # The whole archive: tar builds disagree on --wildcards, which a pattern needs.
+    curl -sSfL "https://codeload.github.com/shikijs/textmate-grammars-themes/tar.gz/37edd1b26f18838050661d912334aba0ca7f4931" \
+        | tar -xz -C "$work"
+    mv "$work"/textmate-grammars-themes-*/samples "$work/samples"
+    go run ./internal/highlight/gen select -work "$work" -pkg "$pkg"
+    node internal/highlight/gen/node/reference.mjs "$work"
+    go run ./internal/highlight/gen write -work "$work" -pkg "$pkg" \
+        -out plugins/grammars -golden internal/highlight/testdata/conformance -notices THIRD_PARTY_NOTICES
+
 # The documentation site: the repo's own Markdown, wrapped in site/shell.md.
 # .github/workflows/pages.yml runs the same command to publish it to GitHub
 # Pages, so change the two together.
