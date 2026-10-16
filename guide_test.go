@@ -44,6 +44,7 @@ func TestGuideClaims(t *testing.T) {
 		want  []string
 		not   []string
 		warns bool
+		warn  string  // a warning must contain this
 		page  bool    // convert a full page, not a fragment
 		opts  Options // further options for the conversion
 	}{
@@ -351,6 +352,22 @@ func TestGuideClaims(t *testing.T) {
 			want:  []string{`class="language-vega-lite"`},
 			not:   []string{"md2html-chart"},
 		},
+		{
+			name:  "a fence with no grammar renders plain and silent",
+			quote: "A fence whose language has no grammar renders plain",
+			src:   "```text\nx = 1\n```\n\n```madeuplang\nx = 1\n```\n",
+			want:  []string{`<code class="language-text">x = 1`, `<code class="language-madeuplang">x = 1`},
+			not:   []string{"md2html-hl"},
+		},
+		{
+			name:  "a near miss of a known language warns",
+			quote: `no grammar for "pyhton"; did you mean "python"?`,
+			src:   "```pyhton\nx = 1\n```\n",
+			want:  []string{`<code class="language-pyhton">x = 1`},
+			not:   []string{"md2html-hl"},
+			warns: true,
+			warn:  "did you mean",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if !strings.Contains(text, c.quote) {
@@ -384,6 +401,9 @@ func TestGuideClaims(t *testing.T) {
 			}
 			if c.warns != (len(warnings) > 0) {
 				t.Errorf("warns = %v, want %v: %q", len(warnings) > 0, c.warns, warnings)
+			}
+			if c.warn != "" && !strings.Contains(strings.Join(warnings, "\n"), c.warn) {
+				t.Errorf("no warning contains %q: %q", c.warn, warnings)
 			}
 		})
 	}
@@ -665,7 +685,8 @@ func without(name string) []Transform {
 // The summary is what every authoring session reads, so it holds the
 // quick reference and every silent trap, and nothing past them: a section
 // that grows into it is context each session pays for. The size budget
-// is what notices that happening, or the traps list outgrowing it.
+// is what notices that happening, or the traps list outgrowing it. It was
+// 8000 until highlighting added a trap and two quick reference rows.
 func TestGuideSummaryHoldsTheQuickReferenceAndTraps(t *testing.T) {
 	sum := string(GuideSummary())
 	for _, name := range summarySections {
@@ -682,8 +703,8 @@ func TestGuideSummaryHoldsTheQuickReferenceAndTraps(t *testing.T) {
 			t.Errorf("summary carries %q", not)
 		}
 	}
-	if len(sum) > 8000 {
-		t.Errorf("summary is %d bytes; keep it under 8000, or move detail into a section", len(sum))
+	if len(sum) > 8500 {
+		t.Errorf("summary is %d bytes; keep it under 8500, or move detail into a section", len(sum))
 	}
 }
 
@@ -905,7 +926,14 @@ func TestGuideStarterStyleBuilds(t *testing.T) {
 		t.Error("a placeholder colour survives in the chart")
 	}
 
-	// Each of the four blocks sets every page colour; collect each theme's.
+	// Each of the four blocks sets every page colour and every syntax
+	// colour; collect each theme's.
+	want := []string{"bg", "fg", "muted", "accent", "rule", "code-bg", "ok", "warn", "series-1", "chart-grid", "chart-axis"}
+	for _, tok := range stylecheck.Tokens {
+		if strings.HasPrefix(tok, "syntax-") {
+			want = append(want, tok)
+		}
+	}
 	blocks := regexp.MustCompile(`(?s)(:root[^{]*)\{([^{}]*)\}`).FindAllStringSubmatch(css, -1)
 	if len(blocks) != 4 {
 		t.Fatalf("the starter has %d colour blocks, want 4", len(blocks))
@@ -921,7 +949,7 @@ func TestGuideStarterStyleBuilds(t *testing.T) {
 		for _, d := range decl.FindAllStringSubmatch(b[2], -1) {
 			got[d[1]] = d[2]
 		}
-		for _, tok := range []string{"bg", "fg", "muted", "accent", "rule", "code-bg", "ok", "warn", "series-1", "chart-grid", "chart-axis"} {
+		for _, tok := range want {
 			if got[tok] == "" {
 				t.Errorf("%s does not set --%s", strings.TrimSpace(b[1]), tok)
 			}

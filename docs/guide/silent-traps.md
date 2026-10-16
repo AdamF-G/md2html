@@ -67,3 +67,5 @@ before you finish.
     `token:` colour. See [Colours](charts.md#colours).
 23. **A template outside a marker stays literal.** `{version}` expands only
     in a marker's attributes.
+24. **A fence whose language has no grammar renders plain.** Only a near
+    miss of a known name warns. `--list-languages` lists the names.

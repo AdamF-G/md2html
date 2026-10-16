@@ -139,8 +139,48 @@ rename one of the clashing plugins.
 `plugins:` names a directory that is not a plugin. Fix the path; it is
 relative to the page.
 
-**front matter plugins has no effect without style** — add `style:`, or
-remove `plugins:`.
+**front matter plugins: …; ignoring it** — the same, on a page with no
+`style:`. Fix the path.
+
+**front matter plugins has no effect without style** — the page's
+plugins provide no languages, and their styles need `style:`. Add
+`style:`, or remove `plugins:`. A plugin that provides languages does
+have an effect: they highlight the page's fences.
+
+**fence at line …: no grammar for "…"; did you mean "…"?** — the fence's
+language is not one md2html has, but is close to one that is. The fence
+is plain. Fix the spelling, or, if the name is right, supply the language
+from a plugin. `md2html --list-languages` lists the names. See
+[Highlighting](code-blocks.md#highlighting).
+
+**fence at line …: highlighting "…" took over …; showing it plain** — the
+fence ran past its time budget of 2 seconds. Split it, or mark it
+`{.no-highlight}`.
+
+**fence at line …: highlighting "…" failed: …; showing it plain** — the
+grammar could not tokenize the fence. The rest of the message is the
+error. Mark the fence `{.no-highlight}`, or fix the grammar if it is a
+plugin's.
+
+**grammar "…" from plugin …, or a grammar it includes: …** — some of
+the patterns cannot be translated: a plugin's grammar, or one it
+includes, uses regular expression features md2html cannot run, on the
+first fence that needs them. md2html cannot tell which grammar a pattern
+is from, so the message names the plugin's. The rules listed are left
+out, so some tokens may be plain or coloured differently. It is said once
+per grammar per page.
+
+**plugins … and … both provide language "…"; using …'s** — two local
+plugins offer the same language name or alias. The later one wins.
+Rename one, or load only one. A plugin that replaces a built-in language
+does not warn.
+
+**plugins … and … both provide scope "…"; using …'s** — two local plugins
+offer grammars with the same scope name under different language names.
+The later one serves the scope, and every grammar that includes it.
+
+**front matter highlight "…" is not true or false** — the page's fences
+are highlighted. Use `highlight: false` to leave the page's code plain.
 
 **style … is selected twice; using it once** — remove the repeat.
 

@@ -64,8 +64,9 @@ an Artifact's host sets the theme.
 Styles come from plugins. The built-in ones are always loaded. Load
 another with `--plugin path/to/it` for a whole run, or with `plugins:
 ./_style` in a page's front matter, relative to the page. Both take a
-comma-separated list. A page's `plugins:` only matters with its own
-`style:`.
+comma-separated list. A page's `plugins:` widens only its own `style:`,
+but the languages its plugins provide highlight its fences with or
+without one.
 
 Paths resolve in four places. `--plugin DIR` is relative to the directory
 md2html runs in. `plugins:` is relative to the page. The `css` paths in a
@@ -109,11 +110,13 @@ accent colour and the text column's width:
 | `styles` | Each style by name: its `description`, its `css` files in order, and `base`. |
 | `base` | Per style. `default`, the default, adds the style to the default stylesheet. `none` starts from nothing. |
 | `charts` | Per style, optional. How its charts are drawn; see [Chart settings](#chart-settings). |
+| `grammars` | Languages for highlighting code; see [Providing languages](#providing-languages). |
 
 Style names follow the same rules as plugin names. `default` is reserved
 for the built-in plugin and its style, so a plugin or style named `default`
-fails to load. A manifest with no `format`, no `name`, no `styles`, or a
-style with no `css` list fails to load. An unknown key only warns.
+fails to load. A manifest with no `format` or no `name`, with neither
+`styles` nor `grammars`, or with a style that has no `css` list, fails to
+load. An unknown key only warns.
 
 A style is added on top of the default stylesheet, so it only needs to say
 what differs. `"base": "none"` starts from nothing instead, and is only
@@ -142,6 +145,62 @@ Write the file's path itself.
 CSS containing `</style`, even in a comment or a string, is an error: it
 would end the page's `<style>` element early.
 
+### Providing languages
+
+A plugin provides languages for [highlighting](code-blocks.md#highlighting)
+with a `grammars` key beside `styles`. A plugin can have either or both.
+This one adds a language called `fabcfg`, which a fence can also name as
+`fab`:
+
+```json
+{
+  "format": 1,
+  "name": "house-languages",
+  "description": "Grammars for our in-house config formats",
+  "grammars": {
+    "fabcfg": {
+      "file": "grammars/fabcfg.tmLanguage.json",
+      "aliases": ["fab"]
+    }
+  }
+}
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `file` | yes | The TextMate grammar, relative to the plugin directory: `.json`, or `.json.gz`. |
+| `aliases` | no | Other names a fence can use. Same spelling rules as the language name. |
+| `scope` | no | The grammar's scope name, such as `source.fabcfg`. Read from the file when left out, and an error when it does not match the file's `scopeName`. Required in built-in plugins. |
+| `license` | no | SPDX identifier, shown by `--list-languages`. Required in built-in plugins. |
+| `source` | no | Where the grammar came from, shown by `--list-languages`. Required in built-in plugins. |
+
+A language name or alias is lowercase letters, digits, `-`, `+`, `#` and
+`.`, starting with a letter, since real fence tags include `c++`, `c#`
+and `objective-c`. A fence matches it ignoring case. Each grammar file is
+read when the plugin loads: one that is not JSON, or has no `scopeName`
+or no `patterns`, fails the load.
+
+Languages come from three places: the built-in grammars, every
+`--plugin`, and a page's own `plugins:`, which add to the run's for that
+page. A site shell's `plugins:` do not: they widen only the shell's
+style, and supply no languages to the pages it wraps.
+
+- **A local plugin replaces a built-in language** that has the same name,
+  alias or scope name, silently. That is how to change how a language is
+  highlighted.
+- **Two local plugins that clash** warn once for each language name or
+  alias they share, and the plugin loaded later wins, in the order
+  `--plugin` and `plugins:` give. Two that share only a scope name warn
+  once, the same way.
+- A clash among `--plugin` plugins is reported once for the run. A page
+  warns only about a clash its own `plugins:` cause.
+- **A grammar can include another by scope name**, such as
+  `"include": "source.go"`, and finds it among every loaded grammar, from
+  any plugin, built-in ones too.
+
+`md2html --plugin ./_langs --list-languages` checks the plugin loads and
+shows its languages. `--list-styles` leaves out a plugin with no styles.
+
 ## Making your own style
 
 A consistent look is a small set of decisions. A style built on the
@@ -157,8 +216,9 @@ The settings that make a look:
 | Chart colours | `--series-1` … `--series-8`, `--chart-surface`, `--chart-grid`, `--chart-axis` | [Chart settings](#chart-settings) |
 | Type and width | the `font-family` on `body` (tier 4 below), and `--measure` | [What a style can change](#what-a-style-can-change) |
 | Chart text | the manifest's `charts` block | [Chart settings](#chart-settings) |
+| Syntax colours | `--syntax-comment`, `--syntax-keyword` and eleven more | [Syntax colours](#syntax-colours) |
 
-That is 23 colours, each with a light and a dark value. Mermaid diagrams
+That is 36 colours, each with a light and a dark value. Mermaid diagrams
 take theirs from the page colours, so in a full page they follow without
 more work.
 
@@ -206,11 +266,11 @@ body keeps the system sans.
 
 ### A starter style
 
-A complete tier 2 style, with every page colour, `--series-1` and the
-chart line colours set in all four blocks. It is a fresh plugin, not the
-`acme` example grown, so it has no `--measure`. Save the manifest as
-`_style/md2html-plugin.json` and the CSS as `_style/house.css`, then
-use `--plugin ./_style --style house`.
+A complete tier 2 style, with every page colour, `--series-1`, the
+chart line colours and the syntax colours set in all four blocks. It is
+a fresh plugin, not the `acme` example grown, so it has no `--measure`.
+Save the manifest as `_style/md2html-plugin.json` and the CSS as
+`_style/house.css`, then use `--plugin ./_style --style house`.
 
 ```json {caption="_style/md2html-plugin.json"}
 {
@@ -231,23 +291,43 @@ use `--plugin ./_style --style house`.
   --bg: #f8f9fb; --fg: #1b2430; --muted: #56606d; --accent: #1f5fa8;
   --rule: #dde2e8; --code-bg: #eef1f5; --ok: #2c6e45; --warn: #a8500c;
   --series-1: #1f5fa8; --chart-grid: #e4e8ed; --chart-axis: #c3cad3;
+  --syntax-comment: #6e617b; --syntax-keyword: #002cd2; --syntax-string: #d60408;
+  --syntax-number: #7d6100; --syntax-constant: #8b017f; --syntax-function: #00544e;
+  --syntax-type: #5d01a7; --syntax-property: #0066b7; --syntax-tag: #c105aa;
+  --syntax-attribute: #703503; --syntax-inserted: #09794c; --syntax-deleted: #9c0238;
+  --syntax-heading: #660cfe;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #12161c; --fg: #e6eaf0; --muted: #9aa5b3; --accent: #8ab4f0;
     --rule: #2a313b; --code-bg: #1b2129; --ok: #6fbe89; --warn: #f0915a;
     --series-1: #4d7fe8; --chart-grid: #232a33; --chart-axis: #3a434f;
+    --syntax-comment: #89898a; --syntax-keyword: #8ab1d8; --syntax-string: #ff9166;
+    --syntax-number: #bd9402; --syntax-constant: #ff81b9; --syntax-function: #05b8a4;
+    --syntax-type: #ecb6ff; --syntax-property: #0192d4; --syntax-tag: #c762bb;
+    --syntax-attribute: #ffc66b; --syntax-inserted: #50e3a5; --syntax-deleted: #cf6c51;
+    --syntax-heading: #b991ff;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12161c; --fg: #e6eaf0; --muted: #9aa5b3; --accent: #8ab4f0;
   --rule: #2a313b; --code-bg: #1b2129; --ok: #6fbe89; --warn: #f0915a;
   --series-1: #4d7fe8; --chart-grid: #232a33; --chart-axis: #3a434f;
+  --syntax-comment: #89898a; --syntax-keyword: #8ab1d8; --syntax-string: #ff9166;
+  --syntax-number: #bd9402; --syntax-constant: #ff81b9; --syntax-function: #05b8a4;
+  --syntax-type: #ecb6ff; --syntax-property: #0192d4; --syntax-tag: #c762bb;
+  --syntax-attribute: #ffc66b; --syntax-inserted: #50e3a5; --syntax-deleted: #cf6c51;
+  --syntax-heading: #b991ff;
 }
 :root[data-theme="light"] {
   --bg: #f8f9fb; --fg: #1b2430; --muted: #56606d; --accent: #1f5fa8;
   --rule: #dde2e8; --code-bg: #eef1f5; --ok: #2c6e45; --warn: #a8500c;
   --series-1: #1f5fa8; --chart-grid: #e4e8ed; --chart-axis: #c3cad3;
+  --syntax-comment: #6e617b; --syntax-keyword: #002cd2; --syntax-string: #d60408;
+  --syntax-number: #7d6100; --syntax-constant: #8b017f; --syntax-function: #00544e;
+  --syntax-type: #5d01a7; --syntax-property: #0066b7; --syntax-tag: #c105aa;
+  --syntax-attribute: #703503; --syntax-inserted: #09794c; --syntax-deleted: #9c0238;
+  --syntax-heading: #660cfe;
 }
 ```
 
@@ -260,7 +340,9 @@ Leave one out and that case shows the default's colours. In this palette
 `--accent` are 5.6:1 or better on both `--bg` and `--code-bg`. Its
 `--series-1` is the accent in light, 6.1:1 on the surface, and a mid-tone
 of the accent's blue in dark, 4.8:1, since the pale dark accent is too
-light for a chart.
+light for a chart. Its syntax colours are `claude-artifact`'s, made for a
+code background close to this one; a different `--code-bg` means
+checking them again.
 
 ### Keeping it consistent
 
@@ -278,6 +360,11 @@ light for a chart.
   lightness as well as hue, in both themes, so that colour-blind readers
   can tell them apart too. Keep each series' OKLCH lightness within
   0.43–0.77 in light and 0.48–0.67 in dark, and its chroma at least 0.10.
+- **Syntax colours apart.** Each `--syntax-*` colour at least 4.5:1 on
+  `--code-bg`. Comment, keyword, string, function and type each at
+  least ΔE 8 from `--fg`, so code does not read as plain text, and every
+  two syntax colours at least ΔE 12 apart in each theme: embedded
+  languages put any two kinds side by side.
 - **All four blocks together.** Edit a colour in one block and the same
   colour in the other three, light pair and dark pair.
 - **Look at it.** After changing colours, run
@@ -340,6 +427,47 @@ Markdown is inert until a style names it.
 
 These class and custom property names are what a style is written against.
 They change only with a note in the CHANGELOG.
+
+### Syntax colours
+
+[Highlighted code](code-blocks.md#highlighting) takes its colours from
+thirteen properties, set four times like the others. Each colours one
+kind of token, as the span's class names it:
+
+| Property | Colours |
+|---|---|
+| `--syntax-comment` | Comments, also set in italics |
+| `--syntax-keyword` | Keywords and storage words such as `func`, `if`, `return`, `const` |
+| `--syntax-string` | Strings, quotes included |
+| `--syntax-number` | Numbers |
+| `--syntax-constant` | Other constants: `true`, `null`, escapes, `this` |
+| `--syntax-function` | Function names, built-in ones included |
+| `--syntax-type` | Type and class names |
+| `--syntax-property` | Property names, such as JSON keys and `obj.field` |
+| `--syntax-tag` | Markup tags, and YAML keys, which their grammar scopes as tags |
+| `--syntax-attribute` | Markup attribute names |
+| `--syntax-inserted` | Added lines in a diff |
+| `--syntax-deleted` | Removed lines in a diff |
+| `--syntax-heading` | Markup headings, and a diff's file and range lines |
+
+Anything else, operators included, is plain text in `--fg`. Each built-in
+style has its own syntax palette, with its own green and red for
+`--syntax-inserted` and `--syntax-deleted`. A style built on the default
+inherits the default's palette, so it needs to set only the colours it
+changes. Each rule falls back to the surrounding text colour, so on a
+`"base": "none"` style that sets none of them, code is plain and readable.
+
+The rules are added to a page only when it has a highlighted fence,
+ahead of its style, so a style's own rules for the `hl-*` classes win.
+The properties are part of the style, so every page carries them, but
+on a page with no highlighted fence they colour nothing.
+Only comments change style; no kind changes weight, so text in a code
+block keeps its metrics. Highlighted code's `<code>` carries the class
+`md2html-hl`, for a style that treats it differently from plain code.
+
+Which scopes make which kind is fixed by md2html, the same for every
+language. A change to it changes pages, and is announced in the
+CHANGELOG.
 
 ## Chart settings
 
@@ -418,13 +546,25 @@ checked. Each style gets a line, then its findings:
 
 | Severity | Means |
 |---|---|
-| error | Broken or unreadable: a colour missing from one theme, or different when the reader picks the theme their system already shows; a value that is not a colour; text under 3:1; chart series out of the lightness band, grey, or too alike for readers with normal or colour-blind vision |
-| warning | Short of a target: text under 4.5:1; series or status colours faint on `--chart-surface`; status colours too close to each other or to a series; a colour the check cannot measure, such as `color-mix()`; a colour set in neither theme; a colour in a plain `:root` inside the dark media query that never shows, with the block that outranks it |
+| error | Broken or unreadable: a colour missing from one theme, or different when the reader picks the theme their system already shows; a value that is not a colour; text under 3:1, a syntax colour on `--code-bg` included; chart series out of the lightness band, grey, or too alike for readers with normal or colour-blind vision |
+| warning | Short of a target: text under 4.5:1, a syntax colour on `--code-bg` included; a syntax colour under ΔE 8 from `--fg` (comment, keyword, string, function and type) or under ΔE 12 from another syntax colour; series or status colours faint on `--chart-surface`; status colours too close to each other or to a series; a colour the check cannot measure, such as `color-mix()`; a colour set in neither theme; a colour in a plain `:root` inside the dark media query that never shows, with the block that outranks it |
 | note | Advice: neighbouring series that colour-blind readers can only just tell apart |
 
 It exits 1 if any style has an error, 2 if a plugin or style fails to
 load, and 0 otherwise. The chart rules
 are the dataviz skill's, and the built-in styles pass all of them.
+
+Syntax colours are only ever text in a code block, so they are measured
+on `--code-bg` alone, by the text rules: an error under 3:1, a warning
+under 4.5:1. Two more rules warn about a palette that passes contrast
+and still shows little. Comment, keyword, string, function and type,
+the kinds most code is made of, must each be at least ΔE 8 from `--fg`.
+And every two of the thirteen must be at least ΔE 12 apart, in each
+theme, since an embedded language can put any two kinds side by side:
+
+    plain: 2 warnings
+      warning  light --syntax-comment is ΔE 2.6 from --fg, under 8
+      warning  dark --syntax-string and --syntax-type are ΔE 2.9 apart, under 12
 
 A build checks each style its pages use and prints one line per style
 with problems: the findings themselves when there are one or two, or

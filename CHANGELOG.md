@@ -12,6 +12,82 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- Syntax highlighting at build time. A fence whose language names a
+  grammar, ignoring case, is coloured when the page is built: each token
+  is wrapped in a span classed `hl-<kind>`, one of thirteen kinds, and the
+  page gains no script. The code's text is unchanged, so copying it and
+  site search see what they did. A fence can opt out with
+  `{.no-highlight}`, and a page with `highlight: false`. A language md2html
+  does not know stays plain, and a near miss of a known one warns, as in
+  `fence at line 12: no grammar for "pyhton"; did you mean "python"?`.
+  `md2html --guide code-blocks` documents it.
+- The built-in `grammars` plugin: 201 TextMate grammars from
+  `tm-grammars` 1.32.22, embedded compressed, each under a permissive
+  licence. Each that has a sample in the collection, all but four, gives
+  exactly what VS Code's own tokenizer gives on it. `md2html --licenses`
+  carries their notices.
+- A `grammars` key in the plugin manifest, so a local plugin can add a
+  language or replace a built-in one. A plugin can now provide languages
+  and no styles.
+- `--syntax-comment`, `--syntax-keyword` and eleven more `--syntax-*`
+  colour tokens, with a palette of its own in every built-in style, in
+  both themes.
+- `--no-highlight` (`Options.NoHighlight`) leaves every fence plain, and
+  `--list-languages` lists every language with its aliases, plugin,
+  licence and source.
+- `--check-style` checks syntax colours: each at least 4.5:1 on
+  `--code-bg`, comment, keyword, string, function and type each at least
+  ΔE 8 from `--fg`, and every two at least ΔE 12 apart.
+
+### Changed
+
+- A fence in a language md2html knows now renders with spans, and its
+  `<code>` gains the class `md2html-hl`. A page that has one carries the
+  highlighting rules ahead of its style. A page with none has the same
+  body as before. Its stylesheet gains only the style's `--syntax-*`
+  colour settings, which style nothing on such a page. That adds about
+  1.5 KB to a page in the default style and 3 KB in proof or
+  claude-artifact.
+- `--list-styles` leaves out a plugin that provides no styles.
+- The binary is larger: highlighting adds about 2.4 MB, from 16.75 to
+  19.12 MB stripped on darwin/arm64, and a stripped build is 18.75 to
+  20.27 MB depending on the platform.
+- Highlighting costs build time. This repository's docs, 35 pages with 77
+  highlighted fences, build in about 0.27 s, against 0.06 s with
+  `--no-highlight` (Apple Silicon, warm, three runs each). Over half the
+  difference is loading the Markdown grammar, which embeds many others: a
+  page with one Markdown fence takes 0.14 s, and one with a Go fence
+  0.02 s.
+- The scope-to-kind table decides which kind a token takes, from the
+  first scope in its stack, innermost first, that a selector matches;
+  the longest selector wins. It is part of the output, and a later change
+  to it will be announced here. As shipped:
+
+  | Selector | Kind |
+  |---|---|
+  | `comment` | comment |
+  | `keyword`, `storage` | keyword |
+  | `keyword.operator` | plain |
+  | `string` | string |
+  | `constant.numeric` | number |
+  | `constant`, `support.constant`, `variable.language` | constant |
+  | `entity.name.function`, `support.function` | function |
+  | `entity.name.type`, `entity.name.class`, `support.type`, `support.class`, `entity.other.inherited-class` | type |
+  | `support.type.property-name`, `variable.other.property` | property |
+  | `entity.name.tag` | tag |
+  | `entity.other.attribute-name` | attribute |
+  | `markup.inserted` | inserted |
+  | `markup.deleted` | deleted |
+  | `markup.heading`, `meta.diff.header`, `meta.diff.range` | heading |
+
+  A `meta.embedded` scope, or a `source` scope below the root, ends the
+  walk with no kind, so code embedded in a string is not coloured as the
+  string.
+
 ## v0.12.0 — 2026-10-14
 
 ### Added

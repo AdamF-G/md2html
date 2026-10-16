@@ -17,6 +17,8 @@ construct has other spellings, they are under
 | Callout with a title | `::: callout Title` … `:::` (`::: warning Title` for a warning) |
 | Collapsible block | `::: details Title` … `:::` |
 | Code block with a caption | ```` ```go {caption="server.go"} ```` |
+| Highlighted code | ```` ```go ```` |
+| Plain code in a known language | ```` ```go {.no-highlight} ```` |
 | Diagram | a ```` ```mermaid ```` fence |
 | Stable heading anchor | `## Title {#my-id}` |
 | Cross-reference to a numbered heading | `§4.2` |

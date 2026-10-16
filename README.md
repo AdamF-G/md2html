@@ -136,6 +136,13 @@ with no page shell, ready to drop into a Claude Artifact.
   hover boxes and keyboard focus made of CSS and a table of the data under
   it. The page gains no script and fetches nothing for it. Vega and
   Vega-Lite run inside md2html, so this needs no Node and no network.
+- **Highlighted code.** A fence whose language md2html knows, such as
+  ```` ```go ````, is coloured when the page is built, in the style's
+  colours for light and dark, so the page gains no script. About 200
+  languages ship built in, from the `tm-grammars` collection;
+  `--list-languages` lists them, and a plugin can add more. A fence in
+  any other language stays plain, and `--no-highlight` or
+  `highlight: false` turns it off.
 - **Callouts and containers.** GitHub alerts (`> [!NOTE]`,
   `> [!WARNING]`) for notes and warnings, and fenced containers
   (`::: callout Title` … `:::`) for titled callouts, cards, collapsible
@@ -394,11 +401,13 @@ recipient's agent anyway.
 | `--preview-runtime` | with `--fragment`, add the mermaid runtime a full page has to a fragment with a diagram, to preview it in a browser; leave it off for output a host will render (`Options.PreviewRuntime`) |
 | `--no-source` | do not [embed each page's Markdown](#the-markdown-travels-with-the-page) in it. Fragments never carry it |
 | `--no-charts` | leave `vega-lite` fences as code blocks instead of drawing charts |
+| `--no-highlight` | leave fenced code plain instead of highlighting it (`Options.NoHighlight`) |
 | `--site FILE` | wrap every page in this shell page, whose front matter says `site: true`, and write the search index `md2html-search.js` at the output root; not with `--fragment` or `--toc float` |
 | `--css FILE` | replace the stylesheet; not with `--style` |
 | `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
-| `--plugin DIR` | load a local plugin for its styles (repeatable) |
+| `--plugin DIR` | load a local plugin for its styles and languages (repeatable) |
 | `--list-styles` | list the styles available, including any `--plugin`'s, and exit |
+| `--list-languages` | list the languages fences are highlighted in, with their aliases, plugin, licence and source, including any `--plugin`'s, and exit |
 | `--check-style` | check the colours of each `--plugin` style, the `--style` list, or the built-in styles, and exit; 1 if any has an error, 2 if a plugin or style fails to load |
 | `--lang TAG` | language of every page, such as `de` or `pt-BR`; a document's own `lang:` front matter overrides it. Default `en`. Ignored with `--fragment` |
 | `--toc LAYOUT` | contents list layout: `inline`, or `float` beside the text on a wide screen; a document's own `toc:` front matter overrides it. Default `inline`, or `float` with `--autotoc`. Ignored with `--fragment` |
@@ -447,6 +456,9 @@ synchronously on the calling goroutine.
 engine never starts. A chart's data file must stay inside
 `Options.DataRoot`, or the page's own directory when that is empty; the
 command sets it to the common ancestor of its entry points.
+
+`Options.NoHighlight` leaves every fenced code block plain, as
+`--no-highlight` does.
 
 `Options.MermaidURL` names the ES module a page with a diagram imports at
 view time, for a docs build that must not reach a CDN. Empty keeps the
@@ -542,6 +554,8 @@ MIT — see [LICENSE](./LICENSE). `internal/fences` is vendored from
 test-only copy of MermaidJS under its MIT licence, with the notices of the
 libraries it bundles left in place. `internal/charts/vendor` holds Vega and
 Vega-Lite, which md2html embeds to draw charts, under the BSD 3-Clause
+licence. `plugins/grammars` holds the TextMate grammars md2html highlights
+code with, from the `tm-grammars` collection, each under its own
 licence; [THIRD_PARTY_NOTICES](./THIRD_PARTY_NOTICES) carries their
 notices and those of everything else built into the binary, and
 `md2html --licenses` prints it.
