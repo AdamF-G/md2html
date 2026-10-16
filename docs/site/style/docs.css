@@ -35,7 +35,18 @@ body { padding-top: 0; }
   padding-left: 0.9rem;
 }
 
-nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
+/* The breadcrumb stays in view as the page scrolls, and a heading jumped
+   to lands below it rather than behind it. */
+html { scroll-padding-top: 3.5rem; }
+nav[aria-label="Breadcrumb"] {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.6rem 0;
+  margin-bottom: 1.5rem;
+}
 
 .foot {
   margin-top: 4rem;
@@ -64,20 +75,34 @@ nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
     max-width: 78rem;
     margin: 0 auto;
   }
-  body > .topbar { grid-area: top; }
+  /* The top bar stays at the top of the window, the breadcrumb pinned
+     beneath it and the sidebar below both. A wide screen keeps the bar
+     to one row, so its height is fixed and the others can sit under it;
+     a narrow one wraps it, and pins only the breadcrumb. */
+  :root { --topbar-h: 4.5rem; scroll-padding-top: calc(var(--topbar-h) + 3.5rem); }
+  body > .topbar {
+    grid-area: top;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: var(--topbar-h);
+    box-sizing: border-box;
+    flex-wrap: nowrap;
+    padding-block: 0;
+  }
   body > .sidebar {
     grid-area: side;
     position: sticky;
-    top: 1rem;
+    top: calc(var(--topbar-h) + 1rem);
     align-self: start;
-    max-height: calc(100vh - 2rem);
+    max-height: calc(100vh - var(--topbar-h) - 2rem);
     overflow-y: auto;
     /* A scrolling box clips what lies left of it, so the box reaches into
        the gutter far enough to hold a top-level page's bar. */
     margin: 0 0 0 -0.9rem;
     padding-left: 0.9rem;
   }
-  body > nav[aria-label="Breadcrumb"] { grid-area: crumbs; }
+  body > nav[aria-label="Breadcrumb"] { grid-area: crumbs; top: var(--topbar-h); }
   body > main.md2html { grid-area: main; margin: 0; min-width: 0; }
   body > .md2html-prev-next { grid-area: pn; max-width: var(--measure); }
   body > .foot { grid-area: foot; }
