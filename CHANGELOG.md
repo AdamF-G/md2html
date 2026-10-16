@@ -24,7 +24,8 @@ major version instead.
   `{.no-highlight}`, and a page with `highlight: false`. A language md2html
   does not know stays plain, and a near miss of a known one warns, as in
   `fence at line 12: no grammar for "pyhton"; did you mean "python"?`.
-  `md2html --guide code-blocks` documents it.
+  Fences inside a Markdown fence are coloured too, in any language the
+  page knows. `md2html --guide code-blocks` documents it.
 - The built-in `grammars` plugin: 201 TextMate grammars from
   `tm-grammars` 1.32.22, embedded compressed, each under a permissive
   licence. Each that has a sample in the collection, all but four, gives
@@ -56,12 +57,12 @@ major version instead.
 - The binary is larger: highlighting adds about 2.4 MB, from 16.75 to
   19.12 MB stripped on darwin/arm64, and a stripped build is 18.75 to
   20.27 MB depending on the platform.
-- Highlighting costs build time. This repository's docs, 35 pages with 77
-  highlighted fences, build in about 0.27 s, against 0.06 s with
-  `--no-highlight` (Apple Silicon, warm, three runs each). Over half the
-  difference is loading the Markdown grammar, which embeds many others: a
-  page with one Markdown fence takes 0.14 s, and one with a Go fence
-  0.02 s.
+- Highlighting costs build time. This repository's docs, 35 pages with 78
+  highlighted fences, build in about 0.08 s, against 0.05 s with
+  `--no-highlight` (a built binary, Apple Silicon, warm, best of five,
+  process start included). A page with one Markdown fence takes 0.04 s
+  and one with a Go fence 0.03 s, against 0.02 s for a page with no
+  fence.
 - The scope-to-kind table decides which kind a token takes, from the
   first scope in its stack, innermost first, that a selector matches;
   the longest selector wins. It is part of the output, and a later change

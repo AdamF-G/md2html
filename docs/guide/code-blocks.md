@@ -70,6 +70,12 @@ A fence can name a language by an alias: `sh`, `bash` and `zsh` reach
 `md2html --list-languages` lists every language, with its aliases, the
 plugin it comes from, and its licence and source.
 
+**Fences inside a Markdown fence** are coloured too, in any language the
+page knows and under the same names, including a list item's or a block
+quote's fences. `{.no-highlight}` works on them as well. An unknown
+language there stays plain without a warning, since an example may be
+wrong on purpose.
+
 **No match, no change.** A fence with no language, or one no grammar
 names, renders exactly as it did before, and so does a fence in a known
 language that has nothing to colour. A near miss of a known name warns
@@ -90,7 +96,8 @@ Opting out, at three levels:
 - one run: `--no-highlight`.
 
 `mermaid`, `fig` and `vega-lite` fences are never highlighted, even when
-one falls back to a code block.
+one falls back to a code block. Inside a Markdown fence they are only
+examples, and are coloured like any other.
 
 ### Languages md2html does not ship
 

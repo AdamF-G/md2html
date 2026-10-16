@@ -168,7 +168,8 @@ includes, uses regular expression features md2html cannot run, on the
 first fence that needs them. md2html cannot tell which grammar a pattern
 is from, so the message names the plugin's. The rules listed are left
 out, so some tokens may be plain or coloured differently. It is said once
-per grammar per page.
+per run, after the pages, listing every pattern any page needed, so it
+names no page. A long pattern is shown with its middle cut out.
 
 **plugins … and … both provide language "…"; using …'s** — two local
 plugins offer the same language name or alias. The later one wins.

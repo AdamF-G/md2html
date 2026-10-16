@@ -5,6 +5,9 @@
 **Status:** Built on the `syntax-highlighting` branch, 2026-10-15. This
 document describes what shipped; where building changed the design, the
 text says so, and [As built](#as-built) lists every such decision.
+[Fences inside Markdown fences](2026-10-16-nested-fences-design.md)
+amends it: how a Markdown fence's own fences are highlighted, and the
+untranslatable-pattern warning.
 
 ## Purpose
 
@@ -246,8 +249,8 @@ plugin always, a local plugin through `--plugin` or front matter `plugins:`.
   cannot translate and disables that rule (the spike found two, in the Go
   grammar's nested generic brackets, with no effect on any tested code). For
   a built-in grammar these are recorded in the generator's report. For a
-  local grammar, md2html gives one warning per grammar listing them, on
-  the first page that uses it (see [As built](#as-built)). Its diagnostics
+  local grammar, md2html gives one warning per grammar listing them,
+  once per run, after the pages (see [As built](#as-built)). Its diagnostics
   do not say which grammar a pattern came from, so the warning names the
   grammar "or a grammar it includes".
 
@@ -420,7 +423,7 @@ chart fences do:
 | Engine error while tokenizing | Plain fence, warning with the error |
 | Line over 20,000 characters | That line plain from the limit on; silent |
 | Local grammar unreadable, invalid or missing `scopeName` | Error when the plugin loads |
-| Local grammar with untranslatable patterns | Loads; one warning listing them, from the first page that uses the grammar |
+| Local grammar with untranslatable patterns | Loads; one warning per run, after the pages, listing every pattern they needed |
 | Two local plugins claim the same language | Warning; the later one wins |
 
 ## Library API and CLI
@@ -553,8 +556,12 @@ its commit body.
 - **Untranslatable patterns are reported at first use, not at load.**
   textmate-go compiles rules lazily, and its diagnostics cover only the
   rules exercised so far. A local grammar's warning therefore comes from
-  the first page that highlights a fence with it, once per grammar per
-  page.
+  the first page that highlights a fence with it. As first built it was
+  said again on every page. The nested-fences change made it the run's:
+  `PluginCache.GrammarWarnings` lists every pattern the run's pages
+  needed, the command line says them after the pages, and `Convert`
+  says them itself only when it was given no cache. Said from whichever
+  page found a pattern first, it would have depended on scheduling.
 - **A long line keeps its first 20,000 runes highlighted.** textmate-go's
   own limit skips the whole line; the wrapper tokenizes the first 20,000
   runes and leaves the rest plain, as this design says.
@@ -616,10 +623,13 @@ its commit body.
   v0.12.0 to 19.12 MB, about +2.4 MB. Across platforms a stripped build
   is 18.75 to 20.27 MB.
 - **Build time.** This repository's docs, 35 pages with 77 highlighted
-  fences, build in about 0.27 s, against 0.06 s with `--no-highlight`
-  (Apple Silicon, warm, three runs each). A page with one Markdown fence
-  takes 0.14 s, since that grammar embeds many others, and one with a Go
-  fence 0.02 s.
+  fences, built in about 0.27 s, against 0.06 s with `--no-highlight`
+  (`go run`, Apple Silicon, warm, three runs each). A page with one
+  Markdown fence took 0.14 s, since that grammar embeds many others, and
+  one with a Go fence 0.02 s. After the nested-fences change, with a
+  built binary, best of five: the docs (78 highlighted fences) take
+  0.08 s against 0.05 s, a Markdown fence page 0.04 s, a Go fence page
+  0.03 s, and a page with no fence 0.02 s.
 
 ## Spike evidence
 

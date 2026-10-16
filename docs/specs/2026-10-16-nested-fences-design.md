@@ -2,8 +2,9 @@
 
 **Date:** 2026-10-16
 **Author:** AdamF-G
-**Status:** Approved for building on the `syntax-highlighting` branch.
+**Status:** Built on the `syntax-highlighting` branch, 2026-10-16.
 Amends [Syntax highlighting](2026-10-14-syntax-highlighting-design.md).
+[As built](#as-built) records what building found.
 
 ## Purpose
 
@@ -131,10 +132,16 @@ fact it is said again on every page, because the record of what was said
 lives with the page. For the Markdown grammar the warning is several
 kilobytes long. This work fixes it:
 
-- **Once per language set.** The record moves to the language set, which
-  is shared by every page with the same plugins, guarded by a lock. If a
-  later page exercises patterns no earlier page did, only the new ones
-  are said.
+- **Once per run, after the pages.** Pages convert in parallel and share
+  one engine per language set, so "the first page" to find a pattern
+  depends on scheduling. The patterns found by the end of the run depend
+  only on what the pages highlighted. `PluginCache.GrammarWarnings`
+  returns one warning per local grammar, listing every pattern any of
+  the cache's conversions needed. Warnings are sorted by plugin and
+  grammar, and patterns within each sorted. The command line prints them
+  after the pages, with no page named, and counts them in its warning
+  total. `Convert` says them through `Options.Warn` itself only when it
+  was given no cache, since its own cache serves one page.
 - **Shorter.** Each entry over 160 characters keeps its first 60 and
   last 90, with ` … ` between, as `plugins/grammars/REPORT.md` already
   does. The end is kept because it carries the reason.
@@ -173,9 +180,10 @@ kilobytes long. This work fixes it:
 - **No eager loading:** highlighting a Markdown fence whose inner fences
   are all Go loads the host, Go and nothing from the 61-rule list. The
   engine's loader records the scopes it was asked for.
-- **Warning once:** two pages using a plugin grammar with untranslatable
-  patterns give one warning; a third page that exercises a new pattern
-  gives one more, naming only it.
+- **Warning once:** pages sharing a cache say nothing, and the cache's
+  warning lists both patterns found across them; without a cache one
+  page with two fences says one warning; a command-line run of twelve
+  pages says it once, naming no page, the same way on every run.
 - **Unchanged output:** the v0.12.0 comparison passes as before.
 
 ## Documentation
@@ -194,3 +202,39 @@ kilobytes long. This work fixes it:
 - Loading an embedded grammar only when it is first used, inside
   textmate-go. That is an upstream change. It would also help the
   grammars above.
+
+## As built
+
+- **Spellings that differ from VS Code.** 79 spellings are embedded by
+  VS Code's Markdown grammar and shipped by md2html. Four colour
+  differently inside a Markdown fence, each the way a top-level fence
+  in that language is coloured:
+  - `json5`: VS Code's rule hands it to the JSON grammar, md2html uses
+    json5's own.
+  - `tex`: VS Code's rule hands it to the LaTeX grammar, md2html uses
+    plain TeX's.
+  - `objc` and `objective-c`: the Objective-C grammar includes `$base`,
+    which inside VS Code's embedding is the Markdown grammar, so VS Code
+    reads a class body as Markdown paragraphs.
+- **This repository's docs** change in one block: a `mermaid` example
+  inside a Markdown fence in the diagrams guide is now coloured.
+- **`innerFences` came forward to the host-grammar commit**, so the
+  host-grammar test compares every line outside an inner body from the
+  start, as the plan's Task 2 would have widened it to.
+- **Tests that compare colours** use a one-minute budget, as the
+  generator does: under `-race` the full grammar's comparison ran past
+  2 s.
+- **The warning went from once per language set to once per run.**
+  The review found that saying it from the first page to reach it
+  printed it under a different page from run to run (18 of 20 runs
+  under one page, the others under two more), so it moved to the end of
+  the run, as style checks are reported.
+- **The comparison test fails on a stale entry.** A spelling listed as
+  differing that now matches the full grammar fails the test, and only
+  real comparisons count toward its floor of 50; 75 do.
+- **Costs.** With a built binary, Apple Silicon, warm, best of five,
+  process start included: the docs (35 pages, 78 highlighted fences)
+  build in 0.08 s, from 0.18 s before, against 0.05 s with
+  `--no-highlight`. A page with one one-line Markdown fence takes
+  0.04 s, from 0.10 s; one with a Go fence 0.03 s; one with no fence
+  0.02 s.
