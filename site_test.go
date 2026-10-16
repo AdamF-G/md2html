@@ -94,6 +94,81 @@ func TestSiteTreeWarnsOnBadNavKeys(t *testing.T) {
 	}
 }
 
+// An index's links order its directory: an explicit nav-order first, then
+// the children the index links, by first link, then the rest by label. A
+// link deeper into a subdirectory does not rank it, a link to the index
+// itself or outside the directory ranks nothing, and a subdirectory keeps
+// its own order.
+func TestSiteNavSortLinksFollowsTheIndex(t *testing.T) {
+	s, _, _ := siteFixture(t, map[string]string{
+		"shell/site.md": minimalShell,
+		"docs/index.md": "---\nnav-sort: links\n---\n# Home\n\n" +
+			"- [Self](index.md)\n" +
+			"- [Outside](../outside.md)\n" +
+			"- [Page](later/page.md)\n" +
+			"- [Zulu](zulu.md)\n" +
+			"- [Guides](guides/index.md)\n" +
+			"- [Alpha](./alpha.md#setup)\n" +
+			"- [Zulu again](zulu.md)\n" +
+			"- [First](first.md)\n",
+		"docs/alpha.md":        "# Alpha\n",
+		"docs/zulu.md":         "# Zulu\n",
+		"docs/mike.md":         "# Mike\n",
+		"docs/first.md":        "---\nnav-order: 1\n---\n# First\n",
+		"docs/guides/index.md": "# Guides\n",
+		"docs/guides/deep.md":  "# Deep\n",
+		"docs/guides/beta.md":  "# Beta\n",
+		"docs/later/index.md":  "# Later\n",
+		"docs/later/page.md":   "# Page\n",
+		"outside.md":           "# Outside\n",
+	}, "shell/site.md")
+	want := strings.Join([]string{
+		"First",
+		"Zulu",
+		"Guides",
+		"  Beta",
+		"  Deep",
+		"Alpha",
+		"Later",
+		"  Page",
+		"Mike",
+	}, "\n") + "\n"
+	if got := s.outline(); got != want {
+		t.Errorf("outline:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestSiteNavSortWarns(t *testing.T) {
+	s, _, _ := siteFixture(t, map[string]string{
+		"shell/site.md":     minimalShell,
+		"docs/index.md":     "---\nnav-sort: sideways\n---\n# Home\n\n[B](b.md) [A](a.md)\n",
+		"docs/a.md":         "---\nnav-sort: links\n---\n# A\n",
+		"docs/b.md":         "# B\n",
+		"docs/sub/index.md": "---\nnav-sort: label\n---\n# Sub\n",
+	}, "shell/site.md")
+	var all string
+	for _, w := range s.Warnings {
+		all += w.Src + ": " + w.Message + "\n"
+	}
+	for _, want := range []string{
+		`nav-sort "sideways" is not links or label`,
+		filepath.Join("docs", "a.md") + ": front matter nav-sort applies to a directory's index.md",
+	} {
+		if !strings.Contains(all, want) {
+			t.Errorf("no warning contains %q; got:\n%s", want, all)
+		}
+	}
+	for _, w := range s.Warnings {
+		if strings.HasSuffix(w.Src, filepath.Join("sub", "index.md")) {
+			t.Errorf("nav-sort: label warned: %s", w.Message)
+		}
+	}
+	// An unknown value orders by label.
+	if got := s.outline(); got != "A\nB\nSub\n" {
+		t.Errorf("outline:\n%s", got)
+	}
+}
+
 func TestBuildSiteDropsAShellInsideTheEntries(t *testing.T) {
 	s, res, root := siteFixture(t, map[string]string{
 		"docs/site.md":  minimalShell,

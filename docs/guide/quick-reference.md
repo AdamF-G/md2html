@@ -39,4 +39,4 @@ construct has other spellings, they are under
 | Links from a front matter list | `[[list key="versions" link="/d/{item}/"]]` |
 | Links from subdirectories | `[[subdirs path="/srv/docs" match="v*" link="https://example.com/{item}/"]]` |
 | A value from another file | `versions: @../versions.md#all-versions` |
-| Order or hide a site page | `nav-order: 2`, `nav-title: Name`, `nav: hidden` |
+| Order or hide a site page | `nav-order: 2`, `nav-title: Name`, `nav: hidden`; `nav-sort: links` on an index |

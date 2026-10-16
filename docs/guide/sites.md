@@ -96,6 +96,12 @@ base, the deepest directory holding every entry point.
   with a warning. A `README.md` is an ordinary page in its directory.
 - A page's label is its `# Title`, or `nav-title:` when set.
 - Order is `nav-order:` (a whole number) first, then label alphabetically.
+  `nav-sort: links` in a directory's `index.md` puts its children in the
+  order the index links them instead: those with `nav-order:` still come
+  first, then each page or subdirectory the index links, by its first
+  link, then the rest by label. A link counts when it reaches the child's
+  own page; one deeper into a subdirectory does not. A subdirectory orders
+  its own children by its own index.
 - `nav: hidden` keeps a page out of the tree, with every page below it,
   and out of previous and next; a hidden page shows no previous and next
   of its own. It stays in search and is reachable by links. On the root's `index.md` it hides only that page.

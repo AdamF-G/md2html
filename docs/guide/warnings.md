@@ -251,6 +251,13 @@ root.
 
 **… is not hidden** — `nav:` takes only `hidden`. The value is ignored.
 
+**… is not links or label** — a `nav-sort` value. The directory is ordered
+by label. Values are lowercase.
+
+**front matter nav-sort applies to a directory's index.md** — `nav-sort`
+on an ordinary page, which has no children to order. Move it to the
+directory's `index.md`.
+
 **links to …, which the build does not write** — a link in the shell to a
 `.md` outside the build. It points at the Markdown file; build that page
 too, or link something else.

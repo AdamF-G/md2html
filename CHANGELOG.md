@@ -12,6 +12,16 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- `nav-sort: links` in a directory's `index.md` orders the directory's
+  children in the site's navigation by the index's own links, so a reading
+  order written as a list is not repeated as a `nav-order:` on each page.
+  An explicit `nav-order:` still comes first, and a page the index never
+  links comes last, by label.
+
 ## v0.13.0 — 2026-10-16
 
 ### Added

@@ -54,6 +54,9 @@ type siteNode struct {
 	hidden   bool
 	hasOrder bool
 	order    int
+	navSort  string // "links": the children are ordered by this page's links
+	linkRank int    // the place of this node's first link in its parent's page
+	hasRank  bool
 	parent   *siteNode
 	children []*siteNode
 }
@@ -199,6 +202,9 @@ func (s *Site) buildTree(docs []Doc) {
 		for _, c := range n.children {
 			finish(c)
 		}
+		if n.navSort == "links" {
+			s.rankByLinks(n)
+		}
 		sort.SliceStable(n.children, func(i, j int) bool { return lessNode(n.children[i], n.children[j]) })
 	}
 	finish(s.root)
@@ -252,10 +258,63 @@ func (s *Site) applyMeta(n *siteNode, d *Doc) {
 	default:
 		s.warn(d.Src, fmt.Sprintf("front matter nav %q is not hidden; ignoring it", v))
 	}
+	switch v := d.Meta["nav-sort"]; v {
+	case "", "label":
+	case "links":
+		if n.isDir {
+			n.navSort = v
+		} else {
+			s.warn(d.Src, "front matter nav-sort applies to a directory's index.md, which orders the directory; ignoring it")
+		}
+	default:
+		s.warn(d.Src, fmt.Sprintf("front matter nav-sort %q is not links or label; ordering by label", v))
+	}
 }
 
-// lessNode orders siblings: those with a nav-order first, by it, then the
-// rest by label, case-insensitively, with the name breaking ties so the
+// rankByLinks gives each child of dir that dir's page links to a rank: the
+// place of its first link in the page's body. A link counts when it reaches
+// the child's own page, a page or a subdirectory's index; one deeper into a
+// subdirectory, or to anything that is not a child, ranks nothing. The page
+// was read once by the crawl; it is read again here, and only for a
+// directory that asks, so a site without nav-sort pays nothing.
+func (s *Site) rankByLinks(dir *siteNode) {
+	if dir.doc == nil {
+		return
+	}
+	raw, err := os.ReadFile(dir.doc.Src)
+	if err != nil {
+		return
+	}
+	_, body, _ := splitFrontMatter(raw)
+	root, err := parseDoc(body)
+	if err != nil {
+		return
+	}
+	bySrc := map[string]*siteNode{}
+	for _, c := range dir.children {
+		if c.doc != nil {
+			bySrc[c.doc.Src] = c
+		}
+	}
+	rank := 0
+	for _, l := range ExtractLinks(root, filepath.Dir(dir.doc.Src)) {
+		if l.Kind != LinkDoc {
+			continue
+		}
+		target, err := resolve(l.Abs)
+		if err != nil {
+			continue
+		}
+		if c := bySrc[target]; c != nil && !c.hasRank {
+			c.linkRank, c.hasRank = rank, true
+			rank++
+		}
+	}
+}
+
+// lessNode orders siblings: those with a nav-order first, by it, then those
+// their directory's page ranks by its links (nav-sort: links), by rank, then
+// the rest by label, case-insensitively, with the name breaking ties so the
 // order never depends on the crawl's.
 func lessNode(a, b *siteNode) bool {
 	if a.hasOrder != b.hasOrder {
@@ -263,6 +322,12 @@ func lessNode(a, b *siteNode) bool {
 	}
 	if a.hasOrder && a.order != b.order {
 		return a.order < b.order
+	}
+	if a.hasRank != b.hasRank {
+		return a.hasRank
+	}
+	if a.hasRank && a.linkRank != b.linkRank {
+		return a.linkRank < b.linkRank
 	}
 	if la, lb := strings.ToLower(a.label), strings.ToLower(b.label); la != lb {
 		return la < lb
