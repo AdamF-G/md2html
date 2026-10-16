@@ -27,14 +27,28 @@ body { padding-top: 0; }
 .sidebar .md2html-pages li { margin: 0.3rem 0; }
 .sidebar .md2html-pages a { display: block; color: var(--fg); }
 .sidebar .md2html-pages a:hover { color: var(--accent); }
-/* The current page's bar sits in the gutter left of the text, a clear
-   gap from its first letter. */
-.sidebar .md2html-pages a[aria-current="page"] {
-  color: var(--accent);
-  box-shadow: inset 2px 0 0 var(--accent);
-  margin-left: -0.9rem;
-  padding-left: 0.9rem;
+/* The sidebar folds, so each row has a column on its left for a chevron,
+   and each level is indented by one more. On a wide screen the list sits
+   a column to the left, so its names line up with the top bar's; a
+   narrow one has no gutter to hold it. The current page's bar
+   is at the list's left edge whatever the page's depth, one column back
+   per level: clear of the name and of any chevron, and inside the
+   sidebar's scrolling box, which would clip it further out. */
+.sidebar .md2html-pages a[aria-current="page"] { color: var(--accent); position: relative; }
+.sidebar .md2html-pages a[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  --level: 1;
+  left: calc(-1 * var(--level) * var(--md2html-fold-col));
 }
+.sidebar .md2html-pages ul a[aria-current="page"]::before { --level: 2; }
+.sidebar .md2html-pages ul ul a[aria-current="page"]::before { --level: 3; }
+.sidebar .md2html-pages ul ul ul a[aria-current="page"]::before { --level: 4; }
+.sidebar .md2html-pages ul ul ul ul a[aria-current="page"]::before { --level: 5; }
 
 /* The breadcrumb stays in view as the page scrolls, and a heading jumped
    to lands below it rather than behind it. */
@@ -96,14 +110,11 @@ nav[aria-label="Breadcrumb"] {
      whole grid, so a sticky sidebar slid down over the footer. */
   body > .sidebar { grid-area: side; margin: 0; }
   body > .sidebar > .md2html-pages {
+    margin-left: calc(-1 * var(--md2html-fold-col));
     position: sticky;
     top: calc(var(--topbar-h) + 1rem);
     max-height: calc(100vh - var(--topbar-h) - 2rem);
     overflow-y: auto;
-    /* A scrolling box clips what lies left of it, so the box reaches into
-       the gutter far enough to hold a top-level page's bar. */
-    margin-left: -0.9rem;
-    padding-left: 0.9rem;
   }
   body > nav[aria-label="Breadcrumb"] { grid-area: crumbs; top: var(--topbar-h); }
   body > main.md2html { grid-area: main; margin: 0; min-width: 0; }

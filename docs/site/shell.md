@@ -25,7 +25,7 @@ repo-url: https://github.com/AdamF-G/md2html/blob/main/{path}
 :::
 
 ::: nav {.sidebar aria-label="Section"}
-[[pages from="section"]]
+[[pages collapse="true"]]
 :::
 
 [[breadcrumb]]
