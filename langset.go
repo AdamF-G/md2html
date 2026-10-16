@@ -21,6 +21,9 @@ type langSet struct {
 	// that the built-in grammars plugin does not ship, from its
 	// left-out.txt. They are real languages, not typos.
 	leftOut map[string]bool
+
+	hostOnce sync.Once
+	host     []byte // the derived Markdown host grammar, or nil
 }
 
 type langEntry struct {
@@ -119,14 +122,41 @@ func buildLangSet(list []*Plugin, warn func(string)) *langSet {
 			}
 		}
 	}
-	ls.engine = highlight.NewTextMate(func(scope string) ([]byte, error) {
-		g := ls.byScope[scope]
-		if g == nil {
-			return nil, nil
-		}
-		return g.raw()
-	}, highlight.Options{})
+	ls.engine = highlight.NewTextMate(ls.load, highlight.Options{})
 	return ls
+}
+
+// load reads the grammar for scope: the derived Markdown host grammar, or
+// the file of the grammar that serves scope; nil, nil for a scope none
+// does.
+func (ls *langSet) load(scope string) ([]byte, error) {
+	if scope == hostScope {
+		ls.markdownHost()
+		return ls.host, nil
+	}
+	g := ls.byScope[scope]
+	if g == nil {
+		return nil, nil
+	}
+	return g.raw()
+}
+
+// markdownHost is the scope to tokenize a Markdown fence with: hostScope,
+// derived once from whichever grammar serves markdownScope, or
+// markdownScope itself when that grammar lacks the shape (see
+// hostGrammar).
+func (ls *langSet) markdownHost() string {
+	ls.hostOnce.Do(func() {
+		if g := ls.byScope[markdownScope]; g != nil {
+			if raw, err := g.raw(); err == nil {
+				ls.host = hostGrammar(raw)
+			}
+		}
+	})
+	if ls.host == nil {
+		return markdownScope
+	}
+	return hostScope
 }
 
 func (ls *langSet) lookup(lang string) *Grammar { return ls.byName[strings.ToLower(lang)] }

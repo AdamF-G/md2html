@@ -261,14 +261,15 @@ func (h highlightContext) spans(lang string, classes []string, lines []string, l
 	}
 	engine := h.langs.engine
 	if h.budget != 0 {
-		engine = highlight.NewTextMate(func(s string) ([]byte, error) {
-			if g := h.langs.byScope[s]; g != nil {
-				return g.raw()
-			}
-			return nil, nil
-		}, highlight.Options{Budget: h.budget})
+		engine = highlight.NewTextMate(h.langs.load, highlight.Options{Budget: h.budget})
 	}
-	toks, err := engine.Tokenize(g.Scope, lines)
+	// A Markdown fence is tokenized without the languages its grammar
+	// embeds; see hostScope.
+	scope := g.Scope
+	if scope == markdownScope {
+		scope = h.langs.markdownHost()
+	}
+	toks, err := engine.Tokenize(scope, lines)
 	switch {
 	case errors.Is(err, highlight.ErrBudget):
 		warn(fmt.Sprintf("fence at line %d: highlighting %q took over %s; showing it plain", line, lang, highlight.DefaultBudget))
@@ -278,7 +279,7 @@ func (h highlightContext) spans(lang string, classes []string, lines []string, l
 		return nil
 	}
 	if lg := h.langs.local(g.Scope); lg != nil && !h.warned[g.Scope] {
-		if d := engine.Diagnostics(g.Scope); len(d) > 0 {
+		if d := engine.Diagnostics(scope); len(d) > 0 {
 			h.warned[g.Scope] = true
 			noun := "patterns cannot be translated and are skipped"
 			if len(d) == 1 {
