@@ -368,6 +368,12 @@ Flags:
 			warned++
 		}
 	}
+	// Said once the pages are done, so they do not depend on which page
+	// found a pattern first.
+	for _, w := range cache.GrammarWarnings() {
+		fmt.Fprintf(stderr, "md2html: %s\n", w)
+		warned++
+	}
 	siteWarnings := 0
 	if site != nil {
 		// Shell warnings arrive as pages convert, in parallel, so they are

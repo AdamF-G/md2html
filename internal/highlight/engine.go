@@ -158,6 +158,16 @@ func (e *TextMate) Diagnostics(scope string) []string {
 	return out
 }
 
+// Abbreviate cuts the middle out of a long diagnostic: some patterns run
+// to thousands of characters. Its end is kept, since it says why.
+func Abbreviate(d string) string {
+	r := []rune(d)
+	if len(r) <= 160 {
+		return d
+	}
+	return string(r[:60]) + " … " + string(r[len(r)-90:])
+}
+
 // runePrefix is s cut to its first n runes.
 func runePrefix(s string, n int) string {
 	if utf8.RuneCountInString(s) <= n {

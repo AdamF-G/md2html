@@ -61,8 +61,11 @@ type Options struct {
 	// shares one, so a plugin's fonts are read and inlined once rather
 	// than once per page, and each language's grammar is compiled once.
 	// Nil loads afresh on every call, which a page with highlighted
-	// fences pays for: measured, about 5 ms for a Go fence and 71 ms for
-	// a Markdown fence, against 0.4 ms and 8.5 ms with a shared cache.
+	// fences pays for: measured, about 4 ms for a Go fence and 13 ms for
+	// a Markdown fence, against 0.2 ms and 0.8 ms with a shared cache.
+	// With nil, Convert also says the page's grammar warnings; a caller
+	// sharing a cache reads them from its GrammarWarnings once its pages
+	// are converted.
 	PluginCache *PluginCache
 	// StyleChosen, if set, is called once per Convert after the page's
 	// style is chosen from Styles or its own "style:" front matter, with
@@ -257,6 +260,12 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// The shell's style is the site's: a page without a style of its own
 	// takes it, with the shell's plugins found from the shell. A page's own
 	// style still wins, and --style applies where neither sets one.
+	// One cache serves the whole call, so the grammar warnings below can be
+	// read from it.
+	ownCache := opt.PluginCache == nil
+	if ownCache {
+		opt.PluginCache = NewPluginCache()
+	}
 	styleOpt, styleMeta := opt, meta
 	if opt.Site != nil && !opt.Fragment && meta["style"] == "" && opt.Site.shellMeta["style"] != "" {
 		styleOpt.SourcePath = opt.Site.shellSrc
@@ -279,6 +288,14 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := newParser(opt.Warn, newChartContext(opt, style), hl).Convert(src, &buf); err != nil {
 		return nil, err
+	}
+	// A caller's cache may serve many pages, whose grammar warnings are the
+	// caller's to say once they are done; a cache of this call's own serves
+	// this page alone.
+	if ownCache && opt.Warn != nil {
+		for _, w := range opt.PluginCache.GrammarWarnings() {
+			opt.Warn(w)
+		}
 	}
 	root, err := parseFragment(buf.Bytes())
 	if err != nil {

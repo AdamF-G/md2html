@@ -320,13 +320,50 @@ func TestBrokenPagePluginKeepsRunGrammars(t *testing.T) {
 	}
 }
 
-func TestLocalGrammarDiagnosticsWarnOncePerPage(t *testing.T) {
+// badPlugin is a local plugin whose grammar "bad" has two patterns the
+// engine cannot translate: one tried on every line, one only inside ( ).
+func badPlugin(t *testing.T) string {
 	dir := writeTree(t, map[string]string{
 		"langs/md2html-plugin.json": `{"format": 1, "name": "langs", "grammars": {"bad": {"file": "g.json"}}}`,
-		"langs/g.json":              `{"scopeName": "source.bad", "patterns": [{"match": "\\p{Xwd}+", "name": "keyword.bad"}, {"match": "ok", "name": "keyword.ok"}]}`,
+		"langs/g.json": `{"scopeName": "source.bad", "patterns": [{"match": "\\p{Xwd}+", "name": "keyword.bad"}, {"match": "ok", "name": "keyword.ok"},
+			{"begin": "\\(", "end": "\\)", "patterns": [{"match": "\\p{Xan}+", "name": "string.bad"}]}]}`,
 	})
-	_, w := convertBody(t, "```bad\nok\n```\n\n```bad\nok\n```\n", Options{Plugins: []string{filepath.Join(dir, "langs")}})
-	if len(w) != 1 || !strings.HasPrefix(w[0], `grammar "bad" from plugin langs, or a grammar it includes: 1 pattern cannot be translated and is skipped: `) {
+	return filepath.Join(dir, "langs")
+}
+
+// Without a cache, Convert says the page's grammar warnings itself, once.
+func TestLocalGrammarDiagnosticsWarnOncePerPage(t *testing.T) {
+	_, w := convertBody(t, "```bad\nok\n```\n\n```bad\nok\n```\n", Options{Plugins: []string{badPlugin(t)}})
+	if len(w) != 1 || !strings.HasPrefix(w[0], `grammar "bad" from plugin langs, or a grammar it includes: 1 pattern cannot be translated and is skipped: \p{Xwd}+`) {
+		t.Errorf("warnings %q", w)
+	}
+}
+
+// With a shared cache the pages say nothing, and the cache's warnings,
+// read once they are done, list every pattern any page found, sorted.
+func TestLocalGrammarDiagnosticsAreTheRuns(t *testing.T) {
+	opt := Options{Plugins: []string{badPlugin(t)}, PluginCache: NewPluginCache()}
+	for _, src := range []string{"```bad\nok\n```\n", "```bad\nok (x)\n```\n", "```bad\nok\n```\n"} {
+		if _, w := convertBody(t, src, opt); len(w) != 0 {
+			t.Errorf("%q: warnings %q", src, w)
+		}
+	}
+	w := opt.PluginCache.GrammarWarnings()
+	const prefix = `grammar "bad" from plugin langs, or a grammar it includes: 2 patterns cannot be translated and are skipped: `
+	if len(w) != 1 || !strings.HasPrefix(w[0], prefix+`\p{Xan}+`) || !strings.Contains(w[0], `; \p{Xwd}+`) {
+		t.Errorf("warnings %q", w)
+	}
+}
+
+// A long pattern is cut in the middle, keeping the reason at its end.
+func TestLocalGrammarDiagnosticIsShortened(t *testing.T) {
+	long := `\\p{Xwd}` + strings.Repeat("a", 300)
+	dir := writeTree(t, map[string]string{
+		"langs/md2html-plugin.json": `{"format": 1, "name": "langs", "grammars": {"bad": {"file": "g.json"}}}`,
+		"langs/g.json":              `{"scopeName": "source.bad", "patterns": [{"match": "` + long + `", "name": "keyword.bad"}, {"match": "ok", "name": "keyword.ok"}]}`,
+	})
+	_, w := convertBody(t, "```bad\nok\n```\n", Options{Plugins: []string{filepath.Join(dir, "langs")}})
+	if len(w) != 1 || !strings.Contains(w[0], `: \p{Xwd}aaa`) || !strings.Contains(w[0], "a … a") || len(w[0]) > 400 {
 		t.Errorf("warnings %q", w)
 	}
 }

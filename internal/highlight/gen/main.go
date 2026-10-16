@@ -390,7 +390,7 @@ func writeReport(path string, ship []meta, left []leftOut, diags map[string][]st
 		n++
 		fmt.Fprintf(&b, "### %s\n\n", m.Name)
 		for _, d := range diags[m.Name] {
-			fmt.Fprintf(&b, "- `%s`\n", strings.ReplaceAll(abbreviate(d), "`", "'"))
+			fmt.Fprintf(&b, "- `%s`\n", strings.ReplaceAll(highlight.Abbreviate(d), "`", "'"))
 		}
 		b.WriteString("\n")
 	}
@@ -398,16 +398,6 @@ func writeReport(path string, ship []meta, left []leftOut, diags map[string][]st
 		b.WriteString("None.\n")
 	}
 	writeFile(path, []byte(strings.TrimRight(b.String(), "\n")+"\n"))
-}
-
-// abbreviate cuts the middle out of a long diagnostic. Some patterns run
-// to thousands of characters, and the report is embedded in the binary.
-func abbreviate(d string) string {
-	r := []rune(d)
-	if len(r) <= 160 {
-		return d
-	}
-	return string(r[:60]) + " … " + string(r[len(r)-90:])
 }
 
 // writeGoldens replaces dir with each shipped grammar's reference dump.

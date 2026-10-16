@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1266,6 +1267,47 @@ func TestLanguageClashWarnsOncePerRun(t *testing.T) {
 		}
 		if n := strings.Count(errb.String(), "both provide language"); n != 1 {
 			t.Errorf("%v: %d clash warnings, want 1:\n%s", args, n, errb.String())
+		}
+	}
+}
+
+// A grammar's untranslatable patterns are said once, after the pages,
+// whichever page found them first.
+func TestGrammarWarningIsSaidOnceAfterThePages(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"langs/md2html-plugin.json": `{"format": 1, "name": "langs", "grammars": {"bad": {"file": "g.json"}}}`,
+		"langs/g.json":              `{"scopeName": "source.bad", "patterns": [{"match": "\\p{Xwd}+", "name": "keyword.bad"}, {"match": "ok", "name": "keyword.ok"}]}`,
+	}
+	for i := range 12 {
+		files[fmt.Sprintf("p%02d.md", i)] = "```bad\nok\n```\n"
+	}
+	for name, body := range files {
+		p := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var first string
+	for range 5 {
+		var out, errb bytes.Buffer
+		if code := run([]string{"--plugin", filepath.Join(dir, "langs"), "-o", filepath.Join(dir, "out"), dir}, &out, &errb); code != 0 {
+			t.Fatalf("exit %d: %s", code, errb.String())
+		}
+		got := errb.String()
+		if n := strings.Count(got, "cannot be translated"); n != 1 {
+			t.Fatalf("said %d times:\n%s", n, got)
+		}
+		if !strings.Contains(got, "md2html: grammar \"bad\" from plugin langs") || !strings.Contains(got, "1 warning(s)") {
+			t.Errorf("stderr:\n%s", got)
+		}
+		if first == "" {
+			first = got
+		} else if got != first {
+			t.Errorf("stderr changed between runs:\n%s\nthen\n%s", first, got)
 		}
 	}
 }

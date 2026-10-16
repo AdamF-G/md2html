@@ -186,9 +186,8 @@ func newCodeFenceRenderer(warn func(string), charts chartContext, hl highlightCo
 // language set, or nil when highlighting is off for the page.
 type highlightContext struct {
 	langs      *langSet
-	lineOffset int             // lines of front matter above the body
-	warned     map[string]bool // local grammars already reported on this page
-	budget     time.Duration   // tests only: a budget other than the default
+	lineOffset int           // lines of front matter above the body
+	budget     time.Duration // tests only: a budget other than the default
 	// budgetScope, in tests only, is the one scope budget applies to;
 	// empty for every scope.
 	budgetScope string
@@ -228,7 +227,7 @@ func newHighlightContext(opt Options, meta map[string]string, lineOffset int) (h
 		warn = opt.Warn
 	}
 	return highlightContext{langs: cache.languages(ps, warn),
-		lineOffset: lineOffset, warned: map[string]bool{}}, nil
+		lineOffset: lineOffset}, nil
 }
 
 // pageGrammarPlugins is the run's plugins, run, and the page's own, the
@@ -288,20 +287,8 @@ func (h highlightContext) grammarSpans(g *Grammar, lang string, lines []string, 
 		warn(fmt.Sprintf("fence at line %d: highlighting %q failed: %v; showing it plain", line, lang, err))
 		return nil
 	}
-	if lg := h.langs.local(g.Scope); lg != nil && !h.warned[g.Scope] {
-		if d := engine.Diagnostics(scope); len(d) > 0 {
-			h.warned[g.Scope] = true
-			noun := "patterns cannot be translated and are skipped"
-			if len(d) == 1 {
-				noun = "pattern cannot be translated and is skipped"
-			}
-			// The engine's diagnostics for a scope cover the grammars it
-			// includes too, without saying which, so the message says so.
-			warn(fmt.Sprintf("grammar %q from plugin %s, or a grammar it includes: %d %s: %s", lg.Name, lg.PluginName(), len(d), noun, strings.Join(d, "; ")))
-		}
-	}
-	// A fence with nothing to colour is a plain fence, byte for byte: the
-	// page then carries no highlighting it does not use.
+	// A local grammar's untranslatable patterns are the run's to say, not
+	// this page's: see PluginCache.GrammarWarnings.
 	out := make([][]highlight.Span, len(toks))
 	for i, t := range toks {
 		out[i] = highlight.Spans(t)

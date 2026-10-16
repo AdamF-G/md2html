@@ -3,6 +3,8 @@ package md2html
 import (
 	"fmt"
 	"io/fs"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -139,6 +141,79 @@ func (ls *langSet) load(scope string) ([]byte, error) {
 		return nil, nil
 	}
 	return g.raw()
+}
+
+// GrammarWarnings returns one warning for each local grammar with
+// patterns the engine could not translate, among those the cache's
+// conversions have used so far. A run calls it once its pages are done:
+// the patterns found depend only on what the pages highlighted, so the
+// warnings do too, where saying them from the page that first found one
+// would depend on which page got there first. They are sorted by plugin
+// and grammar, each listing its patterns sorted. Convert says them itself
+// when it was given no cache.
+func (c *PluginCache) GrammarWarnings() []string {
+	c.mu.Lock()
+	var sets []*langSet
+	for _, e := range c.langs {
+		sets = append(sets, e.set)
+	}
+	c.mu.Unlock()
+	type found struct {
+		g     *Grammar
+		diags map[string]bool
+	}
+	byGrammar := map[*Grammar]*found{}
+	for _, ls := range sets {
+		if ls == nil {
+			continue // still being built by a conversion
+		}
+		for scope, g := range ls.byScope {
+			if g.plugin.dir == "" {
+				continue
+			}
+			scopes := []string{scope}
+			if scope == markdownScope {
+				scopes = append(scopes, hostScope)
+			}
+			for _, s := range scopes {
+				for _, d := range ls.engine.Diagnostics(s) {
+					f := byGrammar[g]
+					if f == nil {
+						f = &found{g, map[string]bool{}}
+						byGrammar[g] = f
+					}
+					f.diags[highlight.Abbreviate(d)] = true
+				}
+			}
+		}
+	}
+	list := make([]*found, 0, len(byGrammar))
+	for _, f := range byGrammar {
+		list = append(list, f)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		a, b := list[i].g, list[j].g
+		if a.plugin.Name != b.plugin.Name {
+			return a.plugin.Name < b.plugin.Name
+		}
+		if a.plugin.dir != b.plugin.dir {
+			return a.plugin.dir < b.plugin.dir
+		}
+		return a.Name < b.Name
+	})
+	var out []string
+	for _, f := range list {
+		d := slices.Sorted(maps.Keys(f.diags))
+		noun := "patterns cannot be translated and are skipped"
+		if len(d) == 1 {
+			noun = "pattern cannot be translated and is skipped"
+		}
+		// The engine's diagnostics for a scope cover the grammars it
+		// includes too, without saying which, so the message says so.
+		out = append(out, fmt.Sprintf("grammar %q from plugin %s, or a grammar it includes: %d %s: %s",
+			f.g.Name, f.g.PluginName(), len(d), noun, strings.Join(d, "; ")))
+	}
+	return out
 }
 
 // markdownHost is the scope to tokenize a Markdown fence with: hostScope,
