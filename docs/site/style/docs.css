@@ -22,7 +22,8 @@ body { padding-top: 0; }
 .topbar .md2html-pages { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; }
 .topbar .md2html-search { margin-left: auto; width: min(18rem, 100%); }
 
-.sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; scrollbar-width: thin; }
+.sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; }
+.sidebar > .md2html-pages { scrollbar-width: thin; }
 .sidebar .md2html-pages li { margin: 0.3rem 0; }
 .sidebar .md2html-pages a { display: block; color: var(--fg); }
 .sidebar .md2html-pages a:hover { color: var(--accent); }
@@ -90,16 +91,18 @@ nav[aria-label="Breadcrumb"] {
     flex-wrap: nowrap;
     padding-block: 0;
   }
-  body > .sidebar {
-    grid-area: side;
+  /* The sidebar fills its column and its list is what stays in view: a
+     sticky box keeps inside its parent, and a grid item's parent is the
+     whole grid, so a sticky sidebar slid down over the footer. */
+  body > .sidebar { grid-area: side; margin: 0; }
+  body > .sidebar > .md2html-pages {
     position: sticky;
     top: calc(var(--topbar-h) + 1rem);
-    align-self: start;
     max-height: calc(100vh - var(--topbar-h) - 2rem);
     overflow-y: auto;
     /* A scrolling box clips what lies left of it, so the box reaches into
        the gutter far enough to hold a top-level page's bar. */
-    margin: 0 0 0 -0.9rem;
+    margin-left: -0.9rem;
     padding-left: 0.9rem;
   }
   body > nav[aria-label="Breadcrumb"] { grid-area: crumbs; top: var(--topbar-h); }
