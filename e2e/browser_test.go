@@ -3796,3 +3796,70 @@ func TestBrowserCopyButtonCopies(t *testing.T) {
 		t.Errorf("button says %q after a click", label)
 	}
 }
+
+// Every token kind takes its colour from the style's --syntax-* token, in
+// the system light and dark themes and in both theme-toggle states, so a
+// highlighted fence reads in whatever theme the reader is in.
+func TestBrowserSyntaxColoursFollowTheTheme(t *testing.T) {
+	dir, baseURL := serveDir(t)
+	src := "```go\n// c\nfunc F() string { return \"s\" + 1 }\ntype T struct{ X int }\nconst k = true\n```\n\n" +
+		"```html\n<a href=\"x\">y</a>\n```\n\n```json\n{\"key\": 1}\n```\n\n```diff\n--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n```\n\n" +
+		"```markdown\n# Heading\n```\n"
+	files := map[string][]byte{}
+	for _, style := range []string{"default", "proof", "claude-artifact"} {
+		page, err := md2html.Convert([]byte(src), md2html.Options{Styles: []string{style}})
+		if err != nil {
+			t.Fatalf("%s: %v", style, err)
+		}
+		files[style+".html"] = page
+	}
+	writeFiles(t, dir, files)
+	ctx := newBrowserCtx(t)
+
+	const probe = figResolveVar + `
+	(() => {
+		const out = {};
+		for (const el of document.querySelectorAll('code.md2html-hl span[class^="hl-"]')) {
+			const kind = el.className.slice(3);
+			if (out[kind]) continue;
+			const probe = document.createElement("span");
+			probe.style.color = "var(--syntax-" + kind + ")";
+			document.body.appendChild(probe);
+			out[kind] = {got: getComputedStyle(el).color, want: getComputedStyle(probe).color};
+			probe.remove();
+		}
+		return out;
+	})()`
+	type pair struct{ Got, Want string }
+	states := []struct {
+		name, scheme, stamp string
+	}{{"system light", "light", ""}, {"system dark", "dark", ""}, {"toggled dark", "light", "dark"}, {"toggled light", "dark", "light"}}
+	for _, style := range []string{"default", "proof", "claude-artifact"} {
+		for _, s := range states {
+			var got map[string]pair
+			actions := []chromedp.Action{
+				emulation.SetEmulatedMedia().WithFeatures([]*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: s.scheme}}),
+				chromedp.Navigate(baseURL + "/" + style + ".html"),
+				chromedp.WaitVisible("code.md2html-hl", chromedp.ByQuery),
+			}
+			if s.stamp != "" {
+				actions = append(actions, figSetTheme(s.stamp))
+			}
+			actions = append(actions, chromedp.Evaluate(probe, &got))
+			if err := chromedp.Run(ctx, actions...); err != nil {
+				t.Fatalf("%s %s: %v", style, s.name, err)
+			}
+			for _, k := range []string{"comment", "keyword", "string", "number", "constant", "function",
+				"type", "property", "tag", "attribute", "inserted", "deleted", "heading"} {
+				p, ok := got[k]
+				if !ok {
+					t.Errorf("%s %s: no %s span on the page", style, s.name, k)
+					continue
+				}
+				if p.Got != p.Want {
+					t.Errorf("%s %s: %s is %s, want --syntax-%s %s", style, s.name, k, p.Got, k, p.Want)
+				}
+			}
+		}
+	}
+}
