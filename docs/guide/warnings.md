@@ -308,6 +308,12 @@ value is ignored; `depth` needs 1 or more.
 **… is not root, section or page** — a `[[pages]]` `from`. It lists from
 the root.
 
+**… is not true or false** — a `[[pages]]` `collapse`. Every branch is
+left open.
+
+**… is not left or right** — a `[[pages]]` `chevron`. Chevrons go on the
+left.
+
 **… is not hidden** — `nav:` takes only `hidden`. The value is ignored.
 
 **… is not links or label** — a `nav-sort` value. The directory is ordered

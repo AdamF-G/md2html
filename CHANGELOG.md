@@ -42,6 +42,13 @@ major version instead.
   and contents list. `--mount` adds one for a single build. A mounted
   site reads chart data and `@file#key` references only from inside its
   source root.
+- `[[pages collapse="true"]]` folds each branch of a site's page tree
+  under a chevron beside its link, closed but for the branch holding the
+  current page, so a sidebar keeps one shape on every page. The link
+  stays a link; the chevron is a `<summary>` of its own, named for the
+  page it opens, and the page gains no script. Chevrons sit in a column
+  on the left of each row, which a style widens with
+  `--md2html-fold-col`, or at the end of it with `chevron="right"`.
 
 ### Changed
 

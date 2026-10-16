@@ -62,9 +62,66 @@ func TestPagesFromPage(t *testing.T) {
 	if len(warnings) != 0 || !strings.Contains(idx, `<ul class="md2html-pages"><li><a href="a.html">Alpha</a></li><li><a href="b.html">Bravo</a></li></ul>`) {
 		t.Errorf("warnings %q, page:\n%s", warnings, idx)
 	}
+	// The page's style may mention [[pages]] itself, so only the body is
+	// searched.
 	a, warnings := sitePage(t, s, res, root, "docs/guides/a.md")
+	_, a, _ = strings.Cut(a, "<body")
 	if len(warnings) != 0 || strings.Contains(a, `class="md2html-pages"`) || strings.Contains(a, "[[pages") {
 		t.Errorf("a leaf's list: warnings %q, page:\n%s", warnings, a)
+	}
+}
+
+// collapse="true" folds each branch into a <details> beside its link, so
+// the tree is the same on every page and only which branches are open
+// differs: the one holding the current page. The link stays a link, and
+// the summary is the toggle alone, named for the page it opens.
+func TestPagesCollapseFoldsEachBranch(t *testing.T) {
+	out, warnings := navFixture(t, "[[pages collapse=\"true\"]]\n\n[[content]]\n")
+	if len(warnings) != 0 {
+		t.Errorf("warnings: %q", warnings)
+	}
+	for _, want := range []string{
+		`<li class="md2html-fold"><a href="../start/index.html">Get started</a>` +
+			`<details><summary aria-label="Get started"></summary><ul class="md2html-pages">` +
+			`<li><a href="../start/install.html">Install</a></li></ul></details></li>`,
+		`<li class="md2html-branch md2html-fold"><a href="index.html">Guides</a>` +
+			`<details open=""><summary aria-label="Guides"></summary><ul class="md2html-pages">` +
+			`<li class="md2html-branch"><a href="a.html" aria-current="page">Alpha (short)</a></li>`,
+		`<li class="md2html-fold"><a href="../reference/index.html">Reference</a>` +
+			`<details><summary aria-label="Reference"></summary><ul class="md2html-pages">`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing\n%s\nin:\n%s", want, out)
+		}
+	}
+	// A level depth cuts off has nothing to fold. The page's style may
+	// mention <details> itself, so only the body is searched.
+	folds := func(shell string) bool {
+		out, _ := navFixture(t, shell)
+		_, body, _ := strings.Cut(out, "<body")
+		return strings.Contains(body, "<details")
+	}
+	if folds("[[pages depth=\"1\" collapse=\"true\"]]\n\n[[content]]\n") {
+		t.Error("a depth-limited list folded")
+	}
+	if folds("[[pages collapse=\"false\"]]\n\n[[content]]\n") {
+		t.Error(`collapse="false" folded`)
+	}
+}
+
+// A folding tree's outer list says so, for the style, and says which side
+// its chevrons go: the left unless chevron="right".
+func TestPagesCollapseMarksTheChevronSide(t *testing.T) {
+	for shell, want := range map[string]string{
+		`[[pages collapse="true"]]`:                 `<ul class="md2html-pages md2html-collapse"><li class="md2html-fold">`,
+		`[[pages collapse="true" chevron="left"]]`:  `<ul class="md2html-pages md2html-collapse"><li class="md2html-fold">`,
+		`[[pages collapse="true" chevron="right"]]`: `<ul class="md2html-pages md2html-collapse md2html-chevron-right"><li class="md2html-fold">`,
+		`[[pages]]`: `<ul class="md2html-pages"><li><a href="../start/index.html">`,
+	} {
+		out, warnings := navFixture(t, shell+"\n\n[[content]]\n")
+		if len(warnings) != 0 || !strings.Contains(out, want) {
+			t.Errorf("%s: warnings %q; missing\n%s\nin:\n%s", shell, warnings, want, out)
+		}
 	}
 }
 
@@ -95,7 +152,7 @@ func TestNavMarkersInAPageBodyUnderASite(t *testing.T) {
 // The shell's warnings are the shell's: they go to the site's, once, not to
 // the page that happened to be converted.
 func TestPagesBadAttributesWarn(t *testing.T) {
-	files := map[string]string{"shell/site.md": "---\nsite: true\n---\n[[pages depth=\"two\" from=\"top\"]]\n\n[[content]]\n"}
+	files := map[string]string{"shell/site.md": "---\nsite: true\n---\n[[pages depth=\"two\" from=\"top\" collapse=\"yes\" chevron=\"up\"]]\n\n[[content]]\n"}
 	for k, v := range treeFiles {
 		if k != "shell/site.md" {
 			files[k] = v
@@ -112,7 +169,7 @@ func TestPagesBadAttributesWarn(t *testing.T) {
 		all = append(all, w.Src+": "+w.Message)
 	}
 	joined := strings.Join(all, "\n")
-	for _, want := range []string{`depth "two"`, `from "top"`} {
+	for _, want := range []string{`depth "two"`, `from "top"`, `collapse "yes"`, `chevron "up"`} {
 		if strings.Count(joined, want) != 1 {
 			t.Errorf("want one site warning mentioning %s; got %q", want, all)
 		}

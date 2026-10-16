@@ -226,7 +226,7 @@ shell; without one they warn and stay as written.
 | Marker | Draws |
 |---|---|
 | `[[content]]` | The current page's body. Exactly one per shell. |
-| `[[pages]]` | The tree below the root as a nested list of links, the current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node, or at the top when that node has nothing below it, as on the root page; `from="root"` (the default) at the top. `from="page"` starts at the current page, so a directory's page lists what is in it. |
+| `[[pages]]` | The tree below the root as a nested list of links, the current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node, or at the top when that node has nothing below it, as on the root page; `from="root"` (the default) at the top. `from="page"` starts at the current page, so a directory's page lists what is in it. `collapse="true"` folds each branch under a chevron beside its link, open on the current page's branch, so the tree has one shape on every page; `chevron="right"` puts the chevrons at the end of each row instead of the left, and `--md2html-fold-col` in a style widens the left column. |
 | `[[breadcrumb]]` | The current page's ancestors, in a `<nav aria-label="Breadcrumb">`; nothing on the root page. |
 | `[[prev-next]]` | The previous and next page in tree order, in a `<nav aria-label="Previous and next">`. |
 

@@ -9,6 +9,23 @@
 .md2html-pages a { text-decoration: none; }
 .md2html-pages a[aria-current="page"], .md2html-list a[aria-current="true"] { color: var(--accent); font-weight: 600; }
 .md2html-label { color: var(--muted); }
+/* [[pages collapse="true"]]: each branch folds under a chevron. On the
+   left, every row keeps a column for one, which also indents the next
+   level, so a page with no branch lines up with one that has; on the
+   right, a branch's link leaves room at its end. A style can widen the
+   column with --md2html-fold-col. */
+.md2html-collapse a, .md2html-collapse .md2html-label { display: block; }
+.md2html-collapse:not(.md2html-chevron-right) ul { padding-left: 0; }
+.md2html-collapse { --md2html-fold-col: 1.3em; }
+.md2html-collapse:not(.md2html-chevron-right) li { padding-left: var(--md2html-fold-col); }
+.md2html-chevron-right .md2html-fold > a, .md2html-chevron-right .md2html-fold > .md2html-label { padding-right: 1.6em; }
+.md2html-fold { position: relative; }
+.md2html-fold > details > summary { position: absolute; top: 0; left: 0; box-sizing: border-box; width: var(--md2html-fold-col); padding-left: 0.3em; height: 1.5em; height: 1lh; display: flex; align-items: center; justify-content: center; list-style: none; cursor: pointer; border-radius: 4px; color: var(--muted); }
+.md2html-chevron-right .md2html-fold > details > summary { left: auto; right: 0; width: 1.4em; padding-left: 0; }
+.md2html-fold > details > summary::-webkit-details-marker { display: none; }
+.md2html-fold > details > summary::before { content: ""; width: 0.4em; height: 0.4em; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateX(-0.1em) rotate(-45deg); }
+.md2html-fold > details[open] > summary::before { transform: translateY(-0.1em) rotate(45deg); }
+.md2html-fold > details > summary:hover, .md2html-fold > details > summary:focus-visible { color: var(--accent); }
 .md2html-breadcrumb { display: flex; flex-wrap: wrap; gap: 0.4em; font-size: 0.9em; color: var(--muted); }
 .md2html-breadcrumb li + li::before { content: "\203a"; margin-right: 0.4em; }
 .md2html-prev-next { display: flex; gap: 1em; margin-top: 3em; }

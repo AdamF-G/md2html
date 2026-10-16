@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -79,7 +80,33 @@ func (s *Site) pagesList(m marker, page *siteNode, from string, say func(string,
 	default:
 		say("[[pages]] from %q is not root, section or page; listing from the root", v)
 	}
-	return s.pagesLevel(start, page, from, depth)
+	collapse := false
+	switch v := m.attrs["collapse"]; v {
+	case "", "false":
+	case "true":
+		collapse = true
+	default:
+		say("[[pages]] collapse %q is not true or false; leaving every branch open", v)
+	}
+	right := false
+	switch v := m.attrs["chevron"]; v {
+	case "", "left":
+	case "right":
+		right = true
+	default:
+		say("[[pages]] chevron %q is not left or right; putting chevrons on the left", v)
+	}
+	ul := s.pagesLevel(start, page, from, depth, collapse)
+	// The outer list says it folds, and which side its chevrons go, so a
+	// style can lay out every level from there.
+	if ul != nil && collapse {
+		class := "md2html-pages md2html-collapse"
+		if right {
+			class += " md2html-chevron-right"
+		}
+		setAttr(ul, "class", class)
+	}
+	return ul
 }
 
 // hasShownChild reports whether n has a child [[pages]] would list.
@@ -92,7 +119,12 @@ func hasShownChild(n *siteNode) bool {
 	return false
 }
 
-func (s *Site) pagesLevel(n, page *siteNode, from string, depth int) *html.Node {
+// pagesLevel lists n's shown children, and below each its own, to depth
+// levels. With collapse, a child's list folds into a <details> beside its
+// link, open when it holds page. The link stays outside the summary, so a
+// reader can follow it or open the branch, and the summary, which holds
+// only the toggle, is named for the page it opens.
+func (s *Site) pagesLevel(n, page *siteNode, from string, depth int, collapse bool) *html.Node {
 	var shown []*siteNode
 	for _, c := range n.children {
 		if !c.hidden {
@@ -105,12 +137,25 @@ func (s *Site) pagesLevel(n, page *siteNode, from string, depth int) *html.Node 
 	ul := elem("ul", "class", "md2html-pages")
 	for _, c := range shown {
 		li := elem("li")
+		var class []string
 		if contains(c, page) {
-			li.Attr = append(li.Attr, html.Attribute{Key: "class", Val: "md2html-branch"})
+			class = append(class, "md2html-branch")
 		}
 		li.AppendChild(s.nodeLink(c, page, from))
-		if sub := s.pagesLevel(c, page, from, depth-1); sub != nil {
+		if sub := s.pagesLevel(c, page, from, depth-1, collapse); sub != nil && collapse {
+			class = append(class, "md2html-fold")
+			details := elem("details")
+			if contains(c, page) {
+				details.Attr = append(details.Attr, html.Attribute{Key: "open"})
+			}
+			details.AppendChild(elem("summary", "aria-label", c.label))
+			details.AppendChild(sub)
+			li.AppendChild(details)
+		} else if sub != nil {
 			li.AppendChild(sub)
+		}
+		if class != nil {
+			li.Attr = append(li.Attr, html.Attribute{Key: "class", Val: strings.Join(class, " ")})
 		}
 		ul.AppendChild(li)
 	}
