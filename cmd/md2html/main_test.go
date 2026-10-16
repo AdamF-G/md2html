@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -268,7 +269,7 @@ func TestRunLinkDepthBoundsFollowing(t *testing.T) {
 // the CLI side too — without it, a reordering here would ship green while
 // the library stayed correct.
 func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", false, false, false, false, "", nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", false, false, false, false, false, "", nil)
 	want := md2html.Builtins()
 	if len(opts.Transforms) != len(want) {
 		t.Fatalf("buildOptions produced %d transforms, want %d", len(opts.Transforms), len(want))
@@ -283,7 +284,7 @@ func TestBuildOptionsMatchesBuiltinsOrder(t *testing.T) {
 // Each --no-* flag must drop exactly its own transform and nothing else,
 // leaving every other name in its Builtins() position.
 func TestBuildOptionsNoFlagsDropOnlyTheirOwnTransform(t *testing.T) {
-	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", true, true, true, false, "", nil)
+	opts := buildOptions(md2html.Doc{Src: "doc.md"}, false, false, "", "", "", "", true, true, true, false, false, "", nil)
 	want := []string{"containers", "alerts", "linkAttrs", "chips", "sectionLinks", "toc"}
 	var got []string
 	for _, tr := range opts.Transforms {
@@ -1150,5 +1151,121 @@ func TestListStylesSkipsStylelessPlugins(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "default") {
 		t.Errorf("styles missing:\n%s", out.String())
+	}
+}
+
+func TestNoHighlightFlag(t *testing.T) {
+	doc := "# A\n\n```go\nfunc main() {}\n```\n"
+	for _, tc := range []struct {
+		args []string
+		want bool
+	}{{nil, true}, {[]string{"--no-highlight"}, false}} {
+		root := tree(t, map[string]string{"doc.md": doc})
+		var out, errb bytes.Buffer
+		if code := run(append([]string{filepath.Join(root, "doc.md")}, tc.args...), &out, &errb); code != 0 {
+			t.Fatalf("%v: exit %d: %s", tc.args, code, errb.String())
+		}
+		b, _ := os.ReadFile(filepath.Join(root, "doc.html"))
+		if got := strings.Contains(string(b), "md2html-hl"); got != tc.want {
+			t.Errorf("%v: md2html-hl present = %v, want %v", tc.args, got, tc.want)
+		}
+	}
+}
+
+func TestListLanguages(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-languages"}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	var goLine, shLine bool
+	for _, l := range lines {
+		if strings.HasPrefix(l, "go ") && strings.Contains(l, "grammars") && strings.Contains(l, "MIT") {
+			goLine = true
+		}
+		if strings.HasPrefix(l, "shellscript (bash, sh, shell, zsh)") {
+			shLine = true
+		}
+	}
+	if !goLine {
+		t.Errorf("no go line naming grammars and MIT:\n%s", out.String())
+	}
+	if !shLine {
+		t.Errorf("no shellscript line naming its aliases:\n%s", out.String())
+	}
+	names := make([]string, len(lines))
+	for i, l := range lines {
+		names[i], _, _ = strings.Cut(l, " ")
+	}
+	if !sort.StringsAreSorted(names) {
+		t.Errorf("output is not sorted by language name")
+	}
+}
+
+const fabPlugin = `{"format": 1, "name": "fabs", "grammars": {"fab": {"file": "fab.json"}}}`
+const fabGrammar = `{"scopeName": "source.fab", "patterns": [{"match": "fab", "name": "keyword.fab"}]}`
+
+func TestListLanguagesWithAPlugin(t *testing.T) {
+	root := tree(t, map[string]string{
+		"gram/md2html-plugin.json": fabPlugin,
+		"gram/fab.json":            fabGrammar,
+		"bad/md2html-plugin.json":  `{"format": 1, "name": "bad", "grammars": {"x": {"file": "missing.json"}}}`,
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-languages", "--plugin", filepath.Join(root, "gram")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), "fab  fabs") {
+		t.Errorf("plugin language missing:\n%s", out.String())
+	}
+	out.Reset()
+	errb.Reset()
+	if code := run([]string{"--list-languages", "--plugin", filepath.Join(root, "bad")}, &out, &errb); code != 2 {
+		t.Errorf("broken plugin: exit %d, want 2", code)
+	}
+	if !strings.Contains(errb.String(), "md2html: ") || out.Len() != 0 {
+		t.Errorf("stderr %q, stdout %q", errb.String(), out.String())
+	}
+}
+
+// --list-styles returns before the entry check and ignores the file, so
+// --list-languages does too.
+func TestListLanguagesTakesNoFiles(t *testing.T) {
+	root := tree(t, map[string]string{"page.md": "# A\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--list-languages", filepath.Join(root, "page.md")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.Contains(out.String(), "grammars") {
+		t.Errorf("no listing:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "page.html")); err == nil {
+		t.Error("a page was written")
+	}
+}
+
+// Two plugins providing the same language clash once per run, however the
+// run is used, and even when highlighting is off.
+func TestLanguageClashWarnsOncePerRun(t *testing.T) {
+	root := tree(t, map[string]string{
+		"a/md2html-plugin.json": strings.Replace(fabPlugin, "fabs", "fa", 1),
+		"a/fab.json":            fabGrammar,
+		"b/md2html-plugin.json": strings.Replace(fabPlugin, "fabs", "fb", 1),
+		"b/fab.json":            fabGrammar,
+		"doc.md":                "# A\n\n```fab\nfab\n```\n",
+	})
+	plug := filepath.Join(root, "a") + "," + filepath.Join(root, "b")
+	for _, args := range [][]string{
+		{filepath.Join(root, "doc.md"), "--plugin", plug},
+		{filepath.Join(root, "doc.md"), "--plugin", plug, "--no-highlight"},
+		{"--list-languages", "--plugin", plug},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 0 {
+			t.Fatalf("%v: exit %d: %s", args, code, errb.String())
+		}
+		if n := strings.Count(errb.String(), "both provide language"); n != 1 {
+			t.Errorf("%v: %d clash warnings, want 1:\n%s", args, n, errb.String())
+		}
 	}
 }

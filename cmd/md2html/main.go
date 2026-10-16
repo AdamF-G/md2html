@@ -70,6 +70,9 @@ Styling the page: md2html --list-styles lists the styles available, and
 explains both, and how to write a plugin that adds a style.
 md2html --check-style checks a style's colours.
 
+Code fences: md2html --list-languages lists the languages code fences are
+highlighted in.
+
 Building a site: --site shell.md wraps every page in a shell page whose
 markers draw navigation and search; md2html --guide sites explains it.
 
@@ -79,29 +82,31 @@ Flags:
 	}
 
 	var (
-		outDir    = fs.String("o", "", "output directory (default: write beside each source)")
-		depth     = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
-		linkDepth = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
-		fragment  = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
-		sitePath  = fs.String("site", "", "wrap every page in this shell page, whose front matter says site: true, and give the build site navigation and search")
-		preview   = fs.Bool("preview-runtime", false, "with --fragment, add the mermaid runtime a full page has, to preview a fragment outside its host")
-		noSource  = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
-		cssPath   = fs.String("css", "", "replace the stylesheet with this file (not with --style)")
-		lang      = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
-		toc       = fs.String("toc", "", "contents list layout, inline or float (beside the text on a wide screen), unless front matter sets toc (default inline, or float with --autotoc)")
-		autoTOC   = fs.String("autotoc", "", "give pages without a [[toc]] marker a contents list: all, or long for pages over 1000 lines or 5 headings")
-		noTable   = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
-		noAnchor  = fs.Bool("no-anchors", false, "do not add heading anchors")
-		noExt     = fs.Bool("no-external-links", false, "do not mark external links")
-		noMd      = fs.Bool("no-md-links", false, "do not rewrite .md links")
-		noAssets  = fs.Bool("no-assets", false, "do not rewrite asset links")
-		noCharts  = fs.Bool("no-charts", false, "leave vega-lite fences as code blocks instead of rendering charts")
-		version   = fs.Bool("version", false, "print the version and exit")
-		licenses  = fs.Bool("licenses", false, "print the licences of the third-party software in md2html and exit")
-		guide     = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
+		outDir      = fs.String("o", "", "output directory (default: write beside each source)")
+		depth       = fs.Int("depth", -1, "directory levels to seed from a directory entry (-1 unlimited)")
+		linkDepth   = fs.Int("link-depth", -1, "hops from a seed that link-following may travel (-1 unlimited, 0 none)")
+		fragment    = fs.Bool("fragment", false, "emit bare HTML fragments (for hosts such as Claude Artifacts) instead of full pages")
+		sitePath    = fs.String("site", "", "wrap every page in this shell page, whose front matter says site: true, and give the build site navigation and search")
+		preview     = fs.Bool("preview-runtime", false, "with --fragment, add the mermaid runtime a full page has, to preview a fragment outside its host")
+		noSource    = fs.Bool("no-source", false, "do not embed each page's original Markdown in it (fragments never carry it)")
+		cssPath     = fs.String("css", "", "replace the stylesheet with this file (not with --style)")
+		lang        = fs.String("lang", "", "language of every page, such as de or pt-BR, unless its front matter sets lang (default en)")
+		toc         = fs.String("toc", "", "contents list layout, inline or float (beside the text on a wide screen), unless front matter sets toc (default inline, or float with --autotoc)")
+		autoTOC     = fs.String("autotoc", "", "give pages without a [[toc]] marker a contents list: all, or long for pages over 1000 lines or 5 headings")
+		noTable     = fs.Bool("no-table-scroll", false, "do not wrap tables in a scroll container")
+		noAnchor    = fs.Bool("no-anchors", false, "do not add heading anchors")
+		noExt       = fs.Bool("no-external-links", false, "do not mark external links")
+		noMd        = fs.Bool("no-md-links", false, "do not rewrite .md links")
+		noAssets    = fs.Bool("no-assets", false, "do not rewrite asset links")
+		noCharts    = fs.Bool("no-charts", false, "leave vega-lite fences as code blocks instead of rendering charts")
+		noHighlight = fs.Bool("no-highlight", false, "leave fenced code plain instead of highlighting it")
+		version     = fs.Bool("version", false, "print the version and exit")
+		licenses    = fs.Bool("licenses", false, "print the licences of the third-party software in md2html and exit")
+		guide       = fs.Bool("guide", false, "print the authoring guide's quick reference and silent traps (with an entry, that section, or all of it), through $PAGER on a terminal, and exit")
 
-		listStyles = fs.Bool("list-styles", false, "list the styles available, from built-in plugins and any --plugin, and exit")
-		checkStyle = fs.Bool("check-style", false, "check the colours of the styles from any --plugin, or the --style list, or every built-in style, print a report, and exit (1 if any has an error)")
+		listStyles    = fs.Bool("list-styles", false, "list the styles available, from built-in plugins and any --plugin, and exit")
+		listLanguages = fs.Bool("list-languages", false, "list the languages fences can be highlighted in, from built-in grammars and any --plugin, and exit")
+		checkStyle    = fs.Bool("check-style", false, "check the colours of the styles from any --plugin, or the --style list, or every built-in style, print a report, and exit (1 if any has an error)")
 
 		installDir     = fs.String("install-skill", "", "install the authoring skill into this existing skills directory, for any agent that reads SKILL.md, and exit")
 		installUser    = fs.Bool("install-skill-user", false, "install the authoring skill for Claude Code under ~/.claude/skills and exit")
@@ -159,6 +164,9 @@ Flags:
 	// invocation. It honours --plugin, so a plugin can be checked before use.
 	if *listStyles {
 		return listAvailableStyles(plugins, styles, stdout, stderr)
+	}
+	if *listLanguages {
+		return listAvailableLanguages(plugins, stdout, stderr)
 	}
 	// Like --list-styles, the whole invocation, and ahead of the entry
 	// check: it checks styles, not documents.
@@ -303,7 +311,7 @@ Flags:
 			// the sink needs no locking and lines from two documents can
 			// never interleave.
 			var warnings []string
-			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt, *noCharts, res.Base,
+			opts := buildOptions(d, *fragment, *noSource, css, *lang, *toc, *autoTOC, *noTable, *noAnchor, *noExt, *noCharts, *noHighlight, res.Base,
 				func(m string) { warnings = append(warnings, m) })
 			opts.Plugins, opts.Styles, opts.PluginCache = plugins, styles, cache
 			opts.StyleChosen = checks.chosen
@@ -451,7 +459,42 @@ func checkPlugins(cache *md2html.PluginCache, dirs, styles []string, stderr io.W
 			return nil, err
 		}
 	}
+	// Plugins that provide the same language or scope clash once for the
+	// whole run, whether or not a page highlights anything; a page only
+	// warns about clashes its own plugins: front matter causes.
+	md2html.Languages(cache, loaded, warn)
 	return all, nil
+}
+
+// listAvailableLanguages prints every language a fence can name: its
+// name and aliases, the plugin it comes from, and its licence and source
+// when known. Plugins load as for a run, so a broken one exits 2.
+func listAvailableLanguages(dirs []string, stdout, stderr io.Writer) int {
+	cache := md2html.NewPluginCache()
+	if _, err := checkPlugins(cache, dirs, nil, stderr); err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
+		return 2
+	}
+	loaded, err := cache.LoadAll(dirs, "", nil)
+	if err != nil {
+		fmt.Fprintf(stderr, "md2html: %v\n", err)
+		return 2
+	}
+	// checkPlugins has already said any clash, so it is not said twice.
+	for _, g := range md2html.Languages(cache, loaded, nil) {
+		name := g.Name
+		if len(g.Aliases) > 0 {
+			name += " (" + strings.Join(g.Aliases, ", ") + ")"
+		}
+		fields := []string{name, g.PluginName()}
+		for _, f := range []string{g.License, g.Source} {
+			if f != "" {
+				fields = append(fields, f)
+			}
+		}
+		fmt.Fprintln(stdout, strings.Join(fields, "  "))
+	}
+	return 0
 }
 
 // listAvailableStyles prints every style a run could select, grouped by
@@ -582,7 +625,7 @@ func checkStyles(dirs, styles []string, stdout, stderr io.Writer) int {
 // that report against it. TestRunReportsContainerWarningToStderr covers the
 // one diagnostic that travels that way.
 func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc, autoTOC string,
-	noTable, noAnchor, noExt, noCharts bool, dataRoot string, warn func(string)) md2html.Options {
+	noTable, noAnchor, noExt, noCharts, noHighlight bool, dataRoot string, warn func(string)) md2html.Options {
 
 	skip := map[string]bool{
 		"tableScroll":    noTable,
@@ -598,18 +641,19 @@ func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc, autoTO
 	}
 
 	return md2html.Options{
-		Fragment:   fragment,
-		NoSource:   noSource,
-		NoCharts:   noCharts,
-		DataRoot:   dataRoot,
-		SourcePath: d.Src,
-		CSS:        css,
-		Lang:       lang,
-		TOC:        toc,
-		AutoTOC:    autoTOC,
-		Transforms: ts,
-		LinkMap:    d.LinkMap,
-		Warn:       warn,
+		Fragment:    fragment,
+		NoSource:    noSource,
+		NoCharts:    noCharts,
+		NoHighlight: noHighlight,
+		DataRoot:    dataRoot,
+		SourcePath:  d.Src,
+		CSS:         css,
+		Lang:        lang,
+		TOC:         toc,
+		AutoTOC:     autoTOC,
+		Transforms:  ts,
+		LinkMap:     d.LinkMap,
+		Warn:        warn,
 	}
 }
 
