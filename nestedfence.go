@@ -3,9 +3,11 @@ package md2html
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/AdamF-G/md2html/internal/highlight"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	gtext "github.com/yuin/goldmark/text"
@@ -121,5 +123,62 @@ func innerFences(lines []string) []innerFence {
 		out = append(out, f)
 		return ast.WalkSkipChildren, nil
 	})
+	return out
+}
+
+// nested highlights the fences inside a Markdown fence, whose lines are
+// lines and spans out, putting each body's spans in place of the outer
+// grammar's. An inner fence is text, an example, so its language is looked
+// up but never rendered as a figure or chart, and an unknown one is not a
+// typo worth naming. line is the outer fence's line in the file.
+func (h highlightContext) nested(out [][]highlight.Span, lines []string, line int, warn func(string)) {
+	for _, f := range innerFences(lines) {
+		body := make([]string, len(f.body))
+		for i, b := range f.body {
+			body[i] = lines[b.line][b.start:b.end]
+		}
+		var inner [][]highlight.Span
+		fi := parseCodeFenceInfo(f.info)
+		if g := h.langs.lookup(fi.lang); g != nil && !slices.Contains(fi.classes, "no-highlight") && !allBlank(body) {
+			inner = h.grammarSpans(g, fi.lang, body, line+1+f.open, warn)
+		}
+		for i, b := range f.body {
+			var s []highlight.Span
+			if inner != nil {
+				s = inner[i]
+			}
+			out[b.line] = splice(out[b.line], b.start, b.end, s)
+		}
+	}
+}
+
+// splice returns outer with [start, end) given inner's spans, which are
+// relative to start. A span that crosses an edge keeps its outside part,
+// and touching spans of one kind merge, as highlight.Spans merges them.
+func splice(outer []highlight.Span, start, end int, inner []highlight.Span) []highlight.Span {
+	var out []highlight.Span
+	add := func(s highlight.Span) {
+		if s.Start >= s.End {
+			return
+		}
+		if n := len(out); n > 0 && out[n-1].Kind == s.Kind && out[n-1].End == s.Start {
+			out[n-1].End = s.End
+			return
+		}
+		out = append(out, s)
+	}
+	for _, s := range outer {
+		if s.Start < start {
+			add(highlight.Span{Start: s.Start, End: min(s.End, start), Kind: s.Kind})
+		}
+	}
+	for _, s := range inner {
+		add(highlight.Span{Start: s.Start + start, End: s.End + start, Kind: s.Kind})
+	}
+	for _, s := range outer {
+		if s.End > end {
+			add(highlight.Span{Start: max(s.Start, end), End: s.End, Kind: s.Kind})
+		}
+	}
 	return out
 }

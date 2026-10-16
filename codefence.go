@@ -189,6 +189,9 @@ type highlightContext struct {
 	lineOffset int             // lines of front matter above the body
 	warned     map[string]bool // local grammars already reported on this page
 	budget     time.Duration   // tests only: a budget other than the default
+	// budgetScope, in tests only, is the one scope budget applies to;
+	// empty for every scope.
+	budgetScope string
 }
 
 // newHighlightContext also loads the run's plugins, and returns the error
@@ -259,8 +262,15 @@ func (h highlightContext) spans(lang string, classes []string, lines []string, l
 		}
 		return nil
 	}
+	return h.grammarSpans(g, lang, lines, line, warn)
+}
+
+// grammarSpans highlights lines with g, the grammar lang names, and then
+// the fences inside a Markdown fence. It returns nil for a plain fence: a
+// fault, which is said, or nothing to colour.
+func (h highlightContext) grammarSpans(g *Grammar, lang string, lines []string, line int, warn func(string)) [][]highlight.Span {
 	engine := h.langs.engine
-	if h.budget != 0 {
+	if h.budget != 0 && (h.budgetScope == "" || h.budgetScope == g.Scope) {
 		engine = highlight.NewTextMate(h.langs.load, highlight.Options{Budget: h.budget})
 	}
 	// A Markdown fence is tokenized without the languages its grammar
@@ -293,15 +303,18 @@ func (h highlightContext) spans(lang string, classes []string, lines []string, l
 	// A fence with nothing to colour is a plain fence, byte for byte: the
 	// page then carries no highlighting it does not use.
 	out := make([][]highlight.Span, len(toks))
-	coloured := false
 	for i, t := range toks {
 		out[i] = highlight.Spans(t)
-		coloured = coloured || len(out[i]) > 0
 	}
-	if !coloured {
-		return nil
+	if g.Scope == markdownScope {
+		h.nested(out, lines, line, warn)
 	}
-	return out
+	for _, s := range out {
+		if len(s) > 0 {
+			return out
+		}
+	}
+	return nil
 }
 
 func allBlank(lines []string) bool {
