@@ -2,7 +2,9 @@
 
 **Date:** 2026-10-14
 **Author:** AdamF-G
-**Status:** Designed, not built. Awaiting review.
+**Status:** Built on the `syntax-highlighting` branch, 2026-10-15. This
+document describes what shipped; where building changed the design, the
+text says so, and [As built](#as-built) lists every such decision.
 
 ## Purpose
 
@@ -47,7 +49,7 @@ with its reason, and can be struck in review.
 | 5 | The engine is `github.com/eugenioenko/textmate-go`, behind an internal interface | Recommended | Exact match with VS Code's tokenizer on every sample in the spike, about 4x faster than it, pure Go, about 1.2 MB |
 | 6 | Embed every permissively licensed grammar in the collection; md2html never fetches one | Decided | All 200 cost about 1.2 MB compressed; `md2html never fetches` stays true |
 | 7 | Token kinds are a fixed, small vocabulary coloured by style tokens, not VS Code themes | Decided | Themes, the theme toggle, style plugins and `--check-style` all keep working unchanged |
-| 8 | On by default for any fence whose language resolves; plain output, byte for byte as today, otherwise | Recommended | No setup for the common case, and no change for a page whose fences name no known language |
+| 8 | On by default for any fence whose language resolves; plain output, byte for byte as today, otherwise | Recommended | No setup for the common case, and the same body for a page whose fences name no known language; its stylesheet gains only the style's `--syntax-*` settings (see [Tokens](#tokens)) |
 | 9 | Opt-outs per fence (`.no-highlight`), per page (`highlight: false`) and per run (`--no-highlight`) | Recommended | Matches how charts can be turned off; `no-highlight` is highlight.js's class |
 | 10 | Warn on an unknown language only when it is a near miss of a known one | Recommended | `text`, `console` and made-up tags are common and deliberate; `pyhton` is a typo worth naming |
 | 11 | A conformance test against VS Code's tokenizer gates every grammar and every engine upgrade | Recommended | The spike's harness is cheap to keep; it is what makes the engine swappable |
@@ -98,11 +100,15 @@ with its reason, and can be struck in review.
   ```` ```{.go caption="x"} ```` and ```` ```go {.wide} ````.
 - **No match, no change.** A fence with no language, or a language no
   loaded grammar names, renders exactly as it does today, byte for byte.
-- **Near misses warn.** An unknown language within edit distance 2 of a
-  known name or alias, and at least four letters long, gives one warning
-  naming the fence's line and the closest match: `fence at line 12:
-  no grammar for "pyhton"; did you mean "python"?`. Any other unknown
-  language is silent.
+  A page with no highlighted fence has the same body as before; its
+  stylesheet gains only the style's `--syntax-*` settings (see
+  [Tokens](#tokens)).
+- **Near misses warn.** An unknown language close to a known name or
+  alias gives one warning naming the fence's line in the file and the
+  closest match: `fence at line 12: no grammar for "pyhton"; did you mean
+  "python"?`. Any other unknown language is silent. As built, "close" is
+  the rule in [As built](#as-built) (open question 3), not the edit
+  distance 2 first proposed.
 - **Opting out:**
   - one fence: `{.go .no-highlight}`; the class stays on the element as any
     other class does;
@@ -144,6 +150,7 @@ key only adds, and an older md2html warns about it and ignores it.
 | `aliases` | no | Other names a fence can use. Same spelling rules as the language name. |
 | `license` | no | SPDX identifier, shown by `--list-languages`. Required in built-in plugins. |
 | `source` | no | Where the grammar came from, shown by `--list-languages`. Required in built-in plugins. |
+| `scope` | no | The grammar's scope name. Required in built-in plugins, so their grammars need not be decompressed at start-up; in a local plugin, an error when it does not match the file's `scopeName`. Added while planning. |
 
 **Rules:**
 
@@ -170,7 +177,13 @@ plugin always, a local plugin through `--plugin` or front matter `plugins:`.
   hook.
 - **Two local plugins claiming the same name** is a warning, and the one
   loaded later wins, matching the order `--plugin` and `plugins:` already
-  give.
+  give. A clash gives one warning: by name or alias when the two share
+  one, and by scope name only when they share nothing else. A clash among
+  `--plugin` plugins is said once per run, by the command line; a page
+  warns only about a clash its own `plugins:` cause.
+- **A site shell's `plugins:` supply no grammars** to the pages it wraps.
+  They widen the shell's style only, as before; a page's languages come
+  from `--plugin` and its own `plugins:`.
 - `--list-languages` prints every available language with its aliases, the
   plugin it comes from, and its licence and source when known, then exits.
 
@@ -182,14 +195,21 @@ plugin always, a local plugin through `--plugin` or front matter `plugins:`.
   Unlicense, CC0-1.0), gzips each, and writes `plugins/grammars/` with a
   manifest carrying each grammar's licence and pinned source commit.
 - Grammars with no licence, `NOASSERTION`, or a copyleft licence (GPL, MPL)
-  are left out: 42 of 242 at version 1.32.22. The guide names them and
-  says how to supply one from a local plugin.
+  are left out: 40 of 242 at version 1.32.22, once the override list
+  below admits YAML and TOML. The guide names them and says how to supply
+  one from a local plugin.
 - A grammar whose licence field is blank in the collection but whose
   upstream licence is permissive (the TextMate bundles' YAML and TOML) is
   added by a short, reviewed override list in the generator, each entry
   with its upstream licence text. Without it, YAML and TOML would not ship.
 - A grammar that fails the conformance test (below) is left out, and the
-  generator writes the reason into a report beside the manifest.
+  generator writes the reason into a report beside the manifest. One
+  does: `bicep`, where textmate-go closes a rule whose `end` is empty at
+  once and VS Code keeps it open. No shipped grammar includes it. 201
+  grammars ship.
+- Aliases come from the collection unchanged. `golang` is not one of
+  `go`'s there, so it is not an alias here; adding it would be
+  per-language data (decision 2).
 - `go:embed` stores files uncompressed, so the grammars are embedded as
   `.json.gz` and decompressed on first use with `compress/gzip`.
 
@@ -216,14 +236,20 @@ plugin always, a local plugin through `--plugin` or front matter `plugins:`.
   (`PluginCache`). A grammar is decompressed and parsed on the first fence
   that needs it and reused after that, so a page with no code costs
   nothing. The registry is safe for concurrent use.
-- **Limits.** Each fence has a time budget of 2 s, and each line is
+- **Limits.** Each fence has a time budget of 2 s, counting only its own
+  tokenizing: textmate-go serializes each grammar behind a lock, and time
+  spent waiting for other pages' fences in the same language is not
+  charged. Each line is
   tokenized up to 20,000 characters, VS Code's default; the rest of a longer
   line is plain. A fence over budget renders plain, with a warning.
 - **Untranslatable patterns.** textmate-go reports an Oniguruma pattern it
   cannot translate and disables that rule (the spike found two, in the Go
   grammar's nested generic brackets, with no effect on any tested code). For
   a built-in grammar these are recorded in the generator's report. For a
-  local grammar, md2html gives one warning per grammar listing them.
+  local grammar, md2html gives one warning per grammar listing them, on
+  the first page that uses it (see [As built](#as-built)). Its diagnostics
+  do not say which grammar a pattern came from, so the warning names the
+  grammar "or a grammar it includes".
 
 ## Token kinds
 
@@ -286,6 +312,9 @@ fixed vocabulary needs.
   fragment, which line numbers and highlighted lines will need.
 - Text is escaped exactly as it is today. Output is deterministic: the same
   input gives byte-identical HTML.
+- A known-language fence whose tokens give no span on any line renders
+  plain, byte for byte as today, with no `md2html-hl`: the class means the
+  block carries highlighting.
 - Captions, the `figure` wrapper and fence ids are unchanged.
 
 ## Colours
@@ -299,12 +328,27 @@ token per kind, in the same theme-block shape as its other colours, and on
 | Token | Kind |
 |---|---|
 | `--syntax-comment`, `--syntax-keyword`, `--syntax-string`, `--syntax-number`, `--syntax-constant`, `--syntax-function`, `--syntax-type`, `--syntax-property`, `--syntax-tag`, `--syntax-attribute`, `--syntax-heading` | text colours |
-| `--syntax-inserted`, `--syntax-deleted` | text colours; `default` sets them to `var(--ok)` and `var(--warn)` |
+| `--syntax-inserted`, `--syntax-deleted` | text colours, each a literal colour of its own in every built-in style |
+
+`inserted` and `deleted` were first to be `var(--ok)` and `var(--warn)`.
+The owner chose colours of their own instead while choosing palettes, so
+that they too could be held apart from every other kind (below).
 
 - **The rules** live in a separate `highlight.css`, put ahead of the
   page's style only when the page has a highlighted fence, as `site.css` is
-  (`needsSiteCSS`). A page with no highlighted code is byte-for-byte
-  unchanged, and a style's own rules for the same classes win.
+  (`needsSiteCSS`). A page with no highlighted code therefore has the
+  same body as before, and its stylesheet gains only the style's
+  `--syntax-*` settings, which style nothing on that page: about 1.5 KB
+  a page in `default` and 3 KB in `proof` and `claude-artifact`. A
+  style's own rules for the same classes win.
+- **The tokens ride with the style.** This spec first said both that
+  every built-in style defines the tokens and that a page with no
+  highlighted code is byte-for-byte unchanged, stylesheet included. Both
+  cannot hold while the tokens live in the style's own CSS, which every
+  page carries. On 2026-10-15 the owner chose to keep the tokens in the
+  styles and to promise an unchanged body only, rather than split each
+  style's syntax palette into a file added with `highlight.css`, which
+  every third-party style would have had to follow.
 - Each rule falls back to the surrounding text colour,
   `.hl-keyword { color: var(--syntax-keyword, inherit) }`, so a
   `base: "none"` style that defines no syntax tokens shows readable, plain
@@ -330,17 +374,38 @@ One new rule, since a palette that passes contrast can still show nothing:
 
 | Severity | Rule | Light | Dark |
 |---|---|---|---|
-| warning | Comment, keyword, string, function and type each at least ΔE 8 from `--fg` and from each other, normal vision | ≥ 8 | ≥ 8 |
+| warning | Comment, keyword, string, function and type each at least ΔE 8 from `--fg`, normal vision | ≥ 8 | ≥ 8 |
+| warning | Every pair of the thirteen syntax tokens at least ΔE 12 apart, normal vision | ≥ 12 | ≥ 12 |
 
-The threshold is a starting point, set during implementation so that every
-built-in palette passes it with margin.
+As built, the pair rule replaced "and from each other" among the five
+kinds. The owner's rule is that anything that could appear adjacent or
+nearby must not share a colour; since embedded languages make nearness
+impossible to predict, every pair is held apart. Pairs are measured on
+what each token resolves to, so two tokens written differently can still
+collide, and a token that is not set is reported once as not set, never
+as part of a pair.
 
 ### Palettes
 
 Each built-in style gets its own syntax palette (decision 12). The plan
-renders candidates for each style side by side on the conformance samples,
-in light and dark, and the owner picks. Every chosen palette passes
-`--check-style` with no warnings.
+rendered candidates for each style side by side, in light and dark, and
+the owner picked: candidate A for `default` and `proof`, B for
+`claude-artifact`. The palettes were then revised four times, V2 for
+more vivid light colours, V3 and V4 to hold every pair of kinds apart, and
+V5 to keep them apart for colour-blind readers too. V5 shipped:
+
+- every pair of the thirteen kinds is at least ΔE 12 apart in each theme,
+  in every built-in style;
+- each kind keeps its hue family between light and dark, within 25° of
+  OKLCh hue;
+- every chosen palette passes `--check-style` with no warnings.
+
+The V5 palettes are also tuned for red-green colour-blind readers: with
+the dataviz skill's simulation, every one of the 78 pairs of kinds is at
+least ΔE 6 apart for protanopia and deuteranopia, except three pairs in
+`claude-artifact`'s light set, the worst at 5.6. This is a target the
+palettes meet, not a `--check-style` rule: colour helps a reader through
+code, it does not carry its meaning on its own (owner, 2026-10-15).
 
 ## Faults
 
@@ -355,7 +420,7 @@ chart fences do:
 | Engine error while tokenizing | Plain fence, warning with the error |
 | Line over 20,000 characters | That line plain from the limit on; silent |
 | Local grammar unreadable, invalid or missing `scopeName` | Error when the plugin loads |
-| Local grammar with untranslatable patterns | Loads; one warning listing them |
+| Local grammar with untranslatable patterns | Loads; one warning listing them, from the first page that uses the grammar |
 | Two local plugins claim the same language | Warning; the later one wins |
 
 ## Library API and CLI
@@ -368,7 +433,8 @@ chart fences do:
 
 ## Costs
 
-Measured in the spike, on Apple Silicon, stripped binaries:
+Measured in the spike, on Apple Silicon, stripped binaries (see
+[As built](#as-built) for what shipped):
 
 - **Binary size.** About +1.2 MB for the engine (0.78 MB of it the
   regexp2 fork) and about +1.2 MB for 200 compressed grammars, so roughly
@@ -402,7 +468,10 @@ Measured in the spike, on Apple Silicon, stripped binaries:
   author classes, byte-identical across runs.
 - **Unchanged output.** A fence with no language, an unknown language, a
   `.no-highlight` fence, `highlight: false`, `--no-highlight`, and a page
-  with no code each produce byte-identical output to the release before.
+  with no code each produce output identical to v0.12.0's, byte for byte,
+  once the stylesheet's `--syntax-*` declarations are taken out. The test
+  compares against goldens v0.12.0 itself wrote, checked in under
+  `testdata/v0.12.0`.
 - **Faults.** Every row of the faults table gives the stated result.
 - **Plugins.** A grammar-only local plugin loads; a local grammar overrides
   a built-in by name, alias and scope name; two clashing local plugins warn;
@@ -414,7 +483,9 @@ Measured in the spike, on Apple Silicon, stripped binaries:
 - **Notices.** `THIRD_PARTY_NOTICES` names every shipped grammar's source
   and licence and both new modules, and the existing notices test lists
   them.
-- **Size budget.** The binary's growth stays under a recorded figure.
+- **Size budget.** The stripped binary stays under 22 MB: the largest
+  common target as built (windows/amd64, 20.27 MB), rounded up to 20.5 MB,
+  plus 1.5 MB of margin.
 
 ## Documentation
 
@@ -460,17 +531,95 @@ Measured in the spike, on Apple Silicon, stripped binaries:
 - **Tree-sitter.** Grammars are compiled C parsers, and Go bindings need
   cgo.
 
-## Open questions for review
+## Open questions, answered
 
-1. **The kind table.** Thirteen kinds is this design's call. Fewer, such
-   as folding `property` into `attribute`, means fewer tokens per style;
-   more means palettes that are harder to make pass the style check.
-2. **YAML keys come out as `tag`.** Following decision 2 strictly means the
-   table may not special-case `entity.name.tag.yaml`. The alternative is a
-   short list of language-suffixed exceptions, which is per-language data,
-   though not code.
-3. **The near-miss warning's threshold** (distance 2, four letters or more)
-   is a guess to be checked against real fence tags.
+1. **The kind table.** Kept at thirteen kinds, as designed; `property` is
+   not folded into `attribute`. One row was added: `keyword.operator` is
+   plain (see [As built](#as-built)).
+2. **YAML keys come out as `tag`.** Kept. The table has no
+   language-suffixed exceptions, and a test row holds
+   `entity.name.tag.yaml` to `tag`.
+3. **The near-miss warning's threshold.** Tightened: distance 2 at four
+   letters or more warned on `text`, `tree`, `data`, `none` and `math`.
+   The rule that shipped is in [As built](#as-built).
+
+## As built
+
+### Decisions the plan made
+
+The spec left these open or did not foresee them; each is called out in
+its commit body.
+
+- **Untranslatable patterns are reported at first use, not at load.**
+  textmate-go compiles rules lazily, and its diagnostics cover only the
+  rules exercised so far. A local grammar's warning therefore comes from
+  the first page that highlights a fence with it, once per grammar per
+  page.
+- **A long line keeps its first 20,000 runes highlighted.** textmate-go's
+  own limit skips the whole line; the wrapper tokenizes the first 20,000
+  runes and leaves the rest plain, as this design says.
+- **The manifest gains an optional `scope` key**, required in built-in
+  plugins so the built-in grammars are not decompressed at start-up just
+  to learn their scope names. In a local plugin it is an error when it
+  does not match the file's `scopeName`.
+- **Injection grammars are not shipped** (the collection's 18
+  `injections`). Neither md2html nor the reference tokenizer loads them,
+  so conformance compares like with like. Supporting them is a follow-up.
+- **`keyword.operator` is plain.** Otherwise `=`, `+` and `:=` take the
+  keyword colour in every language, which no mainstream theme does.
+- **The near-miss rule is tighter than first proposed:**
+  - edit distance counts a transposition as one edit (optimal string
+    alignment);
+  - a tag of 4 to 7 runes may be 1 edit away, and one of 8 or more may
+    be 2;
+  - a suggestion is never shorter than the tag;
+  - tags that mean "no language" never warn: `text`, `txt`, `plain`,
+    `plaintext`, `none`, `output`, `tree`, `ascii`, `logs`.
+
+  Checked on 2026-10-15 against 50 common non-language tags, it gave no
+  false alarm, and it caught 27 of 30 common typos, missing `golnag`,
+  `rubyy` and `sqll`.
+- **`highlight:` in front matter** accepts `true` and `false`. Any other
+  value is warned about and highlighting stays on, as with other front
+  matter keys.
+
+### Decisions made while building
+
+- **Palettes**, `inserted` and `deleted` as colours of their own, and the
+  ΔE 12 rule over every pair of kinds: see [Colours](#colours).
+- **`--check-style`** checks each syntax colour's contrast on
+  `--code-bg`, holds comment, keyword, string, function and type at least
+  ΔE 8 from `--fg`, and holds every pair of the thirteen at least ΔE 12
+  apart.
+- **Clash warnings** are said once per run by the command line for
+  `--plugin` plugins, and on a page only for a clash its own `plugins:`
+  cause. One clash gives one warning, by scope name only when the two
+  share no name or alias.
+- **A site shell's `plugins:`** supply no grammars.
+- **A known-language fence with no coloured span** renders plain.
+- **A page with no highlighted fence** keeps its body, and its stylesheet
+  gains the style's `--syntax-*` settings: the owner's decision of
+  2026-10-15, since the spec contradicted itself. See
+  [Colours](#colours).
+- **`golang` is not an alias**, since the collection gives `go` none.
+- **`bicep` is left out** for failing conformance; 40 grammars are left out
+  for their licence.
+- **The 2 s budget** counts only a fence's own tokenizing, not time spent
+  waiting on the grammar's lock.
+- **The size budget** is 22 MB, from the largest common target.
+- **The untranslatable-pattern warning** names the grammar "or a grammar
+  it includes", because textmate-go's diagnostics carry no source grammar.
+
+### Costs as built
+
+- **Binary size.** A stripped darwin/arm64 build grew from 16.75 MB at
+  v0.12.0 to 19.12 MB, about +2.4 MB. Across platforms a stripped build
+  is 18.75 to 20.27 MB.
+- **Build time.** This repository's docs, 35 pages with 77 highlighted
+  fences, build in about 0.27 s, against 0.06 s with `--no-highlight`
+  (Apple Silicon, warm, three runs each). A page with one Markdown fence
+  takes 0.14 s, since that grammar embeds many others, and one with a Go
+  fence 0.02 s.
 
 ## Spike evidence
 
