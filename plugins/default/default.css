@@ -23,6 +23,19 @@
   --status-warning: #f1c10b;
   --status-serious: #f26a10;
   --status-critical: #dd2942;
+  --syntax-comment: #6f6179;
+  --syntax-keyword: #971240;
+  --syntax-string: #005543;
+  --syntax-number: #6f3601;
+  --syntax-constant: #780177;
+  --syntax-function: #2903f2;
+  --syntax-type: #9806c1;
+  --syntax-property: #014899;
+  --syntax-tag: #cf0479;
+  --syntax-attribute: #7d6200;
+  --syntax-inserted: #0a7b4b;
+  --syntax-deleted: #d90004;
+  --syntax-heading: #624bfd;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -50,6 +63,19 @@
     --status-warning: #f7ce3e;
     --status-serious: #ff9a52;
     --status-critical: #f96570;
+    --syntax-comment: #978f81;
+    --syntax-keyword: #fe9a86;
+    --syntax-string: #009f49;
+    --syntax-number: #ffba30;
+    --syntax-constant: #ca63b0;
+    --syntax-function: #5fb6fd;
+    --syntax-type: #9f87fd;
+    --syntax-property: #0e93c5;
+    --syntax-tag: #fe8ad6;
+    --syntax-attribute: #b4a704;
+    --syntax-inserted: #17eeb9;
+    --syntax-deleted: #e26a4c;
+    --syntax-heading: #cac3ff;
   }
 }
 
@@ -77,6 +103,19 @@
   --status-warning: #f7ce3e;
   --status-serious: #ff9a52;
   --status-critical: #f96570;
+  --syntax-comment: #978f81;
+  --syntax-keyword: #fe9a86;
+  --syntax-string: #009f49;
+  --syntax-number: #ffba30;
+  --syntax-constant: #ca63b0;
+  --syntax-function: #5fb6fd;
+  --syntax-type: #9f87fd;
+  --syntax-property: #0e93c5;
+  --syntax-tag: #fe8ad6;
+  --syntax-attribute: #b4a704;
+  --syntax-inserted: #17eeb9;
+  --syntax-deleted: #e26a4c;
+  --syntax-heading: #cac3ff;
 }
 
 :root[data-theme="light"] {
@@ -103,6 +142,19 @@
   --status-warning: #f1c10b;
   --status-serious: #f26a10;
   --status-critical: #dd2942;
+  --syntax-comment: #6f6179;
+  --syntax-keyword: #971240;
+  --syntax-string: #005543;
+  --syntax-number: #6f3601;
+  --syntax-constant: #780177;
+  --syntax-function: #2903f2;
+  --syntax-type: #9806c1;
+  --syntax-property: #014899;
+  --syntax-tag: #cf0479;
+  --syntax-attribute: #7d6200;
+  --syntax-inserted: #0a7b4b;
+  --syntax-deleted: #d90004;
+  --syntax-heading: #624bfd;
 }
 
 body {

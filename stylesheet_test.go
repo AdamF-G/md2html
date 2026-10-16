@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/AdamF-G/md2html/internal/charts"
+	"github.com/AdamF-G/md2html/internal/highlight"
 )
 
 // twoPlugins builds plugins "acme" (styles "plain", "shared", "blank") and
@@ -611,5 +612,38 @@ func TestStyleChosenConcurrent(t *testing.T) {
 	}
 	if len(got) != 20 || count["claude-artifact/claude-artifact"] != 10 || count["default/default"] != 10 {
 		t.Errorf("calls %v", count)
+	}
+}
+
+// Every syntax token is defined in every built-in style, in every theme
+// block, so highlighted code renders in every theme state. A style layered
+// on default would pass on default's blocks alone in the assembled sheet,
+// so each style's own files are counted.
+func TestBuiltinStylesDefineEverySyntaxToken(t *testing.T) {
+	want := map[string]bool{"default": true, "proof": true, "claude-artifact": true}
+	for _, p := range BuiltinPlugins() {
+		for _, style := range p.StyleNames() {
+			if !want[style] {
+				continue
+			}
+			delete(want, style)
+			var own strings.Builder
+			for _, f := range p.Styles[style].css {
+				b, err := p.readFile(f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				own.Write(b)
+			}
+			for _, k := range highlight.Kinds {
+				name := "--syntax-" + k.Name() + ":"
+				if n := strings.Count(own.String(), name); n < 4 {
+					t.Errorf("%s defines %s %d times, want it in all four theme blocks", style, name, n)
+				}
+			}
+		}
+	}
+	for style := range want {
+		t.Errorf("no built-in style %s", style)
 	}
 }

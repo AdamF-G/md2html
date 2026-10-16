@@ -65,6 +65,19 @@
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
+  --syntax-comment: #6e617b;
+  --syntax-keyword: #002cd2;
+  --syntax-string: #d60408;
+  --syntax-number: #7d6100;
+  --syntax-constant: #8b017f;
+  --syntax-function: #00544e;
+  --syntax-type: #5d01a7;
+  --syntax-property: #0066b7;
+  --syntax-tag: #c105aa;
+  --syntax-attribute: #703503;
+  --syntax-inserted: #09794c;
+  --syntax-deleted: #9c0238;
+  --syntax-heading: #660cfe;
   --measure: 65ch;
   --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -97,6 +110,19 @@
     --status-warning: #fab219;
     --status-serious: #ec835a;
     --status-critical: #d03b3b;
+    --syntax-comment: #89898a;
+    --syntax-keyword: #8ab1d8;
+    --syntax-string: #ff9166;
+    --syntax-number: #bd9402;
+    --syntax-constant: #ff81b9;
+    --syntax-function: #05b8a4;
+    --syntax-type: #ecb6ff;
+    --syntax-property: #0192d4;
+    --syntax-tag: #c762bb;
+    --syntax-attribute: #ffc66b;
+    --syntax-inserted: #50e3a5;
+    --syntax-deleted: #cf6c51;
+    --syntax-heading: #b991ff;
     color-scheme: dark;
   }
 }
@@ -126,6 +152,19 @@
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
+  --syntax-comment: #89898a;
+  --syntax-keyword: #8ab1d8;
+  --syntax-string: #ff9166;
+  --syntax-number: #bd9402;
+  --syntax-constant: #ff81b9;
+  --syntax-function: #05b8a4;
+  --syntax-type: #ecb6ff;
+  --syntax-property: #0192d4;
+  --syntax-tag: #c762bb;
+  --syntax-attribute: #ffc66b;
+  --syntax-inserted: #50e3a5;
+  --syntax-deleted: #cf6c51;
+  --syntax-heading: #b991ff;
   color-scheme: dark;
 }
 
@@ -156,6 +195,19 @@
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
+  --syntax-comment: #6e617b;
+  --syntax-keyword: #002cd2;
+  --syntax-string: #d60408;
+  --syntax-number: #7d6100;
+  --syntax-constant: #8b017f;
+  --syntax-function: #00544e;
+  --syntax-type: #5d01a7;
+  --syntax-property: #0066b7;
+  --syntax-tag: #c105aa;
+  --syntax-attribute: #703503;
+  --syntax-inserted: #09794c;
+  --syntax-deleted: #9c0238;
+  --syntax-heading: #660cfe;
   color-scheme: light;
 }
 
