@@ -18,11 +18,16 @@ list and properly styled tables.
 
 ```bash
 go install github.com/AdamF-G/md2html/cmd/md2html@latest
+```
+
+That needs Go 1.26 or later. Then point it at your documentation:
+
+```bash
 md2html ./docs -o ./site
 ```
 
-That needs Go 1.26 or later, and converts everything under `./docs`, plus
-anything it links to, into `./site`.
+That converts everything under `./docs`, plus anything it links to, into
+`./site`.
 
 ### The authoring skill for agents
 
@@ -32,13 +37,25 @@ the syntax is slightly off. The authoring skill teaches an agent the syntax
 that works and the traps to avoid, so what it writes renders the way it
 meant. It is a plain Agent Skills skill — a `SKILL.md` with a name and
 description — so nothing in it is specific to one agent. The binary carries
-the skill and installs it for you:
+the skill and installs it for you, with whichever one of these fits:
 
-```bash
-md2html --install-skill-user      # Claude Code, for you, under ~/.claude/skills
-md2html --install-skill-project   # Claude Code, for this repo, under ./.claude/skills
-md2html --install-skill DIR       # any agent, into the skills directory it reads
-```
+- Claude Code, for you, under `~/.claude/skills`:
+
+  ```bash
+  md2html --install-skill-user
+  ```
+
+- Claude Code, for this repo, under `./.claude/skills`:
+
+  ```bash
+  md2html --install-skill-project
+  ```
+
+- Any agent, into the skills directory it reads:
+
+  ```bash
+  md2html --install-skill DIR
+  ```
 
 Each writes `SKILL.md` into a `md2html-authoring` directory. The skill
 tells the agent when to look and what the silent traps are, and sends it to
@@ -513,8 +530,13 @@ in your Markdown as well as generated markup.
 prints the version it just installed:
 
 ```bash
-just install                        # to ~/.local/bin
-just bindir=/somewhere/else install # anywhere else
+just install
+```
+
+To install anywhere else, name the directory:
+
+```bash
+just bindir=/somewhere/else install
 ```
 
 It refuses to install into a directory that does not already exist, rather
