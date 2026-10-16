@@ -24,13 +24,15 @@ body { padding-top: 0; }
 
 .sidebar { font-size: 0.92rem; margin-bottom: 1.5rem; scrollbar-width: thin; }
 .sidebar .md2html-pages li { margin: 0.3rem 0; }
-.sidebar .md2html-pages a { color: var(--fg); }
+.sidebar .md2html-pages a { display: block; color: var(--fg); }
 .sidebar .md2html-pages a:hover { color: var(--accent); }
+/* The current page's bar sits in the gutter left of the text, a clear
+   gap from its first letter. */
 .sidebar .md2html-pages a[aria-current="page"] {
   color: var(--accent);
   box-shadow: inset 2px 0 0 var(--accent);
-  margin-left: -0.6rem;
-  padding-left: 0.6rem;
+  margin-left: -0.9rem;
+  padding-left: 0.9rem;
 }
 
 nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
@@ -70,7 +72,10 @@ nav[aria-label="Breadcrumb"] { margin-bottom: 1rem; }
     align-self: start;
     max-height: calc(100vh - 2rem);
     overflow-y: auto;
-    margin: 0;
+    /* A scrolling box clips what lies left of it, so the box reaches into
+       the gutter far enough to hold a top-level page's bar. */
+    margin: 0 0 0 -0.9rem;
+    padding-left: 0.9rem;
   }
   body > nav[aria-label="Breadcrumb"] { grid-area: crumbs; }
   body > main.md2html { grid-area: main; margin: 0; min-width: 0; }
