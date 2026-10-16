@@ -1,6 +1,7 @@
 // Package stylecheck measures a stylesheet's theme colours against the
-// rules md2html holds its styles to: WCAG contrast for text, and the
-// dataviz skill's checks for chart colours.
+// rules md2html holds its styles to: WCAG contrast for text and syntax
+// colours, separation checks for syntax colours, and the dataviz skill's
+// checks for chart colours.
 package stylecheck
 
 import (
@@ -43,13 +44,17 @@ type Finding struct {
 var Tokens = []string{"bg", "fg", "muted", "accent", "rule", "code-bg", "ok", "warn",
 	"chart-surface", "chart-grid", "chart-axis",
 	"series-1", "series-2", "series-3", "series-4", "series-5", "series-6", "series-7", "series-8",
-	"status-good", "status-warning", "status-serious", "status-critical"}
+	"status-good", "status-warning", "status-serious", "status-critical",
+	"syntax-comment", "syntax-keyword", "syntax-string", "syntax-number", "syntax-constant",
+	"syntax-function", "syntax-type", "syntax-property", "syntax-tag", "syntax-attribute",
+	"syntax-inserted", "syntax-deleted", "syntax-heading"}
 
 var (
 	textTokens   = []string{"fg", "muted", "accent", "ok", "warn"}
 	textGrounds  = []string{"bg", "code-bg"}
 	seriesTokens = append([]string(nil), Tokens[11:19]...)
 	statusTokens = append([]string(nil), Tokens[19:23]...)
+	syntaxTokens = append([]string(nil), Tokens[23:36]...)
 )
 
 // The thresholds. Those marked skill are the dataviz skill's own; the rest
@@ -64,6 +69,13 @@ const (
 	cvdTarget       = 8.0  // skill
 	statusApart     = 13.0
 	statusFromSerie = 4.5
+	// syntaxApart is a starting point, set so every built-in palette
+	// passes with margin.
+	syntaxApart = 8.0
+	// syntaxAdjacent is the least distance between any two syntax
+	// colours. Below it, two kinds side by side read as one; every
+	// built-in palette clears it.
+	syntaxAdjacent = 12.0
 )
 
 type band struct{ lo, hi float64 }
@@ -219,6 +231,43 @@ func Check(css string) []Finding {
 					add(Error, theme, fmt.Sprintf("%s --%s on --%s is %s:1, under 3:1", theme, t, g, down(r, 2)), t, g)
 				case r < textWarning:
 					add(Warning, theme, fmt.Sprintf("%s --%s on --%s is %s:1, under 4.5:1 (WCAG AA)", theme, t, g, down(r, 2)), t, g)
+				}
+			}
+		}
+
+		// Syntax colours are only ever text in a code block, so they are
+		// measured on --code-bg alone.
+		for _, t := range syntaxTokens {
+			if !both(t, "code-bg") {
+				continue
+			}
+			r := contrast(c[t], c["code-bg"])
+			switch {
+			case r < textError:
+				add(Error, theme, fmt.Sprintf("%s --%s on --code-bg is %s:1, under 3:1", theme, t, down(r, 2)), t, "code-bg")
+			case r < textWarning:
+				add(Warning, theme, fmt.Sprintf("%s --%s on --code-bg is %s:1, under 4.5:1 (WCAG AA)", theme, t, down(r, 2)), t, "code-bg")
+			}
+		}
+
+		// A palette that passes contrast can still show nothing: the kinds
+		// most code is made of must stand apart from plain text.
+		for _, a := range []string{"syntax-comment", "syntax-keyword", "syntax-string", "syntax-function", "syntax-type"} {
+			if both(a, "fg") {
+				if d := deltaE(c[a], c["fg"], normal); d < syntaxApart {
+					add(Warning, theme, fmt.Sprintf("%s --%s is ΔE %s from --fg, under 8", theme, a, down(d, 1)), a, "fg")
+				}
+			}
+		}
+		// Any two kinds can sit side by side, and embedded languages make it
+		// hard to say which will, so every pair must be told apart.
+		for i, a := range syntaxTokens {
+			for _, b := range syntaxTokens[i+1:] {
+				if !both(a, b) {
+					continue
+				}
+				if d := deltaE(c[a], c[b], normal); d < syntaxAdjacent {
+					add(Warning, theme, fmt.Sprintf("%s --%s and --%s are ΔE %s apart, under 12", theme, a, b, down(d, 1)), a, b)
 				}
 			}
 		}

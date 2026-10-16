@@ -8,7 +8,8 @@ import (
 )
 
 // The dataviz skill's reference palette, as claude-artifact sets it, with
-// the page colours claude-artifact pairs it with.
+// the page colours claude-artifact pairs it with, and claude-artifact's
+// syntax colours.
 var referenceLight = map[string]string{
 	"bg": "#f4f6f8", "fg": "#1b2027", "muted": "#56616d", "accent": "#2c5a85", "rule": "#d9dfe6",
 	"code-bg": "#e9edf1", "ok": "#2c6b45", "warn": "#a8540d",
@@ -16,6 +17,10 @@ var referenceLight = map[string]string{
 	"series-1": "#2a78d6", "series-2": "#eb6834", "series-3": "#1baf7a", "series-4": "#eda100",
 	"series-5": "#e87ba4", "series-6": "#008300", "series-7": "#6250d6", "series-8": "#e34948",
 	"status-good": "#0ca30c", "status-warning": "#fab219", "status-serious": "#ec835a", "status-critical": "#d03b3b",
+	"syntax-comment": "#6e617b", "syntax-keyword": "#002cd2", "syntax-string": "#d60408", "syntax-number": "#7d6100",
+	"syntax-constant": "#8b017f", "syntax-function": "#00544e", "syntax-type": "#5d01a7", "syntax-property": "#0066b7",
+	"syntax-tag": "#c105aa", "syntax-attribute": "#703503", "syntax-inserted": "#09794c", "syntax-deleted": "#9c0238",
+	"syntax-heading": "#660cfe",
 }
 
 var referenceDark = map[string]string{
@@ -25,6 +30,10 @@ var referenceDark = map[string]string{
 	"series-1": "#3987e5", "series-2": "#d95926", "series-3": "#199e70", "series-4": "#c98500",
 	"series-5": "#d55181", "series-6": "#008300", "series-7": "#9085e9", "series-8": "#e66767",
 	"status-good": "#0ca30c", "status-warning": "#fab219", "status-serious": "#ec835a", "status-critical": "#d03b3b",
+	"syntax-comment": "#89898a", "syntax-keyword": "#8ab1d8", "syntax-string": "#ff9166", "syntax-number": "#bd9402",
+	"syntax-constant": "#ff81b9", "syntax-function": "#05b8a4", "syntax-type": "#ecb6ff", "syntax-property": "#0192d4",
+	"syntax-tag": "#c762bb", "syntax-attribute": "#ffc66b", "syntax-inserted": "#50e3a5", "syntax-deleted": "#cf6c51",
+	"syntax-heading": "#b991ff",
 }
 
 // sheet writes light and dark into the four theme blocks, as the guide
@@ -199,6 +208,10 @@ func TestEachRule(t *testing.T) {
 			"warning: light --status-good and --status-serious are ΔE 11.4 apart, under 13\n"},
 		{"status copies a series", map[string]string{"series-8": "#d03c3c"}, nil,
 			"warning: light --status-critical is ΔE 0.1 from --series-8, under 4.5\n"},
+		{"syntax under 4.5:1", nil, map[string]string{"syntax-property": "#1b71bc"},
+			"warning: dark --syntax-property on --code-bg is 3.23:1, under 4.5:1 (WCAG AA)\n"},
+		{"syntax kinds alike", map[string]string{"syntax-type": "#d10407"}, nil,
+			"warning: light --syntax-string and --syntax-type are ΔE 1.0 apart, under 12\n"},
 	} {
 		got := messages(Check(sheet(referenceLight, referenceDark, x.light, x.dark)))
 		if got != x.want {
@@ -584,5 +597,66 @@ func TestRootSelectorCase(t *testing.T) {
 	want := fmt.Sprintf("%d:a=1 %d:b=2 %d:c=3 ", darkRootBlock, mediaBlock, darkBlock)
 	if got := shape(readBlocks(css)); got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
+func TestSyntaxTokensAreTextOnCodeBg(t *testing.T) {
+	fs := Check(sheet(referenceLight, referenceDark, map[string]string{"syntax-keyword": "#e9edf1"}, nil))
+	if !strings.Contains(messages(fs), "error: light --syntax-keyword on --code-bg is 1.00:1, under 3:1") {
+		t.Errorf("findings:\n%s", messages(fs))
+	}
+}
+
+func TestSyntaxKindsMustBeApart(t *testing.T) {
+	fs := Check(sheet(referenceLight, referenceDark,
+		map[string]string{"syntax-string": referenceLight["syntax-keyword"]}, nil))
+	if !strings.Contains(messages(fs), "warning: light --syntax-keyword and --syntax-string are ΔE 0.0 apart, under 12") {
+		t.Errorf("findings:\n%s", messages(fs))
+	}
+}
+
+func TestSyntaxKindMustStandApartFromFg(t *testing.T) {
+	fs := Check(sheet(referenceLight, referenceDark,
+		map[string]string{"syntax-comment": referenceLight["fg"]}, nil))
+	if !strings.Contains(messages(fs), "warning: light --syntax-comment is ΔE 0.0 from --fg, under 8") {
+		t.Errorf("findings:\n%s", messages(fs))
+	}
+}
+
+// Only the five kinds most code is made of are held apart from --fg.
+func TestFgSeparationCoversFiveKinds(t *testing.T) {
+	fs := Check(sheet(referenceLight, referenceDark,
+		map[string]string{"syntax-tag": referenceLight["fg"]}, nil))
+	if strings.Contains(messages(fs), "from --fg") {
+		t.Errorf("findings:\n%s", messages(fs))
+	}
+}
+
+// Every pair of syntax tokens is measured, not only the five kinds.
+func TestEverySyntaxPairMustBeApart(t *testing.T) {
+	got := messages(Check(sheet(referenceLight, referenceDark,
+		map[string]string{"syntax-tag": referenceLight["syntax-attribute"]}, nil)))
+	if want := "warning: light --syntax-tag and --syntax-attribute are ΔE 0.0 apart, under 12\n"; got != want {
+		t.Errorf("got %s\nwant %s", got, want)
+	}
+}
+
+// A pair is measured on what each token resolves to, so two tokens
+// written differently can still collide.
+func TestSyntaxPairCollidesAfterVarResolution(t *testing.T) {
+	got := messages(Check(sheet(referenceLight, referenceDark,
+		nil, map[string]string{"syntax-deleted": "var(--syntax-heading)"})))
+	if want := "warning: dark --syntax-deleted and --syntax-heading are ΔE 0.0 apart, under 12\n"; got != want {
+		t.Errorf("got %s\nwant %s", got, want)
+	}
+}
+
+// A token that is not set is reported once as not set, and never as part
+// of a pair.
+func TestUnsetSyntaxTokenIsNotAPair(t *testing.T) {
+	got := messages(Check(sheet(referenceLight, referenceDark,
+		map[string]string{"syntax-tag": ""}, map[string]string{"syntax-tag": ""})))
+	if want := "warning: --syntax-tag is not set\n"; got != want {
+		t.Errorf("got %s\nwant %s", got, want)
 	}
 }
