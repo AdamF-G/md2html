@@ -1,10 +1,10 @@
 ---
-title: Accessibility follow-ups
+title: Accessibility Follow-Ups
 subtitle: two gaps found while planning fence line capture, deliberately not folded into it
 date: 2026-09-13
 ---
 
-# Accessibility follow-ups
+# Accessibility Follow-Ups
 
 **Status:** Both shipped. Item 1 took the fixed label recommended below,
 with Pandoc's `toc-title` front matter key as the override for a page in

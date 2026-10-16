@@ -1,4 +1,4 @@
-# Extended content model — feature backlog
+# Extended Content Model — Feature Backlog
 
 **Date:** 2026-09-11
 **Status:** All nine items shipped. Item 1 (structured diagram fence) was

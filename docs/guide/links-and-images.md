@@ -1,7 +1,7 @@
 ---
 nav-order: 4
 ---
-# Links and images
+# Links and Images
 
 **Link to the `.md` file.** md2html rewrites it to the page it emits and
 works out the relative path:

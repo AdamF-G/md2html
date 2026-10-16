@@ -1,10 +1,10 @@
 ---
-title: Fence line capture
+title: Fence Line Capture
 subtitle: owning the ::: fence line, and the four traps that come from not owning it
 date: 2026-09-13
 ---
 
-# Fence line capture
+# Fence Line Capture
 
 **Status:** Shipped in v0.3.0, with the `nav` kind and `aria-` names from
 §5.5. The nested-fence trap stays documented under Traps in the authoring

@@ -700,7 +700,7 @@ func TestGuideSummaryHoldsTheQuickReferenceAndTraps(t *testing.T) {
 			t.Errorf("summary is missing the whole %s section", name)
 		}
 	}
-	for _, not := range []string{"# Page structure", "## Nesting fences", "\n[[toc]]\n"} {
+	for _, not := range []string{"# Page Structure", "## Nesting fences", "\n[[toc]]\n"} {
 		if strings.Contains(sum, not) {
 			t.Errorf("summary carries %q", not)
 		}

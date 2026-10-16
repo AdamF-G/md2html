@@ -1,7 +1,7 @@
 ---
 nav-order: 6
 ---
-# Code blocks
+# Code Blocks
 
 ## Nesting fences
 

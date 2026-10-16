@@ -1,7 +1,7 @@
 ---
 nav-order: 9
 ---
-# Inline marks
+# Inline Marks
 
 ## Status badges and spans
 

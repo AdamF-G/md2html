@@ -1,4 +1,4 @@
-# Design notes
+# Design Notes
 
 Each note is the design a feature was built from: the problem, the
 principles, and the decisions that settled it. They are written before the

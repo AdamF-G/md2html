@@ -1,4 +1,4 @@
-# Fences inside Markdown fences — Design
+# Fences Inside Markdown Fences — Design
 
 **Date:** 2026-10-16
 **Author:** AdamF-G

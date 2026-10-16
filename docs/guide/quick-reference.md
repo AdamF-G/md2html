@@ -1,11 +1,11 @@
 ---
 nav-order: 1
 ---
-# Quick reference
+# Quick Reference
 
 The most common needs first. Each row is the form to write; where a
 construct has other spellings, they are under
-[Choosing between forms](choosing-between-forms.md).
+[Choosing Between Forms](choosing-between-forms.md).
 
 | Need | Write |
 |---|---|

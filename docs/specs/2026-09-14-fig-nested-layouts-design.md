@@ -1,10 +1,10 @@
 ---
-title: "fig nested layouts"
+title: "fig Nested Layouts"
 subtitle: cols and split as items, and a card that panel position draws
 date: 2026-09-14
 ---
 
-# fig nested layouts
+# `fig` Nested Layouts
 
 **Date:** 2026-09-14
 **Author:** AdamF-G

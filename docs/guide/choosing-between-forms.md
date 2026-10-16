@@ -1,7 +1,7 @@
 ---
 nav-order: 11
 ---
-# Choosing between forms
+# Choosing Between Forms
 
 Where a construct has several spellings, write the default:
 

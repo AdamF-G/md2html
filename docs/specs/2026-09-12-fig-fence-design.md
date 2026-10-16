@@ -1,4 +1,4 @@
-# Structured diagram fence — Design
+# Structured Diagram Fence — Design
 
 **Date:** 2026-09-12
 **Author:** AdamF-G

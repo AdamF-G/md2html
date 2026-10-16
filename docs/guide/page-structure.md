@@ -1,7 +1,7 @@
 ---
 nav-order: 3
 ---
-# Page structure
+# Page Structure
 
 ## Front matter
 

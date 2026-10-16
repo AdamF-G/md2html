@@ -1,4 +1,4 @@
-# Syntax highlighting — Design
+# Syntax Highlighting — Design
 
 **Date:** 2026-10-14
 **Author:** AdamF-G

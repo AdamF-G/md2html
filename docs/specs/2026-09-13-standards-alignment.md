@@ -1,10 +1,10 @@
 ---
-title: Standards alignment
+title: Standards Alignment
 subtitle: what our Markdown extensions share with prior art, and what to change
 date: 2026-09-13
 ---
 
-# Standards alignment
+# Standards Alignment
 
 **Status:** Shipped. The five changes in §3 and the compatibility suite in
 §5 shipped in v0.3.0, and the `fig` split in §4 in v0.6.0.

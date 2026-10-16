@@ -1,7 +1,7 @@
 ---
 nav-order: 2
 ---
-# Silent traps
+# Silent Traps
 
 Each of these gives valid output, a zero exit and no warning. Check for them
 before you finish.
@@ -14,7 +14,7 @@ before you finish.
    and all.
 3. **Link to the `.md` source, never the `.html` output.** An `.html` link
    is never matched to the page md2html emits, and when the file exists
-   nothing warns. See [Links and images](links-and-images.md).
+   nothing warns. See [Links and Images](links-and-images.md).
 4. **Only the first class names a container's kind.** `::: {.compact
    .warning}` is a plain, unstyled div; write `::: warning {.compact}`.
 5. **A container class outside the shipped kinds is unstyled.**

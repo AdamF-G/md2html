@@ -1,4 +1,4 @@
-# Style check — Design
+# Style Check — Design
 
 **Date:** 2026-10-13
 **Author:** AdamF-G

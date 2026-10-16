@@ -1,10 +1,10 @@
 ---
-title: "fig vocabulary extensions"
+title: "fig Vocabulary Extensions"
 subtitle: one new kind, four new modifiers, and the rule that makes a panel a group
 date: 2026-09-14
 ---
 
-# fig vocabulary extensions
+# `fig` Vocabulary Extensions
 
 **Date:** 2026-09-14
 **Author:** AdamF-G

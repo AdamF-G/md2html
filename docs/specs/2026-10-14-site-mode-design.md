@@ -1,4 +1,4 @@
-# Site mode — Design
+# Site Mode — Design
 
 **Date:** 2026-10-14
 **Author:** AdamF-G

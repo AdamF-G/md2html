@@ -12,7 +12,7 @@ this one from a single Markdown shell page.
   styles, sites, and every warning md2html gives. The same guide prints in
   a terminal with `md2html --guide`.
 - [What changed in each release](../CHANGELOG.md)
-- [Design notes](specs/index.md), the reasoning behind each feature
+- [Design Notes](specs/index.md), the reasoning behind each feature
 
 This site is built by md2html itself, from [its shell](site/shell.md):
 `just site`.
