@@ -36,6 +36,7 @@ type Site struct {
 	root      *siteNode
 	bySrc     map[string]*siteNode
 	order     []*siteNode
+	dirs      map[string]*siteNode // directory nodes by site path, while the tree is built
 
 	mu          sync.Mutex
 	entries     []searchEntry   // the search index, in arrival order
@@ -46,20 +47,22 @@ type Site struct {
 // siteNode is one place in the tree: a page, or a directory, which has a
 // page when it holds an index.md.
 type siteNode struct {
-	name     string // file stem or directory name
-	label    string
-	section  string // slug of the top-level node holding it; "" at the root
-	path     string // a directory's path, for warnings
-	doc      *Doc
-	isDir    bool
-	hidden   bool
-	hasOrder bool
-	order    int
-	navSort  string // "links": the children are ordered by this page's links
-	linkRank int    // the place of this node's first link in its parent's page
-	hasRank  bool
-	parent   *siteNode
-	children []*siteNode
+	name       string // file stem or directory name
+	label      string
+	section    string // slug of the top-level node holding it; "" at the root
+	path       string // a directory's path, for warnings
+	doc        *Doc
+	isDir      bool
+	hidden     bool
+	hasOrder   bool
+	order      int
+	navSort    string // "links": the children are ordered by this page's links
+	linkRank   int    // the place of this node's first link in its parent's page
+	hasRank    bool
+	navSortSet bool   // the page set nav-sort: itself, so a mount's does not reach it
+	sitePath   string // a directory's site path, for messages
+	parent     *siteNode
+	children   []*siteNode
 }
 
 // BuildSite lays out the site for a crawl, with the page at shell as the
@@ -99,6 +102,11 @@ func BuildSite(res *CrawlResult, shell string, opt CrawlOptions) (*Site, error) 
 		return nil, fmt.Errorf("%s needs exactly one [[content]] marker; it has %d", shell, contents)
 	}
 	s.shellTOC = len(findTOCMarkers(parsed)) > 0
+	for _, m := range opt.Mounts {
+		if m.TOC == "shell" && !s.shellTOC {
+			return nil, fmt.Errorf(`%s: toc="shell" needs a [[toc]] in the shell, whose list replaces the pages' own`, m.From)
+		}
+	}
 	for _, f := range strings.Split(s.shellMeta["search-facets"], ",") {
 		if f = strings.ToLower(strings.TrimSpace(f)); f != "" {
 			s.facets = append(s.facets, f)
@@ -154,6 +162,7 @@ func (s *Site) buildTree(docs []Doc) {
 	s.root = &siteNode{isDir: true, path: s.base}
 	s.bySrc = map[string]*siteNode{}
 	dirs := map[string]*siteNode{"": s.root}
+	s.dirs = dirs
 	var dirFor func(rel string) *siteNode
 	dirFor = func(rel string) *siteNode {
 		if n, ok := dirs[rel]; ok {
@@ -164,7 +173,7 @@ func (s *Site) buildTree(docs []Doc) {
 			parentRel = ""
 		}
 		parent := dirFor(parentRel)
-		n := &siteNode{name: path.Base(rel), isDir: true, parent: parent,
+		n := &siteNode{name: path.Base(rel), isDir: true, parent: parent, sitePath: rel,
 			path: filepath.Join(s.base, filepath.FromSlash(rel))}
 		parent.children = append(parent.children, n)
 		dirs[rel] = n
@@ -192,11 +201,18 @@ func (s *Site) buildTree(docs []Doc) {
 		s.bySrc[d.Src] = n
 		s.applyMeta(n, d)
 	}
+	s.applyMounts()
 	var finish func(n *siteNode)
 	finish = func(n *siteNode) {
 		if n.isDir && n.doc == nil {
-			n.label = n.name
-			if n != s.root {
+			if n.label == "" {
+				n.label = n.name
+			}
+			switch {
+			case n == s.root:
+			case len(s.crawl.Mounts) > 0:
+				s.warn(s.shellSrc, fmt.Sprintf("site directory %s has no index.md; the site lists it by its name", n.sitePath))
+			default:
 				s.warn(n.path, "has no index.md; the site lists it by its directory name")
 			}
 		}
@@ -260,15 +276,69 @@ func (s *Site) applyMeta(n *siteNode, d *Doc) {
 		s.warn(d.Src, fmt.Sprintf("front matter nav %q is not hidden; ignoring it", v))
 	}
 	switch v := d.Meta["nav-sort"]; v {
-	case "", "label":
-	case "links":
-		if n.isDir {
+	case "":
+	case "label", "links":
+		if !n.isDir {
+			if v == "links" {
+				s.warn(d.Src, "front matter nav-sort applies to a directory's index.md, which orders the directory; ignoring it")
+			}
+			break
+		}
+		n.navSortSet = true
+		if v == "links" {
 			n.navSort = v
-		} else {
-			s.warn(d.Src, "front matter nav-sort applies to a directory's index.md, which orders the directory; ignoring it")
 		}
 	default:
 		s.warn(d.Src, fmt.Sprintf("front matter nav-sort %q is not links or label; ordering by label", v))
+	}
+}
+
+// applyMounts gives each mount's node the mount's settings, over the page's
+// own: its label and place among its siblings, and how a directory's
+// children are ordered, which reaches every directory below it up to one
+// that sets its own, whose setting holds for its subtree.
+func (s *Site) applyMounts() {
+	for i := range s.crawl.Mounts {
+		m := &s.crawl.Mounts[i]
+		var n *siteNode
+		if m.IsDir {
+			n = s.dirs[m.Path]
+		} else if m.Path == "" {
+			n = s.root
+		} else {
+			n = s.bySrc[m.Source]
+		}
+		if n == nil {
+			continue
+		}
+		if m.NavTitle != "" {
+			n.label = m.NavTitle
+		}
+		if m.HasNavOrder {
+			n.order, n.hasOrder = m.NavOrder, true
+		}
+		if m.NavSort == "" {
+			continue
+		}
+		sortAs := ""
+		if m.NavSort == "links" {
+			sortAs = "links"
+		}
+		n.navSort, n.navSortSet = sortAs, true
+		var below func(d *siteNode)
+		below = func(d *siteNode) {
+			for _, c := range d.children {
+				if !c.isDir {
+					continue
+				}
+				if c.navSortSet {
+					continue // the nearest setting wins, for its whole subtree
+				}
+				c.navSort = sortAs
+				below(c)
+			}
+		}
+		below(n)
 	}
 }
 
