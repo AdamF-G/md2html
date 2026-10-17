@@ -172,12 +172,11 @@ func (s *Site) buildTree(docs []Doc) {
 	}
 	for i := range docs {
 		d := &docs[i]
-		rel, err := filepath.Rel(s.base, d.Src)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		rel := d.SitePath
+		if rel == "" {
 			s.warn(d.Src, fmt.Sprintf("is outside the site's root %s; it is written but has no place in the site's navigation", s.base))
 			continue
 		}
-		rel = filepath.ToSlash(rel)
 		dirRel := path.Dir(rel)
 		if dirRel == "." {
 			dirRel = ""

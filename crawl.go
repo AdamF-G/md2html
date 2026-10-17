@@ -70,6 +70,11 @@ type Doc struct {
 	Src string
 	// Out is the absolute destination path for the generated HTML.
 	Out string
+	// SitePath is the page's place in a site: a slash path from the site's
+	// root, with its source's extension, such as "guide/sites.md". It is
+	// the page's path under Base, or, in a mounted site, under its mount's
+	// path; "" for a page the site has no place for.
+	SitePath string
 	// LinkMap maps an href exactly as written in this document to its
 	// replacement. Populated by buildLinkMaps.
 	LinkMap map[string]string
@@ -497,7 +502,8 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 
 	sort.Strings(order)
 	for _, s := range order {
-		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir),
+		sp, _ := relUnder(base, s)
+		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir), SitePath: sp,
 			Meta: metaBySrc[s], Title: titleBySrc[s]})
 	}
 	// Two distinct sources can map to one output path: a.md and a.markdown

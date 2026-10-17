@@ -233,6 +233,25 @@ func mustCrawl(t *testing.T, opt CrawlOptions) *CrawlResult {
 	return res
 }
 
+// Every page the crawl finds has a site path, its place in the site's tree:
+// its path under the run's base, or none for a page pulled in from outside
+// it.
+func TestCrawlGivesEachPageASitePath(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/index.md":   "# Home\n\n[out](../outside.md)\n",
+		"docs/guide/a.md": "# A\n",
+		"outside.md":      "# Outside\n",
+	})
+	res := mustCrawl(t, CrawlOptions{Entries: []string{filepath.Join(root, "docs")}, OutDir: filepath.Join(root, "out"), Depth: -1, LinkDepth: -1})
+	got := map[string]string{}
+	for _, d := range res.Docs {
+		got[filepath.Base(d.Src)] = d.SitePath
+	}
+	if got["index.md"] != "index.md" || got["a.md"] != "guide/a.md" || got["outside.md"] != "" {
+		t.Errorf("site paths %v", got)
+	}
+}
+
 // A directory symlink pointing at an ancestor must not loop forever.
 func TestCrawlTerminatesOnSymlinkLoop(t *testing.T) {
 	root := writeTree(t, map[string]string{"docs/a.md": "# A"})
