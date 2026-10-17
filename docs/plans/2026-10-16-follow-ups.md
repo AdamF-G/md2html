@@ -1,6 +1,6 @@
-# Follow-ups from Order by Links, Site Links, Mounts and Directory Pages
+# Follow-ups from Order by Links, Site Links, Mounts, Directory Pages and Site-Path Links
 
-Findings the reviews of four plans graded minor and deferred, kept for a
+Findings the reviews of five plans graded minor and deferred, kept for a
 later fix pass. Each says what a reader or user meets; none blocked the
 work it was found in. Tick one off by fixing it, or by deciding it stands
 and saying why.
@@ -8,8 +8,10 @@ and saying why.
 - Plans: [Order by Links](2026-10-16-order-by-links.md),
   [Site Links and Assets](2026-10-16-site-links-and-assets.md),
   [Mounts](2026-10-17-mounts.md),
-  [Directory Pages](2026-10-17-directory-pages.md)
-- Spec: [Mounts](../specs/2026-10-16-mounts-design.md)
+  [Directory Pages](2026-10-17-directory-pages.md),
+  [Site-Path Links](2026-10-16-site-path-links.md)
+- Specs: [Mounts](../specs/2026-10-16-mounts-design.md),
+  [Site-Path Links](../specs/2026-10-16-site-path-links-design.md)
 
 ## Order by links (`nav-sort: links`)
 
@@ -198,3 +200,34 @@ and saying why.
   README in the tree test; `from="page"` on a README page, nested depth,
   a hidden child; non-ASCII or empty items in `TestTitleCase`; directory
   links in a mounted, hoisted or excluded directory, or a loaded one.
+
+## Site-path links: behaviour
+
+- [ ] A link to a page that is then dropped as unreadable is neither
+  rewritten nor reported as missing; only the target's own "unreadable"
+  warning names the cause (`crawl.go`, `crawlMounts`).
+- [ ] A link to a directory whose name has a dot, written without a
+  trailing slash (`../v1.2`), is read as a file and reaches nothing, so it
+  warns (`sitelinks.go`, `inSite`); `../v1.2/` reaches the page.
+- [ ] `nav-sort: links` ranks an index's links by where they resolve on
+  disk, so a site-path link in a generated index does not rank its target.
+
+## Site-path links: code and tests
+
+- [ ] `inSite` builds the directory-page result in two places; the
+  `leaving` doc comment puts the source-root note before the `fromSite`
+  one; the `os.Stat` fallback to "file" in `leaving` has no comment; the
+  `warningTexts` test helper sits after its first user.
+- [ ] No tests: `inSite` with a `?query`, a malformed `%zz` or `./` from the
+  root, and `indexPages`' tables directly; a loaded link, or a fragment, to
+  an excluded target; a directory above the source root under `link`, a
+  loaded directory link, and a held directory without a page under
+  `unlink` and `error`; the shadowed-link clause on the above-source-root
+  unlink and under `error` for a directory.
+- [ ] `TestSitePathLinksPassExcludedTargets`' `../reference/` case passes
+  without the excluded rule, since the excluded directory's own place is
+  the reference section's; `TestExcludedDirectoryWithNoPageLeavesTheSite`
+  is what pins the rule.
+- [ ] `TestEveryWarningIsInTheGuide` reads the shadowed-link clause as a
+  `%s`, so it checks the `linked …` warning's start and not the clause's
+  wording.
