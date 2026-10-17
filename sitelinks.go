@@ -22,7 +22,8 @@ type siteRules struct {
 	unmounted  string // link, unlink or error
 	noAssets   bool   // copy nothing, and leave what would be copied as written
 	excluded   exclusions
-	mounts     []mountRule // a mounted site's mounts; nil without mounts
+	mounts     []mountRule     // a mounted site's mounts; nil without mounts
+	dirs       map[string]bool // site directories that hold a page, by site path
 }
 
 // mountRule is a mount with its own excludes resolved.
@@ -217,7 +218,12 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 		return linkAction{} // missing: the crawl warned
 	}
 	if fi.IsDir() {
-		return linkAction{} // a directory is not a file to copy or link
+		// A link a reader follows to a directory the site holds reaches
+		// the directory's page; any other directory is left as written.
+		if out, ok := r.dirPage(target); ok && !l.Loaded {
+			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
+		}
+		return linkAction{}
 	}
 	if excluded {
 		if l.Kind == LinkDoc || !l.Loaded {
@@ -278,6 +284,23 @@ func (r *siteRules) leaving(l Link, target string) linkAction {
 		return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s: it is outside the source root %s, so repo-url: has no path for it; its text is kept", l.Href, r.sourceRoot)}
 	}
 	return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s, which is outside the site; its text is kept", l.Href)}
+}
+
+// dirPage is the output of the page of the directory target, when the site
+// holds the directory and it holds a page: every such directory's page is
+// at its index.html.
+func (r *siteRules) dirPage(target string) (string, bool) {
+	sp, ok := r.place(target)
+	if !ok {
+		return "", false
+	}
+	if sp == "." {
+		sp = ""
+	}
+	if !r.dirs[sp] {
+		return "", false
+	}
+	return filepath.Join(r.outDir, filepath.FromSlash(sp), "index.html"), true
 }
 
 // relUnder returns target's slash-separated path from root, and whether it

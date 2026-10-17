@@ -224,10 +224,11 @@ func TestSiteCrawlWritesAREADMEPageAtItsIndex(t *testing.T) {
 	}
 }
 
-// A link to a directory is left as written, in the site or out of it.
-func TestSiteCrawlLeavesDirectoryLinksAlone(t *testing.T) {
+// A link to a directory the site holds reaches the directory's page; one to
+// any other directory is left as written.
+func TestSiteCrawlLinksADirectoryToItsPage(t *testing.T) {
 	files := map[string]string{
-		"docs/index.md":     "# Home\n\n[here](./) [sub](sub/) [up](../)\n\n![flow](img/flow.png)\n",
+		"docs/index.md":     "# Home\n\n[here](./) [sub](sub/#top) [up](../) [img](img/)\n\n![flow](img/flow.png)\n",
 		"docs/sub/page.md":  "# Sub\n",
 		"docs/img/flow.png": "png",
 	}
@@ -236,7 +237,13 @@ func TestSiteCrawlLeavesDirectoryLinksAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	idx := docByBase(res.Docs, "index.md")
-	for _, href := range []string{"./", "sub/", "../"} {
+	if got := idx.AnchorLinkMap["./"]; got != "index.html" {
+		t.Errorf("./ -> %q", got)
+	}
+	if got := idx.AnchorLinkMap["sub/#top"]; got != "sub/index.html#top" {
+		t.Errorf("sub/#top -> %q", got)
+	}
+	for _, href := range []string{"../", "img/"} {
 		if _, ok := idx.AnchorLinkMap[href]; ok || idx.AnchorLinkDrops[href] {
 			t.Errorf("%s was rewritten or dropped", href)
 		}

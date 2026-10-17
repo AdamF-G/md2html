@@ -628,6 +628,22 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 			fails = append(fails, src+": "+f+" (unmounted: error)")
 		}
 	}
+	if res.rules != nil {
+		// Every directory that holds a page has one at its index.html: its
+		// own, a README written there, or the one BuildSite writes.
+		res.rules.dirs = map[string]bool{}
+		for _, d := range res.Docs {
+			if d.SitePath == "" {
+				continue
+			}
+			for r := sitePathDir(d.SitePath); ; r = sitePathDir(r) {
+				res.rules.dirs[r] = true
+				if r == "" {
+					break
+				}
+			}
+		}
+	}
 	for i := range res.Docs {
 		d := &res.Docs[i]
 		p := planLinks(linksBySrc[d.Src], d.Out, outBySrc, opt, res.rules)

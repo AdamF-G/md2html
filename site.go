@@ -525,8 +525,32 @@ func (s *Site) rankByLinks(dir *siteNode) {
 			bySrc[c.doc.Src] = c
 		}
 	}
+	byDir := map[string]*siteNode{}
+	for _, c := range dir.children {
+		if c.isDir {
+			byDir[c.sitePath] = c
+		}
+	}
 	rank := 0
 	for _, l := range ExtractLinks(root, filepath.Dir(dir.doc.Src)) {
+		if l.Kind == LinkDoc || l.Kind == LinkAsset {
+			if target, err := resolve(l.Abs); err == nil {
+				if fi, err := os.Stat(target); err == nil && fi.IsDir() {
+					var sp string
+					var ok bool
+					if s.rules != nil {
+						sp, ok = s.rules.place(target)
+					} else {
+						sp, ok = relUnder(s.base, target)
+					}
+					if c := byDir[sp]; ok && c != nil && !c.hasRank {
+						c.linkRank, c.hasRank = rank, true
+						rank++
+					}
+					continue
+				}
+			}
+		}
 		if l.Kind != LinkDoc {
 			continue
 		}
