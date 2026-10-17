@@ -78,6 +78,14 @@ major version instead.
 - Under a site shell, a page with `toc: none` gets no contents list from
   the shell's `[[toc]]`; before, it only kept `--autotoc` away.
 
+### Fixed
+
+- Under the `proof` style, a `[[search]]` in a site's header showed its
+  results only as far as the header's bottom edge: the clip that kept
+  the header's band of ink from spilling above and below cut off the
+  dropdown too. The band is now painted without a clip, and the results
+  hang over the page.
+
 ## v0.13.0 — 2026-10-16
 
 ### Added

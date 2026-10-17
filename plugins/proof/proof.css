@@ -147,13 +147,13 @@ h1, h2, h3, h4 {
 }
 
 /* A band of ink the full width of the window, though the header's content
-   keeps to the page's column: the shadow paints the band past the header's
-   own box, and the clip keeps it from spilling above or below. */
+   keeps to the page's column: the border image paints the band out past
+   the header's own box to the left and right, and nothing above or below.
+   It clips nothing, so a search's results still hang below the band. */
 body > header {
   background: var(--band);
   color: var(--band-fg);
-  box-shadow: 0 0 0 100vmax var(--band);
-  clip-path: inset(0 -100vmax);
+  border-image: conic-gradient(var(--band) 0 0) fill 0 / / 0 100vmax;
 }
 body > header > p a {
   color: var(--band-fg);

@@ -3866,3 +3866,39 @@ func TestBrowserSyntaxColoursFollowTheTheme(t *testing.T) {
 		}
 	}
 }
+
+// A dropdown hangs below the header that holds it, so nothing the header
+// does to paint itself may clip what it holds: proof's band of ink is the
+// header's, and the results over the page are still the results.
+func TestBrowserSearchResultsShowBelowAProofHeader(t *testing.T) {
+	src := t.TempDir()
+	writeFiles(t, src, map[string][]byte{
+		"shell.md":        []byte("---\nsite: true\nstyle: proof\nsearch-facets: kind\n---\n::: header\n[[search]]\n:::\n\n[[content]]\n"),
+		"docs/index.md":   []byte("# Home\n\n" + strings.Repeat("Text under the header. ", 200) + "\n"),
+		"docs/api/exp.md": []byte("---\nkind: class\n---\n# Experiment\n\nA plan of runs.\n"),
+	})
+	dir, baseURL := serveDir(t)
+	buildSite(t, src, dir)
+	ctx := newBrowserCtx(t)
+	searchFor(t, ctx, baseURL+"/index.html", "experi")
+	var probe struct {
+		Below bool `json:"below"`
+		Shown bool `json:"shown"`
+	}
+	err := chromedp.Run(ctx, chromedp.Evaluate(`(() => {
+		const li = document.querySelector(".md2html-search-results li");
+		const r = li.getBoundingClientRect();
+		const x = r.left + r.width / 2, y = r.top + r.height / 2;
+		const header = document.querySelector("body > header").getBoundingClientRect();
+		return {below: y > header.bottom, shown: li.contains(document.elementFromPoint(x, y))};
+	})()`, &probe))
+	if err != nil {
+		t.Fatalf("chromedp: %v", err)
+	}
+	if !probe.Below {
+		t.Fatal("the first result is inside the header, so the test proves nothing")
+	}
+	if !probe.Shown {
+		t.Error("the first result, below a proof header, is hidden: the header clips it")
+	}
+}
