@@ -9,6 +9,34 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- In a mounted site, a link that reaches nothing on disk is read from
+  where its page appears in the site, so a hand-written page and a page
+  generated into a scratch directory can link to each other by their
+  places in the site. `x/y.md`, `x/index.md`, `x/` and `x` reach the
+  site's page there, and the shell's links are read from the site's root.
+  A link that reaches nothing either way still warns, and a build without
+  mounts is unchanged.
+- A link that leaves the site for a file or directory no mount holds,
+  while the site has a page at the link's path, says so: its warning or
+  failure names the page the file shadows, and under `unmounted: link`,
+  which said nothing before, it now warns.
+
+### Changed
+
+- In a mounted site, a link to an excluded file or directory reaches the
+  site's page at its path when there is one, instead of the repository's
+  host, so a template excluded beside the page generated from it links
+  to the generated page.
+- **breaking:** in a mounted site, a link to a directory the site does
+  not hold follows `unmounted:` as a link to a file does: it goes to the
+  repository's host, is unlinked with a warning, or fails the build under
+  `unmounted: error`. Before, it was left as written and broke in the
+  published site.
+
 ## v0.14.0 — 2026-10-16
 
 ### Added
