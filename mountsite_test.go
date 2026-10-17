@@ -61,7 +61,7 @@ func TestMountSettingsShapeTheTree(t *testing.T) {
 		"    P",
 		"    Q",
 		"Design Notes",
-		"handbook (label)",
+		"Handbook",
 		"  Changes",
 	}, "\n") + "\n"
 	if got := s.outline(); got != want {
@@ -71,8 +71,8 @@ func TestMountSettingsShapeTheTree(t *testing.T) {
 	for _, w := range s.Warnings {
 		all += w.Src + ": " + w.Message + "\n"
 	}
-	if !strings.Contains(all, "site directory handbook has no index.md") {
-		t.Errorf("no warning for the unprovided segment:\n%s", all)
+	if strings.Contains(all, "has no index.md") {
+		t.Errorf("a directory without a page warned:\n%s", all)
 	}
 }
 
@@ -200,5 +200,26 @@ func TestMountWithNoPagesWarns(t *testing.T) {
 		if count != 1 {
 			t.Errorf("%d warnings containing %q: %v", count, want, s.Warnings)
 		}
+	}
+}
+
+// A mounted directory with no page of its own, and a path segment no mount
+// provides, each get a written page; a mount's title names its own.
+func TestMountedSiteWritesDirectoryPages(t *testing.T) {
+	s, err := mountSite(t, "[[mount source=\"../index.md\"]]\n\n"+
+		"[[mount path=\"tools\" source=\"../tools\" title=\"The Tools\" nav-sort=\"links\"]]\n\n"+
+		"[[mount path=\"handbook/changes\" source=\"../../CHANGELOG.md\"]]",
+		map[string]string{
+			"repo/docs/index.md":   "# Home\n",
+			"repo/docs/tools/z.md": "# Zed\n",
+			"repo/docs/tools/a.md": "# Alpha\n",
+			"repo/CHANGELOG.md":    "# Changes\n",
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Handbook\n  Changes\nThe Tools\n  Alpha\n  Zed\n"
+	if got := s.outline(); got != want {
+		t.Errorf("outline:\n%s\nwant:\n%s", got, want)
 	}
 }

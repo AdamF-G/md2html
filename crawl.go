@@ -102,6 +102,11 @@ type Doc struct {
 	// the front matter title, else the first <h1>, else the file's base
 	// name. A site labels the page with it.
 	Title string
+	// Body, when set, is the page's Markdown, for a page md2html writes
+	// itself: a directory's page in a site. Its Src is only where the
+	// Markdown would be, not a file to read: a file there may be another
+	// page's. A caller converts Body instead of reading Src.
+	Body []byte
 }
 
 // Warning is a non-fatal problem found during a run.

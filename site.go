@@ -132,12 +132,154 @@ func BuildSite(res *CrawlResult, shell string, opt CrawlOptions) (*Site, error) 
 		}
 	}
 	s.outRoot = filepath.Dir(outputPath(filepath.Join(res.Base, "index.md"), res.Base, outDir))
+	if err := s.writtenPages(res, opt); err != nil {
+		return nil, err
+	}
 	s.outBySrc = make(map[string]string, len(res.Docs))
 	for _, d := range res.Docs {
 		s.outBySrc[d.Src] = d.Out
 	}
 	s.buildTree(res.Docs)
 	return s, nil
+}
+
+// writtenPages gives every directory in the site a page: one with neither an
+// index nor a README gets a page md2html writes, added to res.Docs at
+// <dir>/index.md, so the tree, search, and previous and next treat it as any
+// page. Its title is its mount's title, for a directory mount's own
+// directory, else its name in title case, with the shell's title-case:
+// spellings; its body lists the directory's pages.
+func (s *Site) writtenPages(res *CrawlResult, opt CrawlOptions) error {
+	fixed := titleCaseWords(s.shellMeta["title-case"])
+	hasPage := map[string]bool{}
+	dirs := map[string]bool{"": true}
+	shown := map[string]bool{}
+	for _, d := range res.Docs {
+		if d.SitePath == "" {
+			continue
+		}
+		dirRel := sitePathDir(d.SitePath)
+		stem := sitePathStem(d.SitePath)
+		if isIndexStem(stem) || isReadmeStem(stem) {
+			hasPage[dirRel] = true
+		}
+		for r := dirRel; ; r = sitePathDir(r) {
+			dirs[r] = true
+			if d.Meta["nav"] != "hidden" {
+				shown[r] = true
+			}
+			if r == "" {
+				break
+			}
+		}
+	}
+	titles := map[string]string{}
+	for _, m := range opt.Mounts {
+		if m.IsDir && m.Title != "" {
+			titles[m.Path] = m.Title
+		}
+	}
+	assetAt := map[string]string{}
+	for _, a := range res.Assets {
+		assetAt[a.Out] = a.Src
+	}
+	var rels []string
+	for r := range dirs {
+		if hasPage[r] {
+			continue
+		}
+		// A directory whose index or README the crawl did not reach has a
+		// page the build lacks; writing another would hide or overwrite it.
+		// A mounted site skips this look: a directory mount takes every
+		// file in its source, so an unreached index can only be excluded.
+		if len(opt.Mounts) == 0 {
+			if src := s.unreachedPage(filepath.Join(s.base, filepath.FromSlash(r))); src != "" {
+				s.warn(src, "not in the build: no page links it, so its directory has no page")
+				continue
+			}
+		}
+		rels = append(rels, r)
+	}
+	sort.Strings(rels)
+	for _, r := range rels {
+		title := titles[r]
+		if title == "" {
+			name := path.Base(r)
+			if r == "" {
+				name = filepath.Base(s.rootSource(opt))
+			}
+			if title = titleCase(name, fixed); title == "" {
+				title = name // a name of only separators, such as _
+			}
+		}
+		out := filepath.Join(s.outRoot, filepath.FromSlash(r), "index.html")
+		if src, taken := assetAt[out]; taken {
+			return fmt.Errorf("output path collision: %s and the page md2html writes for %s both produce %s", src, displaySitePath(r), out)
+		}
+		sp := path.Join(r, "index.md")
+		var meta map[string]string
+		if !shown[r] {
+			// Nothing in it is shown, so its page is not either.
+			meta = map[string]string{"nav": "hidden"}
+		}
+		res.Docs = append(res.Docs, Doc{
+			Src:      filepath.Join(s.outRoot, filepath.FromSlash(sp)),
+			Out:      out,
+			SitePath: sp,
+			Meta:     meta,
+			Title:    title,
+			Body:     []byte("# " + escapeMarkdownText(title) + "\n\n[[pages from=\"page\" depth=\"1\"]]\n"),
+		})
+	}
+	return nil
+}
+
+// unreachedPage is the Markdown file in the source directory dir whose stem
+// is index or readme, in any case, or "" when it holds none.
+func (s *Site) unreachedPage(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() || !IsMarkdownPath(e.Name()) {
+			continue
+		}
+		stem := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
+		if isIndexStem(stem) || isReadmeStem(stem) {
+			return filepath.Join(dir, e.Name())
+		}
+	}
+	return ""
+}
+
+// escapeMarkdownText backslash-escapes the ASCII punctuation in s, so
+// Markdown reads it as the text it is. A comment after each [ also keeps the
+// chips transform, which reads the rendered text, from taking [draft] for a
+// chip.
+func escapeMarkdownText(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r < 0x80 && strings.ContainsRune("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+		if r == '[' {
+			b.WriteString("<!---->")
+		}
+	}
+	return b.String()
+}
+
+// rootSource is the directory the site's root stands for: the root mount's
+// source in a mounted site, the run's base otherwise.
+func (s *Site) rootSource(opt CrawlOptions) string {
+	for _, m := range opt.Mounts {
+		if m.Path == "" {
+			return m.Source
+		}
+	}
+	return s.base
 }
 
 func (s *Site) warn(src, msg string) { s.Warnings = append(s.Warnings, Warning{src, msg}) }
@@ -218,17 +360,10 @@ func (s *Site) buildTree(docs []Doc) {
 	s.applyMounts()
 	var finish func(n *siteNode)
 	finish = func(n *siteNode) {
-		if n.isDir && n.doc == nil {
-			if n.label == "" {
-				n.label = n.name
-			}
-			switch {
-			case n == s.root:
-			case len(s.crawl.Mounts) > 0:
-				s.warn(s.shellSrc, fmt.Sprintf("site directory %s has no index.md; the site lists it by its name", n.sitePath))
-			default:
-				s.warn(n.path, "has no index.md; the site lists it by its directory name")
-			}
+		// A directory with no page of its own (a mount that brings in no
+		// pages, or a tree built without writtenPages) is labelled by name.
+		if n.isDir && n.doc == nil && n.label == "" {
+			n.label = n.name
 		}
 		for _, c := range n.children {
 			finish(c)
@@ -371,6 +506,9 @@ func (s *Site) applyMounts() {
 func (s *Site) rankByLinks(dir *siteNode) {
 	if dir.doc == nil {
 		return
+	}
+	if dir.doc.Body != nil {
+		return // a written page links nothing
 	}
 	raw, err := os.ReadFile(dir.doc.Src)
 	if err != nil {

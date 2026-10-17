@@ -364,10 +364,14 @@ Flags:
 			defer func() { <-sem }()
 
 			d := res.Docs[i]
-			src, err := os.ReadFile(d.Src)
-			if err != nil {
-				results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err}
-				return
+			// A page md2html writes carries its own Markdown.
+			src := d.Body
+			if src == nil {
+				var err error
+				if src, err = os.ReadFile(d.Src); err != nil {
+					results[i] = outcome{src: d.Src, res: md2html.WriteRefused, err: err}
+					return
+				}
 			}
 			// One slice per document, written only by this goroutine, so
 			// the sink needs no locking and lines from two documents can

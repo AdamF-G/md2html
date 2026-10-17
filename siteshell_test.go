@@ -20,9 +20,12 @@ func sitePage(t *testing.T, s *Site, res *CrawlResult, root, rel string) (string
 	if doc == nil {
 		t.Fatalf("%s is not in the emit set", rel)
 	}
-	b, err := os.ReadFile(src)
-	if err != nil {
-		t.Fatal(err)
+	b := doc.Body
+	if b == nil {
+		var err error
+		if b, err = os.ReadFile(src); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var warnings []string
 	out, err := Convert(b, Options{SourcePath: src, LinkMap: doc.LinkMap, LinkDrops: doc.LinkDrops,

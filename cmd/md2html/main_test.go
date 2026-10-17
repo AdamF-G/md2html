@@ -1539,3 +1539,21 @@ func mainOf(page []byte) string {
 	}
 	return s
 }
+
+// The command writes a page for a directory that has none, from the page's
+// own Markdown, not from a file.
+func TestRunSiteWritesDirectoryPages(t *testing.T) {
+	root := tree(t, map[string]string{
+		"shell.md":        "---\nsite: true\n---\n[[content]]\n",
+		"docs/index.md":   "# Home\n",
+		"docs/notes/a.md": "# Alpha\n",
+	})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--site", filepath.Join(root, "shell.md"), filepath.Join(root, "docs"), "-o", filepath.Join(root, "site")}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	page, err := os.ReadFile(filepath.Join(root, "site/notes/index.html"))
+	if err != nil || !strings.Contains(string(page), `href="a.html"`) || !strings.Contains(string(page), "Notes") {
+		t.Errorf("no written page (err %v):\n%s", err, page)
+	}
+}

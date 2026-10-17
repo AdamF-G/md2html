@@ -27,6 +27,12 @@ entry point.
 **not following …: excluded** — the link points into an `--exclude`d path.
 Expected if that tree is built by another tool.
 
+**not in the build: no page links it, so its directory has no page** — in
+a site, a directory holds an `index.md` or `README.md` that no link
+reached, so md2html writes no page over it and the directory stays a
+label. Link the file from a page, or give the directory as an entry
+point.
+
 **exclude "…" matches nothing** / **is not a valid pattern** — check the
 `--exclude` value; a name pattern cannot contain `/`.
 
@@ -314,9 +320,6 @@ directory's `index.md`.
 **links to …, which the build does not write** — a link in the shell to a
 `.md` outside the build. It points at the Markdown file; build that page
 too, or link something else.
-
-**… has no index.md** — a directory in the tree with no page of its own;
-the site lists it by its directory name.
 
 **… outside the site's root** — a page pulled in from outside the run's
 base. It is written but has no place in the navigation.

@@ -3644,9 +3644,12 @@ func buildSite(t *testing.T, src string, out string) {
 		t.Fatalf("BuildSite: %v", err)
 	}
 	for _, d := range res.Docs {
-		b, err := os.ReadFile(d.Src)
-		if err != nil {
-			t.Fatal(err)
+		b := d.Body
+		if b == nil {
+			var err error
+			if b, err = os.ReadFile(d.Src); err != nil {
+				t.Fatal(err)
+			}
 		}
 		page, err := md2html.Convert(b, md2html.Options{SourcePath: d.Src, LinkMap: d.LinkMap, Site: site})
 		if err != nil {

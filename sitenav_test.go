@@ -25,7 +25,7 @@ func TestPagesMarkersFromANestedPage(t *testing.T) {
 	tabs := `<ul class="md2html-pages">` +
 		`<li><a href="../start/index.html">Get started</a></li>` +
 		`<li class="md2html-branch"><a href="index.html">Guides</a></li>` +
-		`<li><span class="md2html-label">reference</span></li></ul>`
+		`<li><a href="../reference/index.html">Reference</a></li></ul>`
 	section := `<ul class="md2html-pages">` +
 		`<li class="md2html-branch"><a href="a.html" aria-current="page">Alpha (short)</a></li>` +
 		`<li><a href="b.html">Bravo</a></li></ul>`
