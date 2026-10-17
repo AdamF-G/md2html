@@ -27,11 +27,15 @@ document extensions; every other file is an asset.
 - **Links inside code are inert.** A fenced example containing
   `[a](./nope.md)` is not followed and does not warn.
 
-**Assets are linked, not copied.** With `-o`, an image link is rewritten to
-point back at the original file, so moving the output tree on its own
-breaks images. Without `-o`, each page sits beside its source and links are
-left as written. `<img src>` and Markdown images are rewritten and checked;
-`srcset`, `<video poster>`, `<track src>` and `<object data>` are not.
+**Assets are linked, not copied, except in a site.** With `-o`, an image
+link is rewritten to point back at the original file, so moving the output
+tree on its own breaks images; a site build copies them into the output
+instead (see [Links and files](sites.md#links-and-files)). Without `-o`,
+each page sits beside its source and links are left as written. Markdown
+images, `<img src>`, each `srcset` candidate, a `<video>`'s `poster`, and
+the `src` of `<script>`, `<source>`, `<audio>`, `<iframe>` and `<embed>`
+are rewritten and checked, as is a `<link href>`; `<track src>` and
+`<object data>` are not.
 
 **A link or image can carry attributes.** Write a `{#id .class key=value}`
 block straight after it, with no space (Pandoc's `link_attributes`):

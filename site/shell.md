@@ -2,6 +2,7 @@
 site: true
 style: proof, docs
 plugins: style
+repo-url: https://github.com/AdamF-G/md2html/blob/main/{path}
 ---
 ::: header {.topbar}
 [**md2html**](../index.md)

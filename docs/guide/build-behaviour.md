@@ -9,7 +9,8 @@ nav-order: 13
 - a horizontal scroll wrapper around every table
 - `target="_blank" rel="noopener noreferrer"` on off-site links
 - `.md` links rewritten to `.html`, and asset links pointed back at the
-  source
+  original file, except in a site, which copies them (see
+  [Links and files](sites.md#links-and-files))
 - a `<title>`, from front matter, the first `<h1>`, or the file name
 - the Markdown source, hidden at the end of the page with Copy and Download
   controls

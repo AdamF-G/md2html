@@ -107,8 +107,54 @@ base, the deepest directory holding every entry point.
   of its own. It stays in search and is reachable by links. On the root's `index.md` it hides only that page.
 - `[[pages]]` lists what is below the root, never the root's own page:
   link the root's page from the shell.
-- A page pulled in from outside the root is written but has no place in
-  the tree, and warns.
+- A page from outside the root is not built in a site written to `-o`
+  (see [Links and files](#links-and-files)); built in place, it is
+  written but has no place in the tree, and warns.
+
+## Links and files {#links-and-files}
+
+A site is published as its output directory alone, so it holds
+everything it shows. A file is in the site when it is under the run's
+base.
+
+- A page in the site is linked where it is written. A `.md` outside the
+  site is never built: nothing is written under `_external/`.
+- Any other file in the site that a page shows or links, an image, a
+  stylesheet, a PDF, is copied to the same place in the output.
+  `md2html-assets.txt` at the output root records the copies, so a later
+  build replaces its own and refuses a file someone else put there.
+  A link to a directory (`[Home](./)`, `[Docs](sub/)`) is left as
+  written, in a site or out of it; nothing is copied for it.
+- An image or other file a page loads from outside the site is copied to
+  `_assets/`, at its path from the source root.
+- A link a reader follows out of the site, to a page or any file, goes
+  where the shell's `unmounted:` says:
+
+  | `unmounted:` | The link |
+  |---|---|
+  | `link` | Goes to the file's page on the repository's host, from `repo-url:`. The default when `repo-url:` is set. |
+  | `unlink` | Is removed, with a warning; its text stays. The default without `repo-url:`. |
+  | `error` | Stops the build, naming the page and the link. |
+
+```markdown
+---
+site: true
+repo-url: https://github.com/acme/repo/blob/main/{path}
+---
+```
+
+`{path}` is the file's path from the **source root**: the deepest
+directory holding the shell and the pages, which for a repository's
+docs is the repository's root. `source-root:` in the shell, relative to
+it, or `--source-root`, sets it instead; a default that would be the
+filesystem's root is refused. A file outside the source root has no
+path, so a link to it is unlinked and an image from it dropped, with a
+warning.
+
+`--no-assets` copies nothing and leaves those links as written; a link
+out of the site still follows `unmounted:`. A file under an
+`--exclude`d path keeps its link as written. A site built in place,
+without `-o`, keeps its files where they are.
 
 ## Navigation markers
 

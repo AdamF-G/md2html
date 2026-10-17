@@ -325,13 +325,15 @@ every link out of it, however far that leads.
 
 With `-o`, everything lands inside it. Documents under the entry points
 mirror their relative paths; documents pulled in from elsewhere on disk go
-under `_external/`, mirroring their absolute path. Nothing is ever written
-outside `-o`.
+under `_external/`, mirroring their absolute path, except in a site build
+(`--site` with `-o`), which builds nothing outside its base and so writes
+nothing under `_external/`; `md2html --guide sites` explains where such a
+link goes. Nothing is ever written outside `-o`.
 
 Without `-o`, HTML is written beside each source, and links that would
 escape the entry tree are refused rather than followed.
 
-### Assets are linked, never copied
+### Assets are linked, except in a site
 
 An image stays where it is. Its link is rewritten to point back at the
 original, climbing out of the output directory as far as needed:
@@ -344,6 +346,14 @@ docs/api/auth.md  ->  site/api/auth.html
 So the output tree is self-contained for *documents* but not for *assets*.
 Move `site/` on its own and images break; move it alongside the sources and
 they do not. That is the deliberate trade for never duplicating your files.
+
+A site build is the exception. A site is published as its output
+directory alone, so `--site` copies the files its pages show into `-o`,
+beside the pages that use them, and records them in
+`md2html-assets.txt` so a later build replaces its own copies and
+refuses anything else. A link from the site to a file outside it goes
+where the shell's `repo-url:` and `unmounted:` say;
+`md2html --guide sites` explains them.
 
 ### It will not overwrite your work
 
@@ -403,6 +413,7 @@ recipient's agent anyway.
 | `--no-charts` | leave `vega-lite` fences as code blocks instead of drawing charts |
 | `--no-highlight` | leave fenced code plain instead of highlighting it (`Options.NoHighlight`) |
 | `--site FILE` | wrap every page in this shell page, whose front matter says `site: true`, and write the search index `md2html-search.js` at the output root; not with `--fragment` or `--toc float` |
+| `--source-root DIR` | with `--site`, where a link out of the site and a copied file's path are measured from |
 | `--css FILE` | replace the stylesheet; not with `--style` |
 | `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
 | `--plugin DIR` | load a local plugin for its styles and languages (repeatable) |
@@ -416,7 +427,7 @@ recipient's agent anyway.
 | `--no-anchors` | do not add heading anchors |
 | `--no-external-links` | do not mark external links |
 | `--no-md-links` | do not rewrite `.md` links |
-| `--no-assets` | do not rewrite asset links |
+| `--no-assets` | do not rewrite asset links, nor copy files into a site |
 | `--exclude DIR\|GLOB` | never enter, seed, follow into, or write to `DIR` (relative to the base — the common ancestor of the entry points — or absolute). A value containing `*`, `?` or `[` is instead a name glob, matched against every file and directory name below the base: `--exclude 'AUDIT_*'` skips `AUDIT_2026.md` at any depth. Quote it so the shell does not expand it. Repeatable, or comma-separated |
 | `--version` | print the version and exit; the same version the provenance marker carries, followed by the commit (and `modified` for a changed tree) when the build is not exactly a tagged release |
 | `--licenses` | print the licences of the third-party software built into md2html, and exit |

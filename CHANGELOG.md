@@ -21,6 +21,24 @@ major version instead.
   order written as a list is not repeated as a `nav-order:` on each page.
   An explicit `nav-order:` still comes first, and a page the index never
   links comes last, by label.
+- A site's shell says where a link out of the site goes: `repo-url:`, a
+  URL with `{path}`, sends it to the file's page on the repository's
+  host, and `unmounted:` (`link`, `unlink` or `error`) chooses. Paths
+  are measured from the source root, the deepest directory holding the
+  shell and the pages, or `source-root:` and `--source-root`.
+- `Options.LinkDrops` and the `LinkDrop` transform remove a link and keep
+  its text or an image's alt.
+
+### Changed
+
+- **breaking:** a site build (`--site` with `-o`) copies the files its
+  pages show into the output, recorded in `md2html-assets.txt`, instead
+  of linking back to the sources, and builds nothing outside its base:
+  a page it used to write under `_external/` is no longer written, and a
+  link to it goes where `unmounted:` says. Without `repo-url:`, a link
+  out of the site is now unlinked, with a warning.
+- An image's `srcset` candidates and a video's `poster` are found and
+  rewritten like any other link, in every build.
 
 ## v0.13.0 — 2026-10-16
 
