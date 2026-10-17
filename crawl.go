@@ -51,6 +51,17 @@ type CrawlOptions struct {
 	// files and none of its subdirectories, so both fields describe the
 	// smallest possible run, and the CLI asks for unlimited on both.
 	LinkDepth int
+	// SiteShell is the site shell a build is wrapped in, or empty. With an
+	// OutDir, it makes the crawl a site's: links out of Base are not
+	// followed, the files pages load or link are copied into the output
+	// (CrawlResult.Assets), and a link out of the site becomes what the
+	// shell's front matter says, with repo-url:, unmounted: and
+	// source-root:. See siteRules.
+	SiteShell string
+	// SourceRoot overrides the shell's source-root: and the default, the
+	// deepest directory holding the shell and Base. Relative to the working
+	// directory. Only a site build reads it.
+	SourceRoot string
 }
 
 // Doc is one document in the emit set.
