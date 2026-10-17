@@ -33,6 +33,23 @@ Expected if that tree is built by another tool.
 **pulled in … document(s) from outside** — links reached pages outside the
 entry points. Check none were unintended.
 
+**not building …: it is outside the site's root …** — in a site build, a
+seed such as a symlinked `.md` resolves outside the run's base. A site
+builds only what is under its root; move the file in, or add its tree.
+
+**unlinked …, which is outside the site** — in a site whose shell sets no
+`repo-url:`, a link to a file outside the site. Its text is kept. Set
+`repo-url:` to link the file on the repository's host, or
+`unmounted: error` to stop the build instead.
+
+**unlinked …: it is outside the source root** — a link to a file above
+the site's source root, so `repo-url:` has no path for it. Its text is
+kept. Move the file in, or set `source-root:` higher.
+
+**dropped …, which is outside the source root** — an image or other file
+a page loads, from above the site's source root. An image keeps its alt
+text. Move the file in, or set `source-root:` higher.
+
 **front matter block is not flat key: value** — see
 [Front matter](page-structure.md#front-matter): no nesting, comments or colon-less lines.
 

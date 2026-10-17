@@ -73,6 +73,10 @@ type Doc struct {
 	// LinkMap maps an href exactly as written in this document to its
 	// replacement. Populated by buildLinkMaps.
 	LinkMap map[string]string
+	// LinkDrops names the hrefs, as written in this document, whose links a
+	// site build removes: a link out of the site it has nowhere to send.
+	// Nil outside a site build.
+	LinkDrops map[string]bool
 	// Meta is the document's front matter, nil when it has none. Discovery
 	// reads it so a site can be laid out before any page converts.
 	Meta map[string]string
@@ -103,6 +107,11 @@ type CrawlResult struct {
 	External []string
 	// Warnings are the non-fatal problems found during the crawl.
 	Warnings []Warning
+	// Assets are the files a site build copies into its output, each once,
+	// sorted by Out. Empty outside a site build; see CopyAssets.
+	Assets []Asset
+
+	rules *siteRules // a site build's link rules, for BuildSite's shell
 }
 
 // parseDoc converts Markdown straight to a parsed tree, skipping transforms
@@ -317,6 +326,10 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	}
 	base := commonAncestor(entryAbs)
 	excluded, excludeWarnings := resolveExcludes(opt.Exclude, base)
+	rules, err := newSiteRules(opt, base, excluded)
+	if err != nil {
+		return nil, err
+	}
 
 	// queued pairs a document with its distance, in links, from the nearest
 	// seed. BFS dequeues in nondecreasing hop order, so the first time a
@@ -352,6 +365,16 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 			return
 		}
 		if !isUnder(target, base) {
+			if rules != nil {
+				// A site holds what is under its base: a link out of it
+				// becomes what the shell says, at link-mapping time, and a
+				// seed outside it is refused.
+				if !viaLink {
+					res.Warnings = append(res.Warnings, Warning{src,
+						fmt.Sprintf("not building %s: it is outside the site's root %s", ref, base)})
+				}
+				return
+			}
 			if opt.OutDir == "" {
 				res.Warnings = append(res.Warnings, Warning{src,
 					fmt.Sprintf("refusing to follow %s outside %s (no -o given)", ref, base)})
@@ -487,33 +510,127 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	sort.Strings(res.External)
 	res.External = dedupe(res.External)
 
-	buildLinkMaps(res, opt, linksBySrc)
+	res.rules = rules
+	if err := buildLinkMaps(res, opt, linksBySrc); err != nil {
+		return nil, err
+	}
 	return res, nil
 }
 
 // buildLinkMaps computes, for every document, the replacement for each
-// href it contains. linksBySrc supplies the links already extracted for each
-// document during discovery, so this does not re-read or re-parse any file.
-func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]Link) {
-	// Index the emit set by source path for O(1) lookup.
+// href it contains, and in a site build what it drops and copies. A site's
+// shell is planned too, once, so its copies are made and its warnings said
+// once. linksBySrc supplies the links already extracted during discovery.
+func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]Link) error {
 	outBySrc := make(map[string]string, len(res.Docs))
 	for _, d := range res.Docs {
 		outBySrc[d.Src] = d.Out
 	}
-
+	var fails []string
+	copies := map[string]Asset{}
+	take := func(src string, p linkPlan) {
+		for _, c := range p.copies {
+			if prev, ok := copies[c.Out]; ok && prev.Src != c.Src {
+				fails = append(fails, fmt.Sprintf("output path collision: %s and %s both produce %s", prev.Src, c.Src, c.Out))
+				continue
+			}
+			copies[c.Out] = c
+		}
+		seen := map[string]bool{}
+		for _, w := range p.warns {
+			if !seen[w] {
+				seen[w] = true
+				res.Warnings = append(res.Warnings, Warning{src, w})
+			}
+		}
+		for _, f := range p.fails {
+			fails = append(fails, src+": "+f+" (unmounted: error)")
+		}
+	}
 	for i := range res.Docs {
 		d := &res.Docs[i]
-		d.LinkMap = linkMapFor(linksBySrc[d.Src], d.Out, outBySrc, opt)
+		p := planLinks(linksBySrc[d.Src], d.Out, outBySrc, opt, res.rules)
+		d.LinkMap = p.rewrite
+		if res.rules != nil {
+			d.LinkDrops = p.drop
+		}
+		take(d.Src, p)
 	}
+	if res.rules != nil {
+		shell, err := filepath.Abs(opt.SiteShell)
+		if err != nil {
+			return err
+		}
+		if raw, err := os.ReadFile(shell); err == nil {
+			_, body, _ := splitFrontMatter(raw)
+			if root, err := parseDoc(body); err == nil {
+				// The shell's links are planned from a page at the output
+				// root; only the copies, warnings and failures are kept, and
+				// each page plans the shell's hrefs again from where it is.
+				take(shell, planLinks(ExtractLinks(root, filepath.Dir(shell)),
+					filepath.Join(opt.OutDir, "index.html"), outBySrc, opt, res.rules))
+			}
+		}
+	}
+	if len(fails) > 0 {
+		sort.Strings(fails)
+		return fmt.Errorf("the site cannot be built:\n  %s", strings.Join(fails, "\n  "))
+	}
+	for _, a := range copies {
+		res.Assets = append(res.Assets, a)
+	}
+	sort.Slice(res.Assets, func(i, j int) bool { return res.Assets[i].Out < res.Assets[j].Out })
+	for _, a := range res.Assets {
+		for _, d := range res.Docs {
+			if d.Out == a.Out {
+				return fmt.Errorf("output path collision: %s and %s both produce %s", d.Src, a.Src, a.Out)
+			}
+		}
+	}
+	return nil
 }
 
-// linkMapFor computes the replacement for each of links, as written in a
-// document whose output is fromOut. Document links resolve to other emitted
-// documents inside the output tree; asset links point back out at the
-// original file on disk, since assets are never copied. A site uses it to
-// rewrite its shell's links once per page.
-func linkMapFor(links []Link, fromOut string, outBySrc map[string]string, opt CrawlOptions) map[string]string {
-	m := map[string]string{}
+// linkPlan is what a document's links become: the hrefs rewritten, and in a
+// site build the hrefs dropped, the files copied, and what is warned or
+// stops the build.
+type linkPlan struct {
+	rewrite map[string]string
+	drop    map[string]bool
+	copies  []Asset
+	warns   []string
+	fails   []string
+}
+
+// planLinks plans links, as written in a document whose output is fromOut.
+// Without site rules, document links resolve to other emitted documents
+// and asset links point back out at the original file on disk; with them,
+// siteRules.action decides. A site uses it to rewrite its shell's links
+// once per page.
+func planLinks(links []Link, fromOut string, outBySrc map[string]string, opt CrawlOptions, rules *siteRules) linkPlan {
+	p := linkPlan{rewrite: map[string]string{}, drop: map[string]bool{}}
+	if rules != nil {
+		for _, l := range links {
+			a := rules.action(l, fromOut, outBySrc)
+			switch {
+			case a.fail != "":
+				p.fails = append(p.fails, a.fail)
+			case a.drop:
+				p.drop[l.Href] = true
+			case a.rewrite != "":
+				if opt.NoMdLinks && l.Kind == LinkDoc {
+					continue
+				}
+				p.rewrite[l.Href] = a.rewrite
+			}
+			if a.copy != nil {
+				p.copies = append(p.copies, *a.copy)
+			}
+			if a.warn != "" {
+				p.warns = append(p.warns, a.warn)
+			}
+		}
+		return p
+	}
 	outDir := filepath.Dir(fromOut)
 	for _, l := range links {
 		switch l.Kind {
@@ -533,7 +650,7 @@ func linkMapFor(links []Link, fromOut string, outBySrc map[string]string, opt Cr
 			if err != nil {
 				continue
 			}
-			m[l.Href] = encodePath(filepath.ToSlash(rel)) + fragmentOf(l.Href)
+			p.rewrite[l.Href] = encodePath(filepath.ToSlash(rel)) + fragmentOf(l.Href)
 
 		case LinkAsset:
 			if opt.NoAssets || opt.OutDir == "" {
@@ -548,10 +665,10 @@ func linkMapFor(links []Link, fromOut string, outBySrc map[string]string, opt Cr
 			if err != nil {
 				continue
 			}
-			m[l.Href] = encodePath(filepath.ToSlash(rel))
+			p.rewrite[l.Href] = encodePath(filepath.ToSlash(rel))
 		}
 	}
-	return m
+	return p
 }
 
 // encodePath percent-encodes each segment of a slash-separated relative

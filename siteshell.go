@@ -47,7 +47,7 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	}
 	out := s.outBySrc[src]
 	links := ExtractLinks(shell, s.shellDir)
-	mapped := linkMapFor(links, out, s.outBySrc, s.crawl)
+	mapped := planLinks(links, out, s.outBySrc, s.crawl, nil).rewrite
 	if err := LinkRewrite(mapped).Fn(shell); err != nil {
 		return nil, err
 	}
