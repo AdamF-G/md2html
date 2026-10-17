@@ -48,6 +48,26 @@ func TestPagesNestsBelowItsDepth(t *testing.T) {
 	}
 }
 
+// from="page" lists from the current page: a directory's page lists its
+// children, and a leaf lists nothing.
+func TestPagesFromPage(t *testing.T) {
+	files := map[string]string{"shell/site.md": minimalShell,
+		"docs/index.md":        "# Home\n",
+		"docs/guides/index.md": "# Guides\n\n[[pages from=\"page\" depth=\"1\"]]\n",
+		"docs/guides/a.md":     "# Alpha\n\n[[pages from=\"page\"]]\n",
+		"docs/guides/b.md":     "# Bravo\n",
+	}
+	s, res, root := siteFixture(t, files, "shell/site.md")
+	idx, warnings := sitePage(t, s, res, root, "docs/guides/index.md")
+	if len(warnings) != 0 || !strings.Contains(idx, `<ul class="md2html-pages"><li><a href="a.html">Alpha</a></li><li><a href="b.html">Bravo</a></li></ul>`) {
+		t.Errorf("warnings %q, page:\n%s", warnings, idx)
+	}
+	a, warnings := sitePage(t, s, res, root, "docs/guides/a.md")
+	if len(warnings) != 0 || strings.Contains(a, `class="md2html-pages"`) || strings.Contains(a, "[[pages") {
+		t.Errorf("a leaf's list: warnings %q, page:\n%s", warnings, a)
+	}
+}
+
 func TestBreadcrumbAndPrevNext(t *testing.T) {
 	out, _ := navFixture(t, "[[breadcrumb]]\n\n[[content]]\n\n[[prev-next]]\n")
 	crumbs := `<nav aria-label="Breadcrumb"><ol class="md2html-breadcrumb"><li><a href="../index.html">Home</a></li>` +

@@ -69,8 +69,15 @@ func (s *Site) pagesList(m marker, page *siteNode, from string, say func(string,
 		if start == nil || !hasShownChild(start) {
 			start = s.root
 		}
+	case "page":
+		// The current page's own node: a directory's page lists what is
+		// in it, a leaf lists nothing.
+		start = page
+		if start == nil {
+			start = s.root
+		}
 	default:
-		say("[[pages]] from %q is not root or section; listing from the root", v)
+		say("[[pages]] from %q is not root, section or page; listing from the root", v)
 	}
 	return s.pagesLevel(start, page, from, depth)
 }

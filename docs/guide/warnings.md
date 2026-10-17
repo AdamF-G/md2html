@@ -299,8 +299,8 @@ define expands to nothing.
 **… is not a whole number** — a `nav-order` or a `[[pages]]` `depth`. The
 value is ignored; `depth` needs 1 or more.
 
-**… is not root or section** — a `[[pages]]` `from`. It lists from the
-root.
+**… is not root, section or page** — a `[[pages]]` `from`. It lists from
+the root.
 
 **… is not hidden** — `nav:` takes only `hidden`. The value is ignored.
 
