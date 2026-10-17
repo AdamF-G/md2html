@@ -3,6 +3,7 @@ package md2html
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -21,6 +22,67 @@ type siteRules struct {
 	unmounted  string // link, unlink or error
 	noAssets   bool   // copy nothing, and leave what would be copied as written
 	excluded   exclusions
+	mounts     []mountRule // a mounted site's mounts; nil without mounts
+}
+
+// mountRule is a mount with its own excludes resolved.
+type mountRule struct {
+	*Mount
+	excluded exclusions
+}
+
+// owner is the mount holding target: a file mount of exactly target, else
+// the directory mount whose source holds it most deeply, so a deeper mount
+// takes its files out of an enclosing one. Nil when no mount holds it.
+func (r *siteRules) owner(target string) *mountRule {
+	var best *mountRule
+	for i := range r.mounts {
+		mr := &r.mounts[i]
+		if !mr.IsDir {
+			if mr.Source == target {
+				return mr
+			}
+			continue
+		}
+		if isUnder(target, mr.Source) && (best == nil || len(mr.Source) > len(best.Source)) {
+			best = mr
+		}
+	}
+	return best
+}
+
+// place is where target sits in the site, as a slash path from the site's
+// root, and whether the site holds it at all: under the base without
+// mounts, or held by a mount, at the mount's path.
+func (r *siteRules) place(target string) (string, bool) {
+	if r.mounts == nil {
+		return relUnder(r.base, target)
+	}
+	mr := r.owner(target)
+	if mr == nil {
+		return "", false
+	}
+	if !mr.IsDir {
+		if mr.Path == "" {
+			return "index" + path.Ext(target), true
+		}
+		return mr.Path + path.Ext(target), true
+	}
+	rel, ok := relUnder(mr.Source, target)
+	if !ok {
+		return "", false
+	}
+	return path.Join(mr.Path, rel), true
+}
+
+// excludedAt reports whether target is excluded: by --exclude, or by the
+// excludes of the mount holding it.
+func (r *siteRules) excludedAt(target string) bool {
+	if r.excluded.match(target) {
+		return true
+	}
+	mr := r.owner(target)
+	return mr != nil && mr.excluded.match(target)
 }
 
 // newSiteRules reads a site's link settings from its shell's front matter.
@@ -66,7 +128,14 @@ func newSiteRules(opt CrawlOptions, base string, excluded exclusions) (*siteRule
 	case meta["source-root"] != "":
 		r.sourceRoot, err = resolveDir(filepath.Join(filepath.Dir(shell), meta["source-root"]), opt.SiteShell+": source-root:")
 	default:
-		r.sourceRoot, err = defaultSourceRoot(shell, base)
+		paths := []string{shell, base}
+		if len(opt.Mounts) > 0 {
+			paths = []string{shell}
+			for _, m := range opt.Mounts {
+				paths = append(paths, m.Source)
+			}
+		}
+		r.sourceRoot, err = defaultSourceRoot(paths...)
 	}
 	if err != nil {
 		return nil, err
@@ -87,12 +156,13 @@ func resolveDir(p, from string) (string, error) {
 	return abs, nil
 }
 
-// defaultSourceRoot is the deepest directory holding the shell and the
-// run's base, which for a repository's documentation is the repository's
-// root. When that is the filesystem's root, every path measured from it
-// would carry the building machine's own, so it is refused.
-func defaultSourceRoot(shell, base string) (string, error) {
-	root := commonAncestor([]string{shell, base})
+// defaultSourceRoot is the deepest directory holding every path given: the
+// shell and the run's base, or the shell and every mount's source. For a
+// repository's documentation that is the repository's root. When it is
+// the filesystem's root, every path measured from it would carry the
+// building machine's own, so it is refused.
+func defaultSourceRoot(paths ...string) (string, error) {
+	root := commonAncestor(paths)
 	if filepath.Dir(root) == root {
 		return "", fmt.Errorf("the site's source root would be the filesystem's root %s, since the shell and the pages share no other directory; set source-root: in the shell or --source-root", root)
 	}
@@ -134,7 +204,7 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 	if err != nil {
 		return linkAction{}
 	}
-	if r.excluded.match(target) {
+	if r.excludedAt(target) {
 		return linkAction{}
 	}
 	fi, err := os.Stat(target)
@@ -148,17 +218,16 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 		if out, ok := outBySrc[target]; ok {
 			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
 		}
-		if isUnder(target, r.base) {
+		if _, ok := r.place(target); ok {
 			return linkAction{} // in the site, but not built: left as written
 		}
 		return r.leaving(l, target)
 	}
-	if isUnder(target, r.base) {
+	if sp, ok := r.place(target); ok {
 		if r.noAssets {
 			return linkAction{}
 		}
-		rel, _ := filepath.Rel(r.base, target)
-		out := filepath.Join(r.outDir, rel)
+		out := filepath.Join(r.outDir, filepath.FromSlash(sp))
 		return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href), copy: &Asset{Src: target, Out: out}}
 	}
 	if !l.Loaded {

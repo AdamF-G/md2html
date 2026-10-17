@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,6 +63,11 @@ type CrawlOptions struct {
 	// deepest directory holding the shell and Base. Relative to the working
 	// directory. Only a site build reads it.
 	SourceRoot string
+	// Mounts, from ReadMounts, make the crawl a mounted site's: every
+	// Markdown file a mount holds is a page at its site path, nothing else
+	// is built, and no link is followed. They need SiteShell and OutDir,
+	// and refuse Entries. Base is then the source root.
+	Mounts []Mount
 }
 
 // Doc is one document in the emit set.
@@ -75,6 +81,7 @@ type Doc struct {
 	// the page's path under Base, or, in a mounted site, under its mount's
 	// path; "" for a page the site has no place for.
 	SitePath string
+	mount    *Mount // the mount holding the page, in a mounted site
 	// LinkMap maps an href exactly as written in this document to its
 	// replacement. Populated by buildLinkMaps.
 	LinkMap map[string]string
@@ -311,8 +318,91 @@ func resolveExcludes(vals []string, base string) (exclusions, []Warning) {
 	return ex, warnings
 }
 
+// discovered is what the crawl learns from reading one document.
+type discovered struct {
+	parsed bool // false for a document that read but did not parse
+	meta   map[string]string
+	title  string
+	links  []Link
+}
+
+// discover reads the document at cur and warns about the links in it that
+// lead to nothing. For each link to a document that exists it then calls
+// follow, when not nil, so what follow says lands among those warnings in
+// the order of the links. ok is false when the document cannot be read,
+// which it has warned about; one that reads but does not parse is still a
+// page, with nothing discovered in it.
+func discover(cur string, res *CrawlResult, follow func(l Link, target string)) (d discovered, ok bool) {
+	src, err := os.ReadFile(cur)
+	if err != nil {
+		// Warn and skip: an unreadable document must not enter the emit
+		// set, or the CLI reads it again, fails again, and reports twice.
+		res.Warnings = append(res.Warnings, Warning{cur, "unreadable: " + err.Error()})
+		return d, false
+	}
+	// Strip front matter before parsing, matching what Convert sees: a
+	// Markdown link or image sitting inside a "title:" value is source
+	// text, not a document reference, and must not be followed or
+	// checked for existence just because it was still in the tree the
+	// unstripped bytes would have produced.
+	meta, body, _ := splitFrontMatter(src)
+	root, err := parseDoc(body)
+	if err != nil {
+		res.Warnings = append(res.Warnings, Warning{cur, "parse failed: " + err.Error()})
+		return d, true
+	}
+	d.parsed, d.meta = true, meta
+	d.title = meta["title"]
+	if d.title == "" {
+		d.title = extractTitle(root, cur)
+	}
+	d.links = ExtractLinks(root, filepath.Dir(cur))
+	for _, l := range d.links {
+		switch l.Kind {
+		case LinkAsset:
+			if _, statErr := os.Stat(l.Abs); statErr != nil {
+				res.Warnings = append(res.Warnings, Warning{cur,
+					fmt.Sprintf("referenced asset does not exist: %s", l.Href)})
+			}
+		case LinkDoc:
+			target, err := resolve(l.Abs)
+			if err != nil {
+				continue
+			}
+			if _, statErr := os.Stat(target); statErr != nil {
+				res.Warnings = append(res.Warnings, Warning{cur,
+					fmt.Sprintf("link target does not exist: %s", l.Href)})
+				continue
+			}
+			if follow != nil {
+				follow(l, target)
+			}
+		}
+	}
+	return d, true
+}
+
+// checkOutputs refuses two sources that map to one output path: a.md and
+// a.markdown in one directory, a real document under base/_external
+// colliding with a document pulled in from outside base, or two mounts that
+// place a page at one site path. The emit pass is parallel, so that is a
+// file-level race between two goroutines, not a benign last-writer-wins.
+func checkOutputs(docs []Doc) error {
+	srcByOut := make(map[string]string, len(docs))
+	for _, d := range docs {
+		if prev, dup := srcByOut[d.Out]; dup {
+			return fmt.Errorf("output path collision: %s and %s both produce %s", prev, d.Src, d.Out)
+		}
+		srcByOut[d.Out] = d.Src
+	}
+	return nil
+}
+
 // Crawl discovers every document reachable from the entry points.
 func Crawl(opt CrawlOptions) (*CrawlResult, error) {
+	if len(opt.Mounts) > 0 {
+		return crawlMounts(opt)
+	}
 	if len(opt.Entries) == 0 {
 		return nil, fmt.Errorf("no entry points given")
 	}
@@ -440,64 +530,25 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		hops := queue[0].hops
 		queue = queue[1:]
 
-		src, err := os.ReadFile(cur)
-		if err != nil {
-			// Warn and skip: an unreadable document must not enter the emit
-			// set, or the CLI reads it again, fails again, and reports twice.
-			res.Warnings = append(res.Warnings, Warning{cur, "unreadable: " + err.Error()})
+		d, ok := discover(cur, res, func(l Link, target string) {
+			// A negative LinkDepth is unlimited; otherwise this document
+			// sits at hops and may only be followed out of while that is
+			// still short of the bound.
+			if opt.LinkDepth >= 0 && hops >= opt.LinkDepth {
+				return
+			}
+			admit(cur, target, l.Href, true, hops+1)
+		})
+		if !ok {
 			continue
 		}
 		order = append(order, cur)
-		// Strip front matter before parsing, matching what Convert sees: a
-		// Markdown link or image sitting inside a "title:" value is source
-		// text, not a document reference, and must not be followed or
-		// checked for existence just because it was still in the tree the
-		// unstripped bytes would have produced.
-		meta, body, _ := splitFrontMatter(src)
-		root, err := parseDoc(body)
-		if err != nil {
-			res.Warnings = append(res.Warnings, Warning{cur, "parse failed: " + err.Error()})
-			continue
+		if !d.parsed {
+			continue // read but not parsed: a page with nothing discovered
 		}
-		metaBySrc[cur] = meta
-		title := meta["title"]
-		if title == "" {
-			title = extractTitle(root, cur)
-		}
-		titleBySrc[cur] = title
-
-		links := ExtractLinks(root, filepath.Dir(cur))
-		linksBySrc[cur] = links
-		for _, l := range links {
-			if l.Kind == LinkAsset {
-				if _, statErr := os.Stat(l.Abs); statErr != nil {
-					res.Warnings = append(res.Warnings, Warning{cur,
-						fmt.Sprintf("referenced asset does not exist: %s", l.Href)})
-				}
-				continue
-			}
-			if l.Kind != LinkDoc {
-				continue
-			}
-			target, err := resolve(l.Abs)
-			if err != nil {
-				continue
-			}
-			if _, statErr := os.Stat(target); statErr != nil {
-				res.Warnings = append(res.Warnings, Warning{cur,
-					fmt.Sprintf("link target does not exist: %s", l.Href)})
-				continue
-			}
-			// A negative LinkDepth is unlimited; otherwise this document
-			// sits at hops and may only be followed out of while that is
-			// still short of the bound. The asset-existence warnings above
-			// stay unconditional — a missing image is worth reporting
-			// whether or not this document's links are being followed.
-			if opt.LinkDepth >= 0 && hops >= opt.LinkDepth {
-				continue
-			}
-			admit(cur, target, l.Href, true, hops+1)
-		}
+		metaBySrc[cur] = d.meta
+		titleBySrc[cur] = d.title
+		linksBySrc[cur] = d.links
 	}
 
 	sort.Strings(order)
@@ -506,18 +557,8 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir), SitePath: sp,
 			Meta: metaBySrc[s], Title: titleBySrc[s]})
 	}
-	// Two distinct sources can map to one output path: a.md and a.markdown
-	// in one directory, or a real document under base/_external colliding
-	// with a document pulled in from outside base. The emit pass is
-	// parallel, so that is a file-level race between two goroutines, not a
-	// benign last-writer-wins. Refuse the whole run instead.
-	srcByOut := make(map[string]string, len(res.Docs))
-	for _, d := range res.Docs {
-		if prev, dup := srcByOut[d.Out]; dup {
-			return nil, fmt.Errorf("output path collision: %s and %s both produce %s",
-				prev, d.Src, d.Out)
-		}
-		srcByOut[d.Out] = d.Src
+	if err := checkOutputs(res.Docs); err != nil {
+		return nil, err
 	}
 	sort.Strings(res.External)
 	res.External = dedupe(res.External)
@@ -730,4 +771,114 @@ func dedupe(s []string) []string {
 		}
 	}
 	return out
+}
+
+// crawlMounts is Crawl for a site its mounts describe. Each Markdown file a
+// mount holds, and no deeper mount holds instead, is a page at its site
+// path; a file excluded by --exclude, relative to the source root, or by its
+// mount's own excludes, is not. No link is followed: what the mounts hold is
+// the whole site.
+func crawlMounts(opt CrawlOptions) (*CrawlResult, error) {
+	if len(opt.Entries) > 0 {
+		return nil, fmt.Errorf("the site's mounts say what it holds; give no entry points beside them")
+	}
+	if opt.SiteShell == "" || opt.OutDir == "" {
+		return nil, fmt.Errorf("mounts need a site shell and an output directory")
+	}
+	out, err := filepath.Abs(opt.OutDir)
+	if err != nil {
+		return nil, err
+	}
+	opt.OutDir = out
+	rules, err := newSiteRules(opt, "", exclusions{})
+	if err != nil {
+		return nil, err
+	}
+	base := rules.sourceRoot
+	excluded, excludeWarnings := resolveExcludes(opt.Exclude, base)
+	rules.excluded = excluded
+	res := &CrawlResult{Base: base, Warnings: excludeWarnings}
+	rules.mounts = make([]mountRule, len(opt.Mounts))
+	for i := range opt.Mounts {
+		m := &opt.Mounts[i]
+		if excluded.match(m.Source) {
+			return nil, fmt.Errorf("%s: source %s is excluded by --exclude", m.From, m.Source)
+		}
+		mr := mountRule{Mount: m, excluded: exclusions{base: m.Source}}
+		if m.IsDir {
+			var w []Warning
+			mr.excluded, w = resolveExcludes(m.Exclude, m.Source)
+			res.Warnings = append(res.Warnings, w...)
+		}
+		rules.mounts[i] = mr
+	}
+
+	mountOf := map[string]*Mount{}
+	for i := range rules.mounts {
+		mr := &rules.mounts[i]
+		cands := []string{mr.Source}
+		if mr.IsDir {
+			cands = nil
+			_ = filepath.WalkDir(mr.Source, func(p string, d os.DirEntry, err error) error {
+				if err != nil {
+					return nil // unreadable subtree: skip, do not abort
+				}
+				if p != mr.Source && (excluded.match(p) || mr.excluded.match(p)) {
+					if d.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+				if !d.IsDir() && IsMarkdownPath(p) {
+					cands = append(cands, p)
+				}
+				return nil
+			})
+		}
+		for _, p := range cands {
+			real, err := resolve(p)
+			if err != nil {
+				continue
+			}
+			if real == rules.shell {
+				continue // the shell is the site's template, never a page
+			}
+			owner := rules.owner(real)
+			if owner == nil {
+				res.Warnings = append(res.Warnings, Warning{p,
+					fmt.Sprintf("not building %s: no mount holds it", p)})
+				continue
+			}
+			if owner != mr || rules.excludedAt(real) {
+				continue // a deeper mount holds it, or it is excluded there
+			}
+			mountOf[real] = owner.Mount
+		}
+	}
+
+	order := make([]string, 0, len(mountOf))
+	for src := range mountOf {
+		order = append(order, src)
+	}
+	sort.Strings(order)
+	linksBySrc := map[string][]Link{}
+	for _, src := range order {
+		d, ok := discover(src, res, nil)
+		if !ok {
+			continue
+		}
+		sp, _ := rules.place(src)
+		outPath := filepath.Join(out, filepath.FromSlash(strings.TrimSuffix(sp, path.Ext(sp))+".html"))
+		res.Docs = append(res.Docs, Doc{Src: src, Out: outPath, SitePath: sp,
+			Meta: d.meta, Title: d.title, mount: mountOf[src]})
+		linksBySrc[src] = d.links
+	}
+	if err := checkOutputs(res.Docs); err != nil {
+		return nil, err
+	}
+	res.rules = rules
+	if err := buildLinkMaps(res, opt, linksBySrc); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

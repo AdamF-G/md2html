@@ -1008,3 +1008,30 @@ func TestCrawlKeepsFrontMatterAndTitle(t *testing.T) {
 		t.Errorf("c.md: title %q, meta %v; want the base name and no meta", d.Title, d.Meta)
 	}
 }
+
+// Warnings about one page come in the order of its links, whether the link
+// is followed, refused, or leads nowhere.
+func TestCrawlWarningsKeepLinkOrder(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"docs/a.md":      "[x](skip/x.md) ![m](missing.png) [y](nope.md)",
+		"docs/skip/x.md": "x",
+	})
+	res, err := Crawl(CrawlOptions{LinkDepth: -1, Depth: -1,
+		Entries: []string{filepath.Join(root, "docs/a.md")},
+		OutDir:  filepath.Join(root, "out"),
+		Exclude: []string{"skip"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, w := range res.Warnings {
+		if filepath.Base(w.Src) == "a.md" {
+			got = append(got, w.Message)
+		}
+	}
+	want := "not following skip/x.md: excluded|referenced asset does not exist: missing.png|link target does not exist: nope.md"
+	if strings.Join(got, "|") != want {
+		t.Errorf("warnings %q, want %q", got, want)
+	}
+}
