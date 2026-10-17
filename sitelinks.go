@@ -278,7 +278,8 @@ type linkAction struct {
 // A link a reader follows to a missing file is read as a site path, and
 // goes to the page it names when the site has one. Otherwise a missing
 // file, and one under an excluded path, keep the link as written; in a
-// mounted site an excluded file is outside the site instead.
+// mounted site an excluded file is outside the site instead, unless the
+// site has a page at its path.
 func (r *siteRules) action(l Link, fromOut, fromSite string, outBySrc map[string]string) linkAction {
 	if l.Kind != LinkDoc && l.Kind != LinkAsset {
 		return linkAction{}
@@ -293,6 +294,13 @@ func (r *siteRules) action(l Link, fromOut, fromSite string, outBySrc map[string
 	excluded := r.excludedAt(target)
 	if excluded && r.mounts == nil {
 		return linkAction{}
+	}
+	if excluded {
+		// An excluded file or directory is outside the site, so a link
+		// that a page of the site answers reaches that page instead.
+		if out, _, ok := r.inSite(l, fromSite); ok {
+			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
+		}
 	}
 	fi, err := os.Stat(target)
 	if err != nil {

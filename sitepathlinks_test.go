@@ -226,3 +226,35 @@ func TestSitePathLinksWithoutMounts(t *testing.T) {
 		t.Errorf("warnings: %v", res.Warnings)
 	}
 }
+
+// TestSitePathLinksPassExcludedTargets checks that a link to an excluded
+// file or directory reaches the site's page at that path when there is
+// one, and goes to the repository's host when there is none.
+func TestSitePathLinksPassExcludedTargets(t *testing.T) {
+	files := map[string]string{}
+	for k, v := range sitePathFiles {
+		files[k] = v
+	}
+	files["repo/docs/site/shell.md"] = "---\nsite: true\nrepo-url: https://example.com/blob/main/{path}\n---\n" +
+		"[[mount source=\".\" exclude=\"reference\"]]\n\n[[mount path=\"reference\" source=\"../../../build/scratch/reference\"]]\n\n[[content]]\n"
+	files["repo/docs/site/guides/tuning.md"] = "# Tuning\n\n[e](../reference/engine.md) [r](../reference/) [o](../reference/old.md)\n"
+	files["repo/docs/site/reference/engine.md"] = "# Template\n"
+	files["repo/docs/site/reference/old.md"] = "# Old\n"
+	res, _, err := mountCrawl(t, sitePathShell, files, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tuning := docByBase(res.Docs, "tuning.md")
+	for href, want := range map[string]string{
+		"../reference/engine.md": "../reference/engine.html",
+		"../reference/":          "../reference/index.html",
+		"../reference/old.md":    "https://example.com/blob/main/repo/docs/site/reference/old.md",
+	} {
+		if got := tuning.AnchorLinkMap[href]; got != want {
+			t.Errorf("tuning %s -> %q, want %q", href, got, want)
+		}
+	}
+	if n := countWarnings(res, "shadows"); n != 0 {
+		t.Errorf("%d shadow warnings: %v", n, res.Warnings)
+	}
+}
