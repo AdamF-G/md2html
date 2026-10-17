@@ -183,6 +183,47 @@ func TestSiteCrawlLeavesAnExcludedFileAlone(t *testing.T) {
 	}
 }
 
+// In a site build, a README that is its directory's page is written at the
+// directory's index.html, the root's as the home page, and links to it
+// follow; a README beside an index stays README.html.
+func TestSiteCrawlWritesAREADMEPageAtItsIndex(t *testing.T) {
+	res, root, err := siteCrawl(t, "", map[string]string{
+		"docs/README.md":      "# Home\n\n[tool](tool/README.md)\n",
+		"docs/tool/README.md": "# Tool\n",
+		"docs/both/README.md": "# Both Readme\n",
+		"docs/both/index.md":  "# Both\n",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := func(rel string) string { return filepath.Join(root, "out", rel) }
+	for src, want := range map[string]string{
+		"repo/docs/README.md":      out("index.html"),
+		"repo/docs/tool/README.md": out("tool/index.html"),
+		"repo/docs/both/README.md": out("both/README.html"),
+		"repo/docs/both/index.md":  out("both/index.html"),
+	} {
+		var got string
+		for _, d := range res.Docs {
+			if d.Src == filepath.Join(root, src) {
+				got = d.Out
+			}
+		}
+		if got != want {
+			t.Errorf("%s written to %q, want %q", src, got, want)
+		}
+	}
+	var home Doc
+	for _, d := range res.Docs {
+		if d.Src == filepath.Join(root, "repo/docs/README.md") {
+			home = d
+		}
+	}
+	if got := home.AnchorLinkMap["tool/README.md"]; got != "tool/index.html" {
+		t.Errorf("a link to a README page -> %q", got)
+	}
+}
+
 // A link to a directory is left as written, in the site or out of it.
 func TestSiteCrawlLeavesDirectoryLinksAlone(t *testing.T) {
 	files := map[string]string{

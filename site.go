@@ -183,6 +183,15 @@ func (s *Site) buildTree(docs []Doc) {
 		dirs[rel] = n
 		return n
 	}
+	// A README stands as its directory's page only where the directory has
+	// no index, whichever the crawl met first, so the indexes are found
+	// before any page is placed.
+	hasIndex := map[string]bool{}
+	for _, d := range docs {
+		if d.SitePath != "" && isIndexStem(sitePathStem(d.SitePath)) {
+			hasIndex[sitePathDir(d.SitePath)] = true
+		}
+	}
 	for i := range docs {
 		d := &docs[i]
 		rel := d.SitePath
@@ -197,7 +206,8 @@ func (s *Site) buildTree(docs []Doc) {
 		dir := dirFor(dirRel)
 		stem := strings.TrimSuffix(path.Base(rel), path.Ext(rel))
 		n := dir
-		if !strings.EqualFold(stem, "index") || dir.doc != nil {
+		isPage := isIndexStem(stem) || (isReadmeStem(stem) && !hasIndex[dirRel])
+		if !isPage || dir.doc != nil {
 			n = &siteNode{name: stem, parent: dir}
 			dir.children = append(dir.children, n)
 		}
@@ -415,6 +425,22 @@ func lessNode(a, b *siteNode) bool {
 	}
 	return a.name < b.name
 }
+
+// isIndexStem and isReadmeStem name a directory's page by the stem of its
+// file, in any case: index.md, Index.markdown, README.md, readme.md.
+func isIndexStem(stem string) bool  { return strings.EqualFold(stem, "index") }
+func isReadmeStem(stem string) bool { return strings.EqualFold(stem, "readme") }
+
+// sitePathDir is the directory of a site path, "" at the root, and
+// sitePathStem its file's name without the extension.
+func sitePathDir(sp string) string {
+	if d := path.Dir(sp); d != "." {
+		return d
+	}
+	return ""
+}
+
+func sitePathStem(sp string) string { return strings.TrimSuffix(path.Base(sp), path.Ext(sp)) }
 
 // section returns the slug of the top-level node holding the page at src,
 // or "" for the root page or a page the tree could not place.

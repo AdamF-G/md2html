@@ -398,6 +398,26 @@ func checkOutputs(docs []Doc) error {
 	return nil
 }
 
+// readmesAtIndex writes each README that stands as its directory's page, in
+// a directory with no index, at the directory's index.html, so a reader
+// reaches it at the directory's address and the root's is the home page.
+// Called for a site build into an output directory, before the link maps,
+// so links to it follow.
+func readmesAtIndex(docs []Doc) {
+	hasIndex := map[string]bool{}
+	for _, d := range docs {
+		if d.SitePath != "" && isIndexStem(sitePathStem(d.SitePath)) {
+			hasIndex[sitePathDir(d.SitePath)] = true
+		}
+	}
+	for i := range docs {
+		d := &docs[i]
+		if d.SitePath != "" && isReadmeStem(sitePathStem(d.SitePath)) && !hasIndex[sitePathDir(d.SitePath)] {
+			d.Out = filepath.Join(filepath.Dir(d.Out), "index.html")
+		}
+	}
+}
+
 // Crawl discovers every document reachable from the entry points.
 func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 	if len(opt.Mounts) > 0 {
@@ -556,6 +576,9 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 		sp, _ := relUnder(base, s)
 		res.Docs = append(res.Docs, Doc{Src: s, Out: outputPath(s, base, opt.OutDir), SitePath: sp,
 			Meta: metaBySrc[s], Title: titleBySrc[s]})
+	}
+	if rules != nil {
+		readmesAtIndex(res.Docs)
 	}
 	if err := checkOutputs(res.Docs); err != nil {
 		return nil, err
@@ -876,6 +899,7 @@ func crawlMounts(opt CrawlOptions) (*CrawlResult, error) {
 			Meta: d.meta, Title: d.title, mount: mountOf[src]})
 		linksBySrc[src] = d.links
 	}
+	readmesAtIndex(res.Docs)
 	if err := checkOutputs(res.Docs); err != nil {
 		return nil, err
 	}

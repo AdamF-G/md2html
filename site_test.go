@@ -94,6 +94,31 @@ func TestSiteTreeWarnsOnBadNavKeys(t *testing.T) {
 	}
 }
 
+// A directory's README is its page when it has no index.md, and an ordinary
+// page beside one, whichever the crawl meets first. A README that is the
+// page carries nav-sort: as an index does.
+func TestSiteREADMEIsADirectorysPage(t *testing.T) {
+	s, _, _ := siteFixture(t, map[string]string{
+		"shell/site.md":       minimalShell,
+		"docs/index.md":       "# Home\n",
+		"docs/tool/README.md": "---\nnav-sort: links\n---\n# Tool\n\n[Zed](zed.md) [Alpha](alpha.md)\n",
+		"docs/tool/alpha.md":  "# Alpha\n",
+		"docs/tool/zed.md":    "# Zed\n",
+		"docs/both/README.md": "# Both Readme\n",
+		"docs/both/index.md":  "# Both\n",
+	}, "shell/site.md")
+	want := strings.Join([]string{
+		"Both",
+		"  Both Readme",
+		"Tool",
+		"  Zed",
+		"  Alpha",
+	}, "\n") + "\n"
+	if got := s.outline(); got != want {
+		t.Errorf("outline:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 // An index's links order its directory: an explicit nav-order first, then
 // the children the index links, by first link, then the rest by label. A
 // link deeper into a subdirectory does not rank it, a link to the index
