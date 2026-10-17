@@ -224,13 +224,24 @@ func HeadingAnchors() Transform {
 // untouched, which is how remote URLs, fragments, and deliberately
 // unrewritten links survive.
 func LinkRewrite(m map[string]string) Transform {
+	return linkRewrite(m, nil)
+}
+
+// linkRewrite is LinkRewrite with anchors, when non-nil, rewriting an <a>'s
+// href in m's place: in a site build a link a reader follows can go
+// somewhere other than the same href on an element the page loads.
+func linkRewrite(m, anchors map[string]string) Transform {
 	return Transform{Name: "linkRewrite", Fn: func(root *html.Node) error {
-		if len(m) == 0 {
+		if len(m) == 0 && len(anchors) == 0 {
 			return nil
 		}
 		walk(root, func(n *html.Node) {
 			if n.Type != html.ElementNode {
 				return
+			}
+			m := m
+			if n.DataAtom == atom.A && anchors != nil {
+				m = anchors
 			}
 			for _, key := range linkAttrsFor(n) {
 				v, ok := attr(n, key)
@@ -261,18 +272,30 @@ func LinkRewrite(m map[string]string) Transform {
 
 // LinkDrop removes each link in m, keyed by the href as written, and keeps
 // what it said: an <a> is replaced by its children, an <img> by its alt
-// text, a dropped srcset candidate leaves the others, and any other element
-// carrying a dropped link is removed. A site build drops a link it cannot
-// keep, one leading outside the site that it has nowhere to send.
+// text, a dropped srcset candidate leaves the others, a dropped poster
+// leaves its video, and any other element carrying a dropped link is
+// removed. A site build drops a link it cannot keep, one leading outside the
+// site that it has nowhere to send.
 func LinkDrop(m map[string]bool) Transform {
+	return linkDrop(m, nil)
+}
+
+// linkDrop is LinkDrop with anchors, when non-nil, naming the <a> elements
+// to drop in m's place: in a site build a link a reader follows can be
+// dropped while the same href on an element the page loads is kept.
+func linkDrop(m, anchors map[string]bool) Transform {
 	return Transform{Name: "linkDrop", Fn: func(root *html.Node) error {
-		if len(m) == 0 {
+		if len(m) == 0 && len(anchors) == 0 {
 			return nil
 		}
 		var gone []*html.Node
 		walk(root, func(n *html.Node) {
 			if n.Type != html.ElementNode {
 				return
+			}
+			m := m
+			if n.DataAtom == atom.A && anchors != nil {
+				m = anchors
 			}
 			for _, key := range linkAttrsFor(n) {
 				v, ok := attr(n, key)
@@ -291,6 +314,10 @@ func LinkDrop(m map[string]bool) Transform {
 					} else {
 						setAttr(n, key, joinSrcset(kept))
 					}
+					continue
+				}
+				if m[v] && key == "poster" {
+					removeAttr(n, key)
 					continue
 				}
 				if m[v] {

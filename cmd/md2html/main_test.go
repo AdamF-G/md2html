@@ -1364,3 +1364,72 @@ func TestGrammarWarningIsSaidOnceAfterThePages(t *testing.T) {
 		}
 	}
 }
+
+// An image a page shows and a link a reader follows can name one file out
+// of the site: the image is copied, and the link goes where unmounted: says,
+// each without changing the other.
+func TestRunSiteKeepsAClickableImageFromOutsideTheSite(t *testing.T) {
+	for _, tc := range []struct {
+		front, wantA string
+	}{
+		{"repo-url: https://example.org/r/blob/main/{path}\n", `<a href="https://example.org/r/blob/main/logo.png"><img src="_assets/logo.png" alt="logo"/></a>`},
+		{"", `<p><img src="_assets/logo.png" alt="logo"/></p>`},
+	} {
+		root := tree(t, map[string]string{
+			"site/shell.md": "---\nsite: true\n" + tc.front + "---\n[[content]]\n",
+			"docs/index.md": "# Home\n\n[![logo](../logo.png)](../logo.png)\n",
+			"logo.png":      "png",
+		})
+		var out, errb bytes.Buffer
+		if code := run([]string{"--site", filepath.Join(root, "site/shell.md"), filepath.Join(root, "docs"), "-o", filepath.Join(root, "out")}, &out, &errb); code != 0 {
+			t.Fatalf("exit %d, stderr: %s", code, errb.String())
+		}
+		page, _ := os.ReadFile(filepath.Join(root, "out/index.html"))
+		if !strings.Contains(string(page), tc.wantA) {
+			t.Errorf("repo-url %q: no %s in\n%s", tc.front, tc.wantA, mainOf(page))
+		}
+		if b, err := os.ReadFile(filepath.Join(root, "out/_assets/logo.png")); err != nil || string(b) != "png" {
+			t.Errorf("repo-url %q: image not copied: %v", tc.front, err)
+		}
+	}
+}
+
+// A missing file, in the site or out of it, is warned about and left as
+// written; the build does not try to copy it.
+func TestRunSiteLeavesAMissingFileAsWritten(t *testing.T) {
+	root := tree(t, map[string]string{
+		"site/shell.md": "---\nsite: true\n---\n[[content]]\n",
+		"docs/index.md": "# Home\n\n![m](img/missing.png) ![far](../gone.png)\n",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", filepath.Join(root, "site/shell.md"), filepath.Join(root, "docs"), "-o", filepath.Join(root, "out")}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	page, _ := os.ReadFile(filepath.Join(root, "out/index.html"))
+	for _, want := range []string{`src="img/missing.png"`, `src="../gone.png"`} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("missing %s in\n%s", want, mainOf(page))
+		}
+	}
+	for _, want := range []string{"img/missing.png", "../gone.png"} {
+		if !strings.Contains(errb.String(), "referenced asset does not exist: "+want) {
+			t.Errorf("no warning for %s in:\n%s", want, errb.String())
+		}
+	}
+	if !strings.Contains(errb.String(), " 0 failed") || strings.Contains(errb.String(), "no such file") {
+		t.Errorf("a copy was tried:\n%s", errb.String())
+	}
+}
+
+// mainOf is a page's <main>, which is all a failure needs to show.
+func mainOf(page []byte) string {
+	s := string(page)
+	if i := strings.Index(s, "<main"); i >= 0 {
+		s = s[i:]
+	}
+	if i := strings.Index(s, "</main>"); i >= 0 {
+		s = s[:i+len("</main>")]
+	}
+	return s
+}

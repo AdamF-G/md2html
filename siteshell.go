@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // wrap returns the shell, rendered for the page at src, with the page's
@@ -50,13 +51,13 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	// The crawl planned the shell once, for its copies and warnings; each
 	// page plans it again from where the page is written.
 	plan := planLinks(links, out, s.outBySrc, s.crawl, s.rules)
-	if err := LinkDrop(plan.drop).Fn(shell); err != nil {
+	if err := linkDrop(plan.drop, plan.anchorDrop).Fn(shell); err != nil {
 		return nil, err
 	}
-	if err := LinkRewrite(plan.rewrite).Fn(shell); err != nil {
+	if err := linkRewrite(plan.rewrite, plan.anchorRewrite).Fn(shell); err != nil {
 		return nil, err
 	}
-	s.rebaseShellLinks(links, plan.rewrite, plan.drop, out)
+	s.rebaseShellLinks(links, plan, out)
 	if label == "" {
 		label = tocLabel
 	}
@@ -97,16 +98,27 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	return shell, nil
 }
 
-// rebaseShellLinks points each relative link the link map left alone at
-// its target from the page written at out. Written in the shell, it is
+// rebaseShellLinks points each relative link the plan left alone at its
+// target from the page written at out. Written in the shell, it is
 // relative to the shell's directory, which is no page's: in place an asset
 // is not mapped, nor is a document the build does not emit, nor anything
 // under --no-md-links or --no-assets. A link to a document the build does
 // not emit is said once, since it reaches the Markdown file, not a page.
-func (s *Site) rebaseShellLinks(links []Link, mapped map[string]string, dropped map[string]bool, out string) {
+func (s *Site) rebaseShellLinks(links []Link, plan linkPlan, out string) {
 	for _, l := range links {
 		if l.Kind != LinkDoc && l.Kind != LinkAsset {
 			continue
+		}
+		// The maps that handle this link's kind, as linkRewrite and
+		// linkDrop choose them.
+		mapped, dropped := plan.rewrite, plan.drop
+		if l.Node.DataAtom == atom.A {
+			if plan.anchorRewrite != nil {
+				mapped = plan.anchorRewrite
+			}
+			if plan.anchorDrop != nil {
+				dropped = plan.anchorDrop
+			}
 		}
 		if _, ok := mapped[l.Href]; ok || dropped[l.Href] || hasScheme(l.Href) {
 			continue

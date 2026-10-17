@@ -673,20 +673,22 @@ func buildOptions(d md2html.Doc, fragment, noSource bool, css, lang, toc, autoTO
 	}
 
 	return md2html.Options{
-		Fragment:    fragment,
-		NoSource:    noSource,
-		NoCharts:    noCharts,
-		NoHighlight: noHighlight,
-		DataRoot:    dataRoot,
-		SourcePath:  d.Src,
-		CSS:         css,
-		Lang:        lang,
-		TOC:         toc,
-		AutoTOC:     autoTOC,
-		Transforms:  ts,
-		LinkMap:     d.LinkMap,
-		LinkDrops:   d.LinkDrops,
-		Warn:        warn,
+		Fragment:        fragment,
+		NoSource:        noSource,
+		NoCharts:        noCharts,
+		NoHighlight:     noHighlight,
+		DataRoot:        dataRoot,
+		SourcePath:      d.Src,
+		CSS:             css,
+		Lang:            lang,
+		TOC:             toc,
+		AutoTOC:         autoTOC,
+		Transforms:      ts,
+		LinkMap:         d.LinkMap,
+		LinkDrops:       d.LinkDrops,
+		AnchorLinkMap:   d.AnchorLinkMap,
+		AnchorLinkDrops: d.AnchorLinkDrops,
+		Warn:            warn,
 	}
 }
 

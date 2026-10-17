@@ -27,7 +27,9 @@ major version instead.
   are measured from the source root, the deepest directory holding the
   shell and the pages, or `source-root:` and `--source-root`.
 - `Options.LinkDrops` and the `LinkDrop` transform remove a link and keep
-  its text or an image's alt.
+  its text or an image's alt. `Options.AnchorLinkMap` and
+  `Options.AnchorLinkDrops` carry what a site build does with an `<a>`'s
+  href apart from the same href on an image the page shows.
 
 ### Changed
 
@@ -36,7 +38,11 @@ major version instead.
   of linking back to the sources, and builds nothing outside its base:
   a page it used to write under `_external/` is no longer written, and a
   link to it goes where `unmounted:` says. Without `repo-url:`, a link
-  out of the site is now unlinked, with a warning.
+  out of the site is now unlinked, with a warning. A file already at a
+  copy's destination that md2html did not write, or that was edited
+  since, is refused, and the build exits non-zero. A default source root
+  that would be the filesystem's root is now an error, and a `.md` under
+  the base that the build does not write is left as written.
 - An image's `srcset` candidates and a video's `poster` are found and
   rewritten like any other link, in every build.
 

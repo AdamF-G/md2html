@@ -37,10 +37,10 @@ entry points. Check none were unintended.
 seed such as a symlinked `.md` resolves outside the run's base. A site
 builds only what is under its root; move the file in, or add its tree.
 
-**unlinked …, which is outside the site** — in a site whose shell sets no
-`repo-url:`, a link to a file outside the site. Its text is kept. Set
-`repo-url:` to link the file on the repository's host, or
-`unmounted: error` to stop the build instead.
+**unlinked …, which is outside the site** — in a site whose shell says
+`unmounted: unlink`, or sets no `repo-url:`, a link to a file outside the
+site. Its text is kept. Set `repo-url:` to link the file on the
+repository's host, or `unmounted: error` to stop the build instead.
 
 **unlinked …: it is outside the source root** — a link to a file above
 the site's source root, so `repo-url:` has no path for it. Its text is

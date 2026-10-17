@@ -77,6 +77,12 @@ type Doc struct {
 	// site build removes: a link out of the site it has nowhere to send.
 	// Nil outside a site build.
 	LinkDrops map[string]bool
+	// AnchorLinkMap and AnchorLinkDrops are, in a site build, the
+	// replacement for, or removal of, an <a>'s href, which can differ from
+	// what the same href means on an element the page loads. Nil outside a
+	// site build.
+	AnchorLinkMap   map[string]string
+	AnchorLinkDrops map[string]bool
 	// Meta is the document's front matter, nil when it has none. Discovery
 	// reads it so a site can be laid out before any page converts.
 	Meta map[string]string
@@ -553,24 +559,28 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 		d.LinkMap = p.rewrite
 		if res.rules != nil {
 			d.LinkDrops = p.drop
+			d.AnchorLinkMap, d.AnchorLinkDrops = p.anchorRewrite, p.anchorDrop
 		}
 		take(d.Src, p)
 	}
 	if res.rules != nil {
-		shell, err := filepath.Abs(opt.SiteShell)
+		// Read where it really is, as each page reads it, so a shell reached
+		// through a symlink has its links planned from one directory.
+		shell := res.rules.shell
+		raw, err := os.ReadFile(shell)
 		if err != nil {
-			return err
+			return fmt.Errorf("site shell: %w", err)
 		}
-		if raw, err := os.ReadFile(shell); err == nil {
-			_, body, _ := splitFrontMatter(raw)
-			if root, err := parseDoc(body); err == nil {
-				// The shell's links are planned from a page at the output
-				// root; only the copies, warnings and failures are kept, and
-				// each page plans the shell's hrefs again from where it is.
-				take(shell, planLinks(ExtractLinks(root, filepath.Dir(shell)),
-					filepath.Join(opt.OutDir, "index.html"), outBySrc, opt, res.rules))
-			}
+		_, body, _ := splitFrontMatter(raw)
+		root, err := parseDoc(body)
+		if err != nil {
+			return fmt.Errorf("site shell: %w", err)
 		}
+		// The shell's links are planned from a page at the output root;
+		// only the copies, warnings and failures are kept, and each page
+		// plans the shell's hrefs again from where it is.
+		take(shell, planLinks(ExtractLinks(root, filepath.Dir(shell)),
+			filepath.Join(opt.OutDir, "index.html"), outBySrc, opt, res.rules))
 	}
 	if len(fails) > 0 {
 		sort.Strings(fails)
@@ -592,13 +602,17 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 
 // linkPlan is what a document's links become: the hrefs rewritten, and in a
 // site build the hrefs dropped, the files copied, and what is warned or
-// stops the build.
+// stops the build. In a site build an <a>'s hrefs are planned apart, in
+// anchorRewrite and anchorDrop, since a link a reader follows out of the
+// site can go elsewhere than the same href on an image the page shows.
 type linkPlan struct {
-	rewrite map[string]string
-	drop    map[string]bool
-	copies  []Asset
-	warns   []string
-	fails   []string
+	rewrite       map[string]string
+	drop          map[string]bool
+	anchorRewrite map[string]string
+	anchorDrop    map[string]bool
+	copies        []Asset
+	warns         []string
+	fails         []string
 }
 
 // planLinks plans links, as written in a document whose output is fromOut.
@@ -609,18 +623,23 @@ type linkPlan struct {
 func planLinks(links []Link, fromOut string, outBySrc map[string]string, opt CrawlOptions, rules *siteRules) linkPlan {
 	p := linkPlan{rewrite: map[string]string{}, drop: map[string]bool{}}
 	if rules != nil {
+		p.anchorRewrite, p.anchorDrop = map[string]string{}, map[string]bool{}
 		for _, l := range links {
 			a := rules.action(l, fromOut, outBySrc)
+			rewrite, drop := p.rewrite, p.drop
+			if !l.Loaded {
+				rewrite, drop = p.anchorRewrite, p.anchorDrop
+			}
 			switch {
 			case a.fail != "":
 				p.fails = append(p.fails, a.fail)
 			case a.drop:
-				p.drop[l.Href] = true
+				drop[l.Href] = true
 			case a.rewrite != "":
 				if opt.NoMdLinks && l.Kind == LinkDoc {
 					continue
 				}
-				p.rewrite[l.Href] = a.rewrite
+				rewrite[l.Href] = a.rewrite
 			}
 			if a.copy != nil {
 				p.copies = append(p.copies, *a.copy)

@@ -273,3 +273,12 @@ func TestConvertAppliesLinkDropsBeforeTheMap(t *testing.T) {
 		t.Errorf("got:\n%s", s)
 	}
 }
+
+// A dropped poster is only a picture shown before the video plays; the
+// video, with a src that works, stays.
+func TestLinkDropKeepsAVideoWithoutItsPoster(t *testing.T) {
+	got := apply(t, `<video src="ok.mp4" poster="../../far.jpg"></video>`, LinkDrop(map[string]bool{"../../far.jpg": true}))
+	if !strings.Contains(got, `<video src="ok.mp4"></video>`) {
+		t.Errorf("got:\n%s", got)
+	}
+}

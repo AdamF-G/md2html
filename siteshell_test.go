@@ -25,7 +25,8 @@ func sitePage(t *testing.T, s *Site, res *CrawlResult, root, rel string) (string
 		t.Fatal(err)
 	}
 	var warnings []string
-	out, err := Convert(b, Options{SourcePath: src, LinkMap: doc.LinkMap, LinkDrops: doc.LinkDrops, Site: s, NoSource: true,
+	out, err := Convert(b, Options{SourcePath: src, LinkMap: doc.LinkMap, LinkDrops: doc.LinkDrops,
+		AnchorLinkMap: doc.AnchorLinkMap, AnchorLinkDrops: doc.AnchorLinkDrops, Site: s, NoSource: true,
 		Warn: func(m string) { warnings = append(warnings, m) }})
 	if err != nil {
 		t.Fatalf("Convert %s: %v", rel, err)

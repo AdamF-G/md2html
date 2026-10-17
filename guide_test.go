@@ -1169,6 +1169,19 @@ func warningMessages(t *testing.T) map[string]string {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// What each name was last given by name := expr, so a warning
+			// built into a variable before it is used can be read.
+			defined := map[string]ast.Expr{}
+			ast.Inspect(file, func(n ast.Node) bool {
+				if a, ok := n.(*ast.AssignStmt); ok && a.Tok == token.DEFINE && len(a.Lhs) == len(a.Rhs) {
+					for i, l := range a.Lhs {
+						if id, ok := l.(*ast.Ident); ok {
+							defined[id.Name] = a.Rhs[i]
+						}
+					}
+				}
+				return true
+			})
 			ast.Inspect(file, func(n ast.Node) bool {
 				switch x := n.(type) {
 				case *ast.CallExpr:
@@ -1192,6 +1205,21 @@ func warningMessages(t *testing.T) map[string]string {
 				case *ast.CompositeLit:
 					if id, ok := x.Type.(*ast.Ident); ok && id.Name == "Warning" && len(x.Elts) == 2 {
 						add(fset, x.Pos(), x.Elts[1])
+					}
+					// A site's linkAction carries its warning as warn:.
+					for _, e := range x.Elts {
+						kv, ok := e.(*ast.KeyValueExpr)
+						if !ok {
+							continue
+						}
+						if k, ok := kv.Key.(*ast.Ident); !ok || k.Name != "warn" {
+							continue
+						}
+						v := kv.Value
+						if id, ok := v.(*ast.Ident); ok && defined[id.Name] != nil {
+							v = defined[id.Name]
+						}
+						add(fset, kv.Pos(), v)
 					}
 				}
 				return true

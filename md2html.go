@@ -168,6 +168,13 @@ type Options struct {
 	// crawler in a site build for links it cannot keep; nil otherwise.
 	// Convert runs LinkDrop(LinkDrops) just before LinkRewrite(LinkMap).
 	LinkDrops map[string]bool
+	// AnchorLinkMap and AnchorLinkDrops are, in a site build, the
+	// replacement for, or removal of, an <a>'s href, which can differ from
+	// what the same href means on an element the page loads. An <a> is
+	// rewritten and dropped by them in place of LinkMap and LinkDrops when
+	// they are set. Nil outside a site build.
+	AnchorLinkMap   map[string]string
+	AnchorLinkDrops map[string]bool
 	// Warn, when non-nil, receives one message per non-fatal problem found
 	// while converting this document. Things that report so far: a front
 	// matter block that is not flat key: value, a language that is not a
@@ -409,14 +416,14 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		opt.Warn(fmt.Sprintf("front matter toc %q has no [[toc]] or [TOC] marker in the document; it has no effect", meta["toc"]))
 	}
 	transforms = withTOC(transforms, meta["toc-title"], float)
-	if opt.LinkDrops != nil {
+	if opt.LinkDrops != nil || opt.AnchorLinkDrops != nil {
 		transforms = append(transforms[:len(transforms):len(transforms)],
-			LinkDrop(opt.LinkDrops))
+			linkDrop(opt.LinkDrops, opt.AnchorLinkDrops))
 	}
-	if opt.LinkMap != nil {
+	if opt.LinkMap != nil || opt.AnchorLinkMap != nil {
 		// Full-slice expression: never append into the caller's array.
 		transforms = append(transforms[:len(transforms):len(transforms)],
-			LinkRewrite(opt.LinkMap))
+			linkRewrite(opt.LinkMap, opt.AnchorLinkMap))
 	}
 	for _, t := range transforms {
 		if err := t.Fn(root); err != nil {

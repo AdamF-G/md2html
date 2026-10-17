@@ -13,6 +13,7 @@ import (
 // A build without a shell, or one written in place, has none, and does what
 // it always did.
 type siteRules struct {
+	shell      string // the shell, absolute and with its symlinks resolved
 	base       string // a file under it is in the site
 	sourceRoot string // _assets/ and repo-url: paths are measured from it
 	outDir     string
@@ -38,7 +39,7 @@ func newSiteRules(opt CrawlOptions, base string, excluded exclusions) (*siteRule
 		return nil, fmt.Errorf("site shell: %w", err)
 	}
 	meta, _, _ := splitFrontMatter(raw)
-	r := &siteRules{base: base, outDir: opt.OutDir, repoURL: meta["repo-url"],
+	r := &siteRules{shell: shell, base: base, outDir: opt.OutDir, repoURL: meta["repo-url"],
 		noAssets: opt.NoAssets, excluded: excluded}
 	if r.repoURL != "" && !strings.Contains(r.repoURL, "{path}") {
 		return nil, fmt.Errorf("%s: repo-url: needs a {path}, where a file's path from the source root goes", opt.SiteShell)
@@ -131,12 +132,16 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 	}
 	target, err := resolve(l.Abs)
 	if err != nil {
-		return linkAction{} // missing: the crawl warned
+		return linkAction{}
 	}
 	if r.excluded.match(target) {
 		return linkAction{}
 	}
-	if fi, err := os.Stat(target); err == nil && fi.IsDir() {
+	fi, err := os.Stat(target)
+	if err != nil {
+		return linkAction{} // missing: the crawl warned
+	}
+	if fi.IsDir() {
 		return linkAction{} // a directory is not a file to copy or link
 	}
 	if l.Kind == LinkDoc {

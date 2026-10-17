@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -69,14 +70,20 @@ func TestSiteCrawlKeepsTheSiteToItself(t *testing.T) {
 		"../site.go#L10":       "https://example.org/r/blob/main/site.go#L10",
 		"../logo.png":          "_assets/logo.png",
 	} {
-		if got := idx.LinkMap[href]; got != want {
+		// An image's src is planned apart from an <a>'s href.
+		got := idx.AnchorLinkMap[href]
+		if href == "img/flow.png" || href == "../logo.png" {
+			got = idx.LinkMap[href]
+		}
+		if got != want {
 			t.Errorf("%s -> %q, want %q", href, got, want)
 		}
 	}
-	for _, href := range []string{"../../far.txt", "../../farpic.png"} {
-		if !idx.LinkDrops[href] {
-			t.Errorf("%s not dropped", href)
-		}
+	if !idx.AnchorLinkDrops["../../far.txt"] {
+		t.Error("../../far.txt not dropped")
+	}
+	if !idx.LinkDrops["../../farpic.png"] {
+		t.Error("../../farpic.png not dropped")
 	}
 	var outs []string
 	for _, a := range res.Assets {
@@ -106,7 +113,7 @@ func TestSiteCrawlUnlinksWithoutARepoURL(t *testing.T) {
 	}
 	idx := docByBase(res.Docs, "index.md")
 	for _, href := range []string{"../LICENSE", "../README.md#install", "../site.go#L10"} {
-		if !idx.LinkDrops[href] {
+		if !idx.AnchorLinkDrops[href] {
 			t.Errorf("%s not unlinked", href)
 		}
 	}
@@ -140,11 +147,13 @@ func TestSiteCrawlNoAssets(t *testing.T) {
 		t.Errorf("assets %v", res.Assets)
 	}
 	for _, href := range []string{"img/flow.png", "files/my%20doc.pdf", "../logo.png"} {
-		if _, ok := idx.LinkMap[href]; ok {
+		_, ok := idx.LinkMap[href]
+		_, aok := idx.AnchorLinkMap[href]
+		if ok || aok {
 			t.Errorf("%s was rewritten", href)
 		}
 	}
-	if idx.LinkMap["../LICENSE"] != "https://example.org/r/blob/main/LICENSE" {
+	if idx.AnchorLinkMap["../LICENSE"] != "https://example.org/r/blob/main/LICENSE" {
 		t.Error("a link out of the site did not follow unmounted:")
 	}
 }
@@ -187,7 +196,7 @@ func TestSiteCrawlLeavesDirectoryLinksAlone(t *testing.T) {
 	}
 	idx := docByBase(res.Docs, "index.md")
 	for _, href := range []string{"./", "sub/", "../"} {
-		if _, ok := idx.LinkMap[href]; ok || idx.LinkDrops[href] {
+		if _, ok := idx.AnchorLinkMap[href]; ok || idx.AnchorLinkDrops[href] {
 			t.Errorf("%s was rewritten or dropped", href)
 		}
 	}
@@ -211,7 +220,7 @@ func TestSiteCrawlLeavesAnUnbuiltPageInTheSiteAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	idx := docByBase(res.Docs, "index.md")
-	if _, ok := idx.LinkMap["sub/deep.md"]; ok || idx.LinkDrops["sub/deep.md"] {
+	if _, ok := idx.AnchorLinkMap["sub/deep.md"]; ok || idx.AnchorLinkDrops["sub/deep.md"] {
 		t.Error("an unbuilt page's link was changed")
 	}
 	for _, w := range res.Warnings {
@@ -232,4 +241,77 @@ func TestSiteCrawlKeepsTheFragmentOfACopiedImage(t *testing.T) {
 	if got := docByBase(res.Docs, "index.md").LinkMap["../icons.svg#x"]; got != "_assets/icons.svg#x" {
 		t.Errorf("got %q", got)
 	}
+}
+
+// An image the page shows and a link a reader follows can name the same file
+// out of the site, as a clickable image does: the image is copied and the
+// link goes where unmounted: says, and neither changes what the other is.
+func TestSiteCrawlKeepsAClickableImageFromOutsideTheSite(t *testing.T) {
+	files := map[string]string{
+		"docs/index.md": "# Home\n\n[![logo](../logo.png)](../logo.png)\n",
+		"logo.png":      "png",
+	}
+	for _, tc := range []struct{ front, want string }{
+		{"repo-url: https://example.org/r/blob/main/{path}\n", `<a href="https://example.org/r/blob/main/logo.png"><img src="_assets/logo.png" alt="logo"/></a>`},
+		{"", `<p><img src="_assets/logo.png" alt="logo"/></p>`},
+	} {
+		var opt CrawlOptions
+		res, root, err := siteCrawl(t, tc.front, files, func(o *CrawlOptions) { opt = *o })
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := BuildSite(res, opt.SiteShell, opt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _ := sitePage(t, s, res, root, "repo/docs/index.md")
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("repo-url %q: no %s in\n%s", tc.front, tc.want, mainOf(out))
+		}
+		if len(res.Assets) != 1 || res.Assets[0].Src != filepath.Join(root, "repo/logo.png") {
+			t.Errorf("repo-url %q: assets %v", tc.front, res.Assets)
+		}
+	}
+}
+
+// A shell reached through a symlink is read where it really is: its
+// relative image is planned from there by the crawl and by every page.
+func TestSiteCrawlReadsTheShellWhereItIs(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"repo/site/shell.md":  "---\nsite: true\n---\n![brand](brand.png)\n\n[[content]]\n",
+		"repo/site/brand.png": "png",
+		"repo/docs/index.md":  "# Home\n",
+	})
+	if err := os.Symlink(filepath.Join(root, "repo/site/shell.md"), filepath.Join(root, "repo/shell.md")); err != nil {
+		t.Skipf("no symlinks: %v", err)
+	}
+	opt := CrawlOptions{Entries: []string{filepath.Join(root, "repo/docs")}, OutDir: filepath.Join(root, "out"),
+		Depth: -1, LinkDepth: -1, SiteShell: filepath.Join(root, "repo/shell.md")}
+	res, err := Crawl(opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Assets) != 1 || res.Assets[0].Src != filepath.Join(root, "repo/site/brand.png") {
+		t.Fatalf("assets %v", res.Assets)
+	}
+	s, err := BuildSite(res, opt.SiteShell, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := sitePage(t, s, res, root, "repo/docs/index.md")
+	rel, _ := filepath.Rel(opt.OutDir, res.Assets[0].Out)
+	if want := `src="` + filepath.ToSlash(rel) + `"`; !strings.Contains(out, want) {
+		t.Errorf("no %s in\n%s", want, mainOf(out))
+	}
+}
+
+// mainOf is a page's <main>, which is all a failure needs to show.
+func mainOf(page string) string {
+	if i := strings.Index(page, "<main"); i >= 0 {
+		page = page[i:]
+	}
+	if i := strings.Index(page, "</main>"); i >= 0 {
+		page = page[:i+len("</main>")]
+	}
+	return page
 }
