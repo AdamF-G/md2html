@@ -11,8 +11,8 @@ this one from a single Markdown shell page.
   syntax md2html reads, the traps that render wrong without a warning,
   styles, sites, and every warning md2html gives. The same guide prints in
   a terminal with `md2html --guide`.
-- [What changed in each release](../CHANGELOG.md)
 - [Design Notes](specs/index.md), the reasoning behind each feature
+- [What changed in each release](../CHANGELOG.md)
 
 This site is built by md2html itself, from [its shell](site/shell.md):
 `just site`.
