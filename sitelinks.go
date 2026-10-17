@@ -374,22 +374,36 @@ func (r *siteRules) outsideLoaded(l Link, target, fromOut string) linkAction {
 
 // leaving is what a link a reader follows out of the site becomes. The
 // root of the source is a directory too, and fills {path} with nothing.
-// fromSite, the site directory of the page holding the link, is for the
-// clause that names a site page the file shadows.
+// When the site has a page at the link's site path, the file or directory
+// at target shadows it, and the message says which page it hides; fromSite,
+// the site directory of the page holding the link, is where that path is
+// read from.
 func (r *siteRules) leaving(l Link, target, fromSite string) linkAction {
+	var shadow, kind string
+	if _, at, ok := r.inSite(l, fromSite); ok {
+		kind = "file"
+		if fi, err := os.Stat(target); err == nil && fi.IsDir() {
+			kind = "directory"
+		}
+		shadow = fmt.Sprintf("; the site has a page at %s, which the %s shadows", at, kind)
+	}
 	switch r.unmounted {
 	case "error":
-		return linkAction{fail: fmt.Sprintf("links to %s, which is outside the site", l.Href)}
+		return linkAction{fail: fmt.Sprintf("links to %s, which is outside the site%s", l.Href, shadow)}
 	case "link":
 		if rel, ok := relUnder(r.sourceRoot, target); ok {
 			if rel == "." {
 				rel = ""
 			}
-			return linkAction{rewrite: strings.ReplaceAll(r.repoURL, "{path}", encodePath(rel)) + fragmentOf(l.Href)}
+			a := linkAction{rewrite: strings.ReplaceAll(r.repoURL, "{path}", encodePath(rel)) + fragmentOf(l.Href)}
+			if shadow != "" {
+				a.warn = fmt.Sprintf("linked %s to the repository's host, since the %s is outside the site%s", l.Href, kind, shadow)
+			}
+			return a
 		}
-		return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s: it is outside the source root %s, so repo-url: has no path for it; its text is kept", l.Href, r.sourceRoot)}
+		return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s: it is outside the source root %s, so repo-url: has no path for it; its text is kept%s", l.Href, r.sourceRoot, shadow)}
 	}
-	return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s, which is outside the site; its text is kept", l.Href)}
+	return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s, which is outside the site; its text is kept%s", l.Href, shadow)}
 }
 
 // dirPage is the output of the page of the directory target, when the site

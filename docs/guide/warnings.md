@@ -9,6 +9,8 @@ What each warning means and how to fix it. The text in bold is the start of
 the message.
 
 **link target does not exist** — the `.md` file is missing. Fix the path.
+In a mounted site, a link a reader follows warns only when nothing is on
+disk and the site has no page at the link's path from its own page.
 
 **referenced asset does not exist** — an image or other file, or an
 `.html` link, points at nothing. Fix the path; link pages by their `.md`.
@@ -56,6 +58,20 @@ or remove the mount.
 `unmounted: unlink`, or sets no `repo-url:`, a link to a file outside the
 site. Its text is kept. Set `repo-url:` to link the file on the
 repository's host, or `unmounted: error` to stop the build instead.
+
+When the message goes on to say `the site has a page at …, which the file
+shadows`, the link's path from its page is also a page of the site, and
+the file, which no mount holds, hides it. The same clause ends the
+`outside the source root` warning and the `unmounted: error` failure. To
+reach the page, rename or move the file, or exclude it. The same holds of
+a directory.
+
+**linked … to the repository's host, since the … is outside the site; the
+site has a page at …, which the … shadows** — in a site that sets
+`repo-url:`, a link reaches a file or directory no mount holds, at a path
+where the site has a page. The link goes to the repository's host, not to
+the page. Rename or move the file, or exclude it, and the link reaches
+the page.
 
 **unlinked …: it is outside the source root** — a link to a file above
 the site's source root, so `repo-url:` has no path for it. Its text is

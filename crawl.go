@@ -729,10 +729,9 @@ func planLinks(links []Link, fromOut, fromSite string, outBySrc map[string]strin
 			case a.drop:
 				drop[l.Href] = true
 			case a.rewrite != "":
-				if opt.NoMdLinks && l.Kind == LinkDoc {
-					continue
+				if !(opt.NoMdLinks && l.Kind == LinkDoc) {
+					rewrite[l.Href] = a.rewrite
 				}
-				rewrite[l.Href] = a.rewrite
 			}
 			if a.copy != nil {
 				p.copies = append(p.copies, *a.copy)

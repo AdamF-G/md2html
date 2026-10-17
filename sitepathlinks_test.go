@@ -347,3 +347,111 @@ func TestExcludedDirectoryWithNoPageLeavesTheSite(t *testing.T) {
 		t.Errorf("no warning: %v", res.Warnings)
 	}
 }
+
+// TestShadowedLinkNamesThePage checks that a link to a file no mount holds,
+// where the site has a page at the same path, says which page it hides.
+func TestShadowedLinkNamesThePage(t *testing.T) {
+	build := func(front string, extra map[string]string) (*CrawlResult, error) {
+		files := map[string]string{}
+		for k, v := range sitePathFiles {
+			files[k] = v
+		}
+		files["build/scratch/guides/tuning.md"] = "# Stale\n"
+		files["build/scratch/reference/engine.md"] = "# Engine\n\n[tuning](../guides/tuning.md) [dir](../guides/)\n"
+		for k, v := range extra {
+			files[k] = v
+		}
+		files["repo/docs/site/shell.md"] = "---\nsite: true\n" + front + "---\n" + sitePathShell + "\n\n[[content]]\n"
+		res, _, err := mountCrawl(t, sitePathShell, files, nil)
+		return res, err
+	}
+	const clause = "; the site has a page at guides/tuning, which the file shadows"
+	const dirClause = "; the site has a page at guides/, which the directory shadows"
+
+	res, err := build("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := docByBase(res.Docs, "engine.md")
+	if !engine.AnchorLinkDrops["../guides/tuning.md"] {
+		t.Errorf("not dropped: %v", engine.AnchorLinkDrops)
+	}
+	for _, w := range []string{
+		"unlinked ../guides/tuning.md, which is outside the site; its text is kept" + clause,
+		"unlinked ../guides/, which is outside the site; its text is kept" + dirClause,
+	} {
+		if countWarnings(res, w) != 1 {
+			t.Errorf("no warning %q: %v", w, res.Warnings)
+		}
+	}
+
+	res, err = build("repo-url: https://example.com/blob/main/{path}\n", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine = docByBase(res.Docs, "engine.md")
+	if got, want := engine.AnchorLinkMap["../guides/tuning.md"], "https://example.com/blob/main/build/scratch/guides/tuning.md"; got != want {
+		t.Errorf("rewrite %q, want %q", got, want)
+	}
+	for _, w := range []string{
+		"linked ../guides/tuning.md to the repository's host, since the file is outside the site" + clause,
+		"linked ../guides/ to the repository's host, since the directory is outside the site" + dirClause,
+	} {
+		if countWarnings(res, w) != 1 {
+			t.Errorf("no warning %q: %v", w, res.Warnings)
+		}
+	}
+
+	_, err = build("unmounted: error\n", nil)
+	if err == nil || !strings.Contains(err.Error(), "links to ../guides/tuning.md, which is outside the site"+clause) {
+		t.Errorf("unmounted: error gave %v", err)
+	}
+
+	// A file with no page at its site path reports as before.
+	res, err = build("repo-url: https://example.com/blob/main/{path}\n", map[string]string{
+		"build/scratch/reference/engine.md": "# Engine\n\n[other](../other.md)\n",
+		"build/scratch/other.md":            "# Other\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countWarnings(res, "shadows"); n != 0 {
+		t.Errorf("%d shadow warnings: %v", n, res.Warnings)
+	}
+	if got, want := docByBase(res.Docs, "engine.md").AnchorLinkMap["../other.md"], "https://example.com/blob/main/build/scratch/other.md"; got != want {
+		t.Errorf("rewrite %q, want %q", got, want)
+	}
+	if n := countWarnings(res, "other.md"); n != 0 {
+		t.Errorf("%d warnings about other.md: %v", n, res.Warnings)
+	}
+	res, err = build("", map[string]string{
+		"build/scratch/reference/engine.md": "# Engine\n\n[other](../other.md)\n",
+		"build/scratch/other.md":            "# Other\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countWarnings(res, "unlinked ../other.md, which is outside the site; its text is kept") != 1 {
+		t.Errorf("no unlink warning: %v", res.Warnings)
+	}
+}
+
+// TestShadowedLinkWarnsWithoutMdLinks checks that --no-md-links, which
+// leaves a .md link as written, still reports the page the file shadows.
+func TestShadowedLinkWarnsWithoutMdLinks(t *testing.T) {
+	files := map[string]string{}
+	for k, v := range sitePathFiles {
+		files[k] = v
+	}
+	files["build/scratch/guides/tuning.md"] = "# Stale\n"
+	files["build/scratch/reference/engine.md"] = "# Engine\n\n[tuning](../guides/tuning.md)\n"
+	files["repo/docs/site/shell.md"] = "---\nsite: true\nrepo-url: https://example.com/blob/main/{path}\n---\n" + sitePathShell + "\n\n[[content]]\n"
+	res, _, err := mountCrawl(t, sitePathShell, files, func(opt *CrawlOptions) { opt.NoMdLinks = true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	const w = "linked ../guides/tuning.md to the repository's host, since the file is outside the site; the site has a page at guides/tuning, which the file shadows"
+	if countWarnings(res, w) != 1 {
+		t.Errorf("no warning %q: %v", w, res.Warnings)
+	}
+}
