@@ -25,7 +25,7 @@ func sitePage(t *testing.T, s *Site, res *CrawlResult, root, rel string) (string
 		t.Fatal(err)
 	}
 	var warnings []string
-	out, err := Convert(b, Options{SourcePath: src, LinkMap: doc.LinkMap, Site: s, NoSource: true,
+	out, err := Convert(b, Options{SourcePath: src, LinkMap: doc.LinkMap, LinkDrops: doc.LinkDrops, Site: s, NoSource: true,
 		Warn: func(m string) { warnings = append(warnings, m) }})
 	if err != nil {
 		t.Fatalf("Convert %s: %v", rel, err)
@@ -276,5 +276,49 @@ func TestSiteFragmentWarnsAboutNavMarkers(t *testing.T) {
 	}
 	if len(warnings) != 1 || warnings[0] != "[[pages]] needs a site shell (--site); leaving it as written" {
 		t.Errorf("warnings = %q", warnings)
+	}
+}
+
+// The shell's links follow the site's rules, from each page it wraps: its
+// image is copied once and linked from where the page is, its link out of
+// the site goes to the repository's host, and one it has nowhere to send
+// is dropped, warned about once under the shell's path.
+func TestShellLinksFollowTheSiteRules(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"repo/site/shell.md": "---\nsite: true\nrepo-url: https://example.org/r/blob/main/{path}\n---\n" +
+			"![logo](logo.svg) [licence](../LICENSE) [far](../../far.txt)\n\n[[content]]\n",
+		"repo/site/logo.svg":       "<svg/>",
+		"repo/LICENSE":             "MIT",
+		"repo/docs/index.md":       "# Home\n",
+		"repo/docs/guide/intro.md": "# Intro\n",
+		"far.txt":                  "far",
+	})
+	opt := CrawlOptions{Entries: []string{filepath.Join(root, "repo/docs")}, OutDir: filepath.Join(root, "out"),
+		Depth: -1, LinkDepth: -1, SiteShell: filepath.Join(root, "repo/site/shell.md")}
+	res := mustCrawl(t, opt)
+	s, err := BuildSite(res, opt.SiteShell, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Assets) != 1 || res.Assets[0].Out != filepath.Join(root, "out/_assets/site/logo.svg") {
+		t.Fatalf("assets %v", res.Assets)
+	}
+	page, _ := sitePage(t, s, res, root, "repo/docs/guide/intro.md")
+	for _, want := range []string{`src="../_assets/site/logo.svg"`, `href="https://example.org/r/blob/main/LICENSE"`, "far"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("missing %s in:\n%s", want, page)
+		}
+	}
+	if strings.Contains(page, "far.txt") {
+		t.Errorf("the dropped link is still there:\n%s", page)
+	}
+	n := 0
+	for _, w := range append(res.Warnings, s.Warnings...) {
+		if strings.Contains(w.Message, "far.txt") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("the dropped link was warned about %d times", n)
 	}
 }

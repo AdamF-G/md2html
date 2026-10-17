@@ -32,6 +32,7 @@ type Site struct {
 	outRoot   string
 	outBySrc  map[string]string
 	crawl     CrawlOptions
+	rules     *siteRules // the crawl's link rules, for the shell's links
 	root      *siteNode
 	bySrc     map[string]*siteNode
 	order     []*siteNode
@@ -80,6 +81,7 @@ func BuildSite(res *CrawlResult, shell string, opt CrawlOptions) (*Site, error) 
 	}
 	s := &Site{shellSrc: shellSrc, shellDir: filepath.Dir(shellSrc), shellBody: body,
 		base: res.Base, crawl: opt}
+	s.rules = res.rules
 	// Kept as written: the list markers resolve the keys they read, per
 	// page, as on any page.
 	s.shellMeta = meta

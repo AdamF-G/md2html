@@ -47,11 +47,16 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	}
 	out := s.outBySrc[src]
 	links := ExtractLinks(shell, s.shellDir)
-	mapped := planLinks(links, out, s.outBySrc, s.crawl, nil).rewrite
-	if err := LinkRewrite(mapped).Fn(shell); err != nil {
+	// The crawl planned the shell once, for its copies and warnings; each
+	// page plans it again from where the page is written.
+	plan := planLinks(links, out, s.outBySrc, s.crawl, s.rules)
+	if err := LinkDrop(plan.drop).Fn(shell); err != nil {
 		return nil, err
 	}
-	s.rebaseShellLinks(links, mapped, out)
+	if err := LinkRewrite(plan.rewrite).Fn(shell); err != nil {
+		return nil, err
+	}
+	s.rebaseShellLinks(links, plan.rewrite, plan.drop, out)
 	if label == "" {
 		label = tocLabel
 	}
@@ -98,12 +103,12 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 // is not mapped, nor is a document the build does not emit, nor anything
 // under --no-md-links or --no-assets. A link to a document the build does
 // not emit is said once, since it reaches the Markdown file, not a page.
-func (s *Site) rebaseShellLinks(links []Link, mapped map[string]string, out string) {
+func (s *Site) rebaseShellLinks(links []Link, mapped map[string]string, dropped map[string]bool, out string) {
 	for _, l := range links {
 		if l.Kind != LinkDoc && l.Kind != LinkAsset {
 			continue
 		}
-		if _, ok := mapped[l.Href]; ok || hasScheme(l.Href) {
+		if _, ok := mapped[l.Href]; ok || dropped[l.Href] || hasScheme(l.Href) {
 			continue
 		}
 		rel, err := filepath.Rel(filepath.Dir(out), l.Abs)
