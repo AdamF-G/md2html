@@ -163,6 +163,11 @@ type Options struct {
 	// to a.html) and an existing ./a.html asset (mapped to the original
 	// file) would have the first rewrite turned into the second.
 	LinkMap map[string]string
+	// LinkDrops names hrefs, as written in the source, whose links are
+	// removed, keeping an <a>'s text and an image's alt. Populated by the
+	// crawler in a site build for links it cannot keep; nil otherwise.
+	// Convert runs LinkDrop(LinkDrops) just before LinkRewrite(LinkMap).
+	LinkDrops map[string]bool
 	// Warn, when non-nil, receives one message per non-fatal problem found
 	// while converting this document. Things that report so far: a front
 	// matter block that is not flat key: value, a language that is not a
@@ -404,6 +409,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		opt.Warn(fmt.Sprintf("front matter toc %q has no [[toc]] or [TOC] marker in the document; it has no effect", meta["toc"]))
 	}
 	transforms = withTOC(transforms, meta["toc-title"], float)
+	if opt.LinkDrops != nil {
+		transforms = append(transforms[:len(transforms):len(transforms)],
+			LinkDrop(opt.LinkDrops))
+	}
 	if opt.LinkMap != nil {
 		// Full-slice expression: never append into the caller's array.
 		transforms = append(transforms[:len(transforms):len(transforms)],

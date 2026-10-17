@@ -241,3 +241,35 @@ func TestNoMdLinksFlagSuppressesDocRewriting(t *testing.T) {
 		t.Error("NoMdLinks suppressed asset rewriting too; the flags are independent")
 	}
 }
+
+// A dropped link goes, and what it said stays: an <a> keeps its children,
+// an image its alt text, an srcset loses only that candidate, and any
+// other element is removed.
+func TestLinkDropKeepsTextAndAlt(t *testing.T) {
+	m := map[string]bool{"../LICENSE": true, "../../pic.png": true, "x.mp4": true, "big.png": true}
+	got := apply(t, `<p>See <a href="../LICENSE">the <b>licence</b></a>.</p>`+
+		`<p><img src="../../pic.png" alt="A picture"></p>`+
+		`<p><img src="ok.png" srcset="ok.png 1x, big.png 2x"></p>`+
+		`<p><video src="x.mp4"></video>after</p>`, LinkDrop(m))
+	for _, want := range []string{
+		`<p>See the <b>licence</b>.</p>`,
+		`<p>A picture</p>`,
+		`<img src="ok.png" srcset="ok.png 1x"/>`,
+		`<p>after</p>`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in\n%s", want, got)
+		}
+	}
+}
+
+func TestConvertAppliesLinkDropsBeforeTheMap(t *testing.T) {
+	out, err := Convert([]byte("[licence](../LICENSE) and [guide](./g.md)\n"), Options{Fragment: true,
+		LinkDrops: map[string]bool{"../LICENSE": true}, LinkMap: map[string]string{"./g.md": "g.html"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := string(out); strings.Contains(s, "LICENSE") || !strings.Contains(s, "licence and") || !strings.Contains(s, `href="g.html"`) {
+		t.Errorf("got:\n%s", s)
+	}
+}

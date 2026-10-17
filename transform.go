@@ -259,6 +259,71 @@ func LinkRewrite(m map[string]string) Transform {
 	}}
 }
 
+// LinkDrop removes each link in m, keyed by the href as written, and keeps
+// what it said: an <a> is replaced by its children, an <img> by its alt
+// text, a dropped srcset candidate leaves the others, and any other element
+// carrying a dropped link is removed. A site build drops a link it cannot
+// keep, one leading outside the site that it has nowhere to send.
+func LinkDrop(m map[string]bool) Transform {
+	return Transform{Name: "linkDrop", Fn: func(root *html.Node) error {
+		if len(m) == 0 {
+			return nil
+		}
+		var gone []*html.Node
+		walk(root, func(n *html.Node) {
+			if n.Type != html.ElementNode {
+				return
+			}
+			for _, key := range linkAttrsFor(n) {
+				v, ok := attr(n, key)
+				if !ok {
+					continue
+				}
+				if key == "srcset" {
+					var kept []srcsetCandidate
+					for _, c := range srcsetURLs(v) {
+						if !m[c.url] {
+							kept = append(kept, c)
+						}
+					}
+					if len(kept) == 0 {
+						removeAttr(n, key)
+					} else {
+						setAttr(n, key, joinSrcset(kept))
+					}
+					continue
+				}
+				if m[v] {
+					gone = append(gone, n)
+					return
+				}
+			}
+		})
+		// Removed after the walk, so it never steps from a detached node.
+		for _, n := range gone {
+			p := n.Parent
+			if p == nil {
+				continue
+			}
+			switch n.DataAtom {
+			case atom.A:
+				for c := n.FirstChild; c != nil; {
+					next := c.NextSibling
+					n.RemoveChild(c)
+					p.InsertBefore(c, n)
+					c = next
+				}
+			case atom.Img:
+				if alt, _ := attr(n, "alt"); alt != "" {
+					p.InsertBefore(textNode(alt), n)
+				}
+			}
+			p.RemoveChild(n)
+		}
+		return nil
+	}}
+}
+
 // isExternal reports whether an href points off-site.
 func isExternal(href string) bool {
 	return strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") ||
