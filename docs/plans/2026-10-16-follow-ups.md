@@ -1,12 +1,13 @@
-# Follow-ups from Order by Links and Site Links
+# Follow-ups from Order by Links, Site Links and Mounts
 
-Findings the reviews of two plans graded minor and deferred, kept for a
+Findings the reviews of three plans graded minor and deferred, kept for a
 later fix pass. Each says what a reader or user meets; none blocked the
 work it was found in. Tick one off by fixing it, or by deciding it stands
 and saying why.
 
 - Plans: [Order by Links](2026-10-16-order-by-links.md),
-  [Site Links and Assets](2026-10-16-site-links-and-assets.md)
+  [Site Links and Assets](2026-10-16-site-links-and-assets.md),
+  [Mounts](2026-10-17-mounts.md)
 - Spec: [Mounts](../specs/2026-10-16-mounts-design.md)
 
 ## Order by links (`nav-sort: links`)
@@ -100,3 +101,64 @@ and saying why.
   would collapse into one (`links_test.go`).
 - [ ] `linkDrop` skips a node with no parent without saying that cannot
   happen for parsed content.
+
+## Mounts: behaviour
+
+- [ ] `path=".md"` on a file mount trims to "" and silently becomes the
+  root (`mounts.go`).
+- [ ] A `--mount` value with no space between attributes is accepted, and
+  a repeated attribute silently takes the last value.
+- [ ] Two file mounts at one path pass `checkMounts`; the crawl's output
+  collision check stops them later, naming the sources but not the
+  `[[mount]]` declarations.
+- [ ] An empty root mount, or an empty directory mount whose path another
+  mount shares, does not warn "no pages": the warning fires only when the
+  mount has no node in the tree (`site.go`, `applyMounts`). A directory
+  mount whose pages all go to deeper mounts does warn.
+- [ ] A non-site build over a tree holding the shell warns once per
+  `[[mount]]` marker, not once.
+- [ ] A missing reference target reached through a symlinked directory
+  leading outside the root warns "cannot be read" rather than "outside
+  the source root" (compared lexically; nothing leaks).
+- [ ] With `--mount`, a bad shell now preempts the `--toc` float and
+  `--fragment` refusals.
+- [ ] `Convert` deletes `meta["toc"]` from the map later read for search
+  facets (harmless unless `toc` is a facet).
+
+## Mounts: code
+
+- [ ] `place()` uses `path.Ext` on an OS path; `filepath.Ext` is right
+  (wrong only on Windows with a dot in a directory name).
+- [ ] `Crawl` discards `relUnder`'s ok without a comment.
+- [ ] `Site.dirs` says "while the tree is built" but the map is kept.
+- [ ] The reference reader's outside-the-root branch duplicates the
+  unreadable branch's two lines.
+
+## Mounts: tests
+
+- [ ] `parseMount`: toc/title/nav-sort/nav-order conflicts, an error
+  from `--mount`, a flag-only site, `path=".md"`.
+- [ ] `buildTree` warns and skips a page with an empty `SitePath`.
+- [ ] `TestMountCrawlSymlinks` runs a throwaway first crawl and does not
+  assert the out-of-mount warning or that a link to the alias reaches
+  `design-notes/a.html`.
+- [ ] A link to the shell, or to a mount-excluded page, is left as written
+  (the hoist test's comment overstates).
+- [ ] A mount's `nav-title` beats the page's own title and `nav-title`; a
+  doc-less directory keeps a mount's `nav-title` through `finish`;
+  `toc="shell"` with a shell `[[toc]]`, and with `toc: none`; `toc: none`
+  under a shell in a site without mounts.
+- [ ] A symlinked reference escaping the root; the shell's reference
+  warning said once.
+- [ ] The CLI: a comma inside `--mount` is kept (`exclude="a,b"`); `--site`
+  with no mounts and no entries prints the usage.
+
+## Mounts: docs
+
+- [ ] "Two mounts may share a directory" could read as one source mounted
+  twice.
+- [ ] The Mounts table does not say `exclude` and `nav-sort` are
+  directory-only, or that a file mount with no path is the home page.
+- [ ] No back-reference to `source-root:` in Mounts; "The tree" and "Links
+  and files" still describe the root and "in the site" by the base alone.
+- [ ] The guide does not say `--mount` needs `--site`.
