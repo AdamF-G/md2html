@@ -258,3 +258,92 @@ func TestSitePathLinksPassExcludedTargets(t *testing.T) {
 		t.Errorf("%d shadow warnings: %v", n, res.Warnings)
 	}
 }
+
+// TestMountedSiteDirectoryLinksLeaveTheSite checks that a link to a
+// directory the site does not hold follows unmounted:, while one to a
+// directory it holds without a page stays as written.
+func TestMountedSiteDirectoryLinksLeaveTheSite(t *testing.T) {
+	build := func(front string) (*CrawlResult, error) {
+		files := map[string]string{}
+		for k, v := range mountFiles {
+			files[k] = v
+		}
+		files["repo/README.md"] = "# Readme\n\n[root](./) [notes](./notes/)\n"
+		files["repo/notes/n.md"] = "# N\n"
+		files["repo/docs/guide/sites.md"] = "# Sites\n\n[img](img/)\n"
+		files["repo/docs/site/shell.md"] = "---\nsite: true\n" + front + "---\n" + mountShell + "\n\n[[content]]\n"
+		res, _, err := mountCrawl(t, mountShell, files, nil)
+		return res, err
+	}
+
+	res, err := build("repo-url: https://example.com/blob/main/{path}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := docByBase(res.Docs, "README.md")
+	for href, want := range map[string]string{
+		"./":       "https://example.com/blob/main/",
+		"./notes/": "https://example.com/blob/main/notes",
+	} {
+		if got := readme.AnchorLinkMap[href]; got != want {
+			t.Errorf("%s -> %q, want %q", href, got, want)
+		}
+	}
+	sites := docByBase(res.Docs, "sites.md")
+	if v, ok := sites.AnchorLinkMap["img/"]; ok || sites.AnchorLinkDrops["img/"] {
+		t.Errorf("img/ changed: %q %v", v, sites.AnchorLinkDrops["img/"])
+	}
+
+	res, err = build("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme = docByBase(res.Docs, "README.md")
+	for _, href := range []string{"./", "./notes/"} {
+		if !readme.AnchorLinkDrops[href] {
+			t.Errorf("%s not dropped: %v", href, readme.AnchorLinkDrops)
+		}
+		if countWarnings(res, "unlinked "+href+", which is outside the site") != 1 {
+			t.Errorf("no warning for %s: %v", href, res.Warnings)
+		}
+	}
+
+	if _, err = build("unmounted: error\n"); err == nil || !strings.Contains(err.Error(), "./notes/") {
+		t.Errorf("unmounted: error gave %v", err)
+	}
+}
+
+// TestExcludedDirectoryWithNoPageLeavesTheSite checks that a link to an
+// excluded directory the site has no page for follows unmounted:, as a
+// link to an excluded file does.
+func TestExcludedDirectoryWithNoPageLeavesTheSite(t *testing.T) {
+	build := func(front string) (*CrawlResult, error) {
+		files := map[string]string{}
+		for k, v := range mountFiles {
+			files[k] = v
+		}
+		files["repo/docs/guide/sites.md"] = "# Sites\n\n[d](drafts/)\n"
+		files["repo/docs/site/shell.md"] = "---\nsite: true\n" + front + "---\n" + mountShell + "\n\n[[content]]\n"
+		res, _, err := mountCrawl(t, mountShell, files, nil)
+		return res, err
+	}
+	res, err := build("repo-url: https://example.com/blob/main/{path}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sites := docByBase(res.Docs, "sites.md")
+	if got, want := sites.AnchorLinkMap["drafts/"], "https://example.com/blob/main/docs/guide/drafts"; got != want {
+		t.Errorf("drafts/ -> %q, want %q", got, want)
+	}
+	res, err = build("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sites = docByBase(res.Docs, "sites.md")
+	if !sites.AnchorLinkDrops["drafts/"] {
+		t.Errorf("drafts/ not dropped: %v", sites.AnchorLinkDrops)
+	}
+	if countWarnings(res, "unlinked drafts/, which is outside the site") != 1 {
+		t.Errorf("no warning: %v", res.Warnings)
+	}
+}

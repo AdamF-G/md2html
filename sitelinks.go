@@ -295,33 +295,39 @@ func (r *siteRules) action(l Link, fromOut, fromSite string, outBySrc map[string
 	if excluded && r.mounts == nil {
 		return linkAction{}
 	}
-	if excluded {
-		// An excluded file or directory is outside the site, so a link
-		// that a page of the site answers reaches that page instead.
+	fi, err := os.Stat(target)
+	if excluded || err != nil {
+		// An excluded file or directory is outside the site, and nothing
+		// on disk is no file: a link a reader follows may still name a
+		// page by its site path, which it then reaches.
 		if out, _, ok := r.inSite(l, fromSite); ok {
 			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
 		}
 	}
-	fi, err := os.Stat(target)
 	if err != nil {
-		// Nothing on disk: a link a reader follows may still name a page
-		// by its site path. Otherwise the crawl warned.
-		if out, _, ok := r.inSite(l, fromSite); ok {
-			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
-		}
-		return linkAction{}
+		return linkAction{} // the crawl warned
 	}
 	if fi.IsDir() {
 		// A link a reader follows to a directory the site holds reaches
-		// the directory's page; any other directory is left as written.
-		if out, ok := r.dirPage(target); ok && !l.Loaded {
+		// the directory's page. In a mounted site one it does not hold is
+		// outside the site; any other directory is left as written.
+		if l.Loaded {
+			return linkAction{}
+		}
+		if excluded {
+			return r.leaving(l, target, fromSite)
+		}
+		if out, ok := r.dirPage(target); ok {
 			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
+		}
+		if _, held := r.place(target); !held && r.mounts != nil {
+			return r.leaving(l, target, fromSite)
 		}
 		return linkAction{}
 	}
 	if excluded {
 		if l.Kind == LinkDoc || !l.Loaded {
-			return r.leaving(l, target)
+			return r.leaving(l, target, fromSite)
 		}
 		return r.outsideLoaded(l, target, fromOut)
 	}
@@ -332,7 +338,7 @@ func (r *siteRules) action(l Link, fromOut, fromSite string, outBySrc map[string
 		if _, ok := r.place(target); ok {
 			return linkAction{} // in the site, but not built: left as written
 		}
-		return r.leaving(l, target)
+		return r.leaving(l, target, fromSite)
 	}
 	if sp, ok := r.place(target); ok {
 		if r.noAssets {
@@ -342,7 +348,7 @@ func (r *siteRules) action(l Link, fromOut, fromSite string, outBySrc map[string
 		return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href), copy: &Asset{Src: target, Out: out}}
 	}
 	if !l.Loaded {
-		return r.leaving(l, target)
+		return r.leaving(l, target, fromSite)
 	}
 	return r.outsideLoaded(l, target, fromOut)
 }
@@ -366,13 +372,19 @@ func (r *siteRules) outsideLoaded(l Link, target, fromOut string) linkAction {
 	return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href), copy: &Asset{Src: target, Out: out}}
 }
 
-// leaving is what a link a reader follows out of the site becomes.
-func (r *siteRules) leaving(l Link, target string) linkAction {
+// leaving is what a link a reader follows out of the site becomes. The
+// root of the source is a directory too, and fills {path} with nothing.
+// fromSite, the site directory of the page holding the link, is for the
+// clause that names a site page the file shadows.
+func (r *siteRules) leaving(l Link, target, fromSite string) linkAction {
 	switch r.unmounted {
 	case "error":
 		return linkAction{fail: fmt.Sprintf("links to %s, which is outside the site", l.Href)}
 	case "link":
 		if rel, ok := relUnder(r.sourceRoot, target); ok {
+			if rel == "." {
+				rel = ""
+			}
 			return linkAction{rewrite: strings.ReplaceAll(r.repoURL, "{path}", encodePath(rel)) + fragmentOf(l.Href)}
 		}
 		return linkAction{drop: true, warn: fmt.Sprintf("unlinked %s: it is outside the source root %s, so repo-url: has no path for it; its text is kept", l.Href, r.sourceRoot)}
