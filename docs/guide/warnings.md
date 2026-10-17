@@ -243,8 +243,8 @@ holds a file md2html did not write. Move it, or choose another `-o`.
 `breadcrumb`, `prev-next`, `search`) in a build with no shell. It stays as
 written; build with `--site`.
 
-**… belongs in the site's shell** — a `[[content]]` in a page's body. It
-stays as written; put it in the shell.
+**… belongs in the site's shell** — a `[[content]]` or `[[mount]]` in a
+page's body. It stays as written; put it in the shell.
 
 **… has no effect in a fragment** — a `[[theme-toggle]]` in `--fragment`
 output, whose host sets the theme. It stays as written.

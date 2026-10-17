@@ -30,6 +30,15 @@ major version instead.
   its text or an image's alt. `Options.AnchorLinkMap` and
   `Options.AnchorLinkDrops` carry what a site build does with an `<a>`'s
   href apart from the same href on an image the page shows.
+- `[[mount]]` markers in a site's shell place a directory or a Markdown
+  file from anywhere in the repository at a path in the site, so a site
+  built from files spread across a repository needs no copy staged
+  first. Pages are written at their site paths, links between them are
+  rewritten through the mounts, a deeper mount takes its files out of an
+  enclosing one, and a mount sets its own label, order, child ordering
+  and contents list. `--mount` adds one for a single build. A mounted
+  site reads chart data and `@file#key` references only from inside its
+  source root.
 
 ### Changed
 
@@ -45,6 +54,8 @@ major version instead.
   the base that the build does not write is left as written.
 - An image's `srcset` candidates and a video's `poster` are found and
   rewritten like any other link, in every build.
+- Under a site shell, a page with `toc: none` gets no contents list from
+  the shell's `[[toc]]`; before, it only kept `--autotoc` away.
 
 ## v0.13.0 — 2026-10-16
 

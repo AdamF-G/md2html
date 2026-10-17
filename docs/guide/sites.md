@@ -111,6 +111,58 @@ base, the deepest directory holding every entry point.
   (see [Links and files](#links-and-files)); built in place, it is
   written but has no place in the tree, and warns.
 
+## Mounts {#mounts}
+
+A site's files are rarely in one directory. `[[mount]]` markers in the
+shell place sources from anywhere in the repository at paths in the
+site, so the shell says what the site holds, and the build needs no
+entries:
+
+```markdown
+---
+site: true
+---
+[[mount source="../index.md"]]
+
+[[mount path="overview" source="../../README.md" nav-order="1"]]
+
+[[mount path="guide" source="../guide" nav-order="2"]]
+
+[[mount path="design-notes" source="../specs" nav-title="Design Notes"]]
+```
+
+```bash
+md2html --site docs/site/shell.md -o _site
+```
+
+| Attribute | Meaning |
+|---|---|
+| `source` | A directory or a `.md` file, relative to the shell. Required. |
+| `path` | Where it appears in the site, such as `guide` or `handbook/changes`. Absent, the mount is the site's root. |
+| `exclude` | Comma-separated directories and name globs, as `--exclude`, relative to the source. |
+| `nav-title`, `nav-order` | The mount's label and place, over the page's own. |
+| `nav-sort` | `links` orders a directory mount's children by its index's links, and every directory below that sets none. |
+| `toc` | `shell` drops the mounted pages' own contents lists, so the shell's `[[toc]]` is the only one. |
+
+- A directory mount builds every `.md` below it, at its path under the
+  mount's; a file mount builds that one page. Pages are written at their
+  site paths, so `docs/guide/sites.md` mounted at `guide` becomes
+  `guide/sites.html`.
+- One mount has no `path`: the root. A mount inside another's source
+  takes its files out of the enclosing one, and two mounts may share a
+  directory, with one value for each setting.
+- A link between mounted pages reaches the page where it is written. A
+  file a mount holds is in the site; anything else is outside it, and
+  follows `unmounted:` (see [Links and files](#links-and-files)).
+- `--exclude` applies to every mount, relative to the source root, the
+  deepest directory holding the shell and the mounts' sources. A mounted
+  site reads chart data and `@file#key` references only from inside it.
+- With mounts, entries, `--depth` and `--link-depth` are refused, and
+  `-o` is required. `--mount 'path="team" source="notes"'` adds a mount
+  for one build, its source read from the working directory.
+- `[[mount]]` renders nothing; in a page's body it warns. A page with
+  `toc: none` gets no contents list from the shell, in any site.
+
 ## Links and files {#links-and-files}
 
 A site is published as its output directory alone, so it holds

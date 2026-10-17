@@ -414,6 +414,7 @@ recipient's agent anyway.
 | `--no-highlight` | leave fenced code plain instead of highlighting it (`Options.NoHighlight`) |
 | `--site FILE` | wrap every page in this shell page, whose front matter says `site: true`, and write the search index `md2html-search.js` at the output root; not with `--fragment` or `--toc float` |
 | `--source-root DIR` | with `--site`, where a link out of the site and a copied file's path are measured from |
+| `--mount ATTRS` | with `--site`, add a mount for this build, written as a `[[mount]]` marker's attributes (repeatable) |
 | `--css FILE` | replace the stylesheet; not with `--style` |
 | `--style NAMES` | style every page with these styles, stacked in order; a page's `style:` front matter overrides it |
 | `--plugin DIR` | load a local plugin for its styles and languages (repeatable) |

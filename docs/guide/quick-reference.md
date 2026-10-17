@@ -34,6 +34,7 @@ construct has other spellings, they are under
 | Page look | `style: claude-artifact` in front matter, or `--style`; `--list-styles` lists them |
 | Output for a host that supplies the page (a Claude Artifact) | `--fragment` |
 | A site shell around every page | `site: true` page holding `[[content]]`; `--site shell.md` |
+| A site from files across a repo | `[[mount]]` in the shell |
 | Where a site's links out of it go | `repo-url: https://…/blob/main/{path}` in the shell |
 | Site navigation | `[[pages]]` (`depth="1"`, `from="section"`), `[[breadcrumb]]`, `[[prev-next]]` in the shell |
 | Site search | `[[search]]` in the shell; `search-facets: kind` |
