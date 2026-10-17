@@ -1052,6 +1052,69 @@ func TestRunSourceRootNeedsSite(t *testing.T) {
 	}
 }
 
+// A shell with mounts is the whole description of the site: no entries, and
+// pages at their site paths. --mount adds one, from the working directory.
+func TestRunSiteFromMounts(t *testing.T) {
+	root := tree(t, map[string]string{
+		"repo/docs/site/shell.md": "---\nsite: true\n---\n[[mount source=\"../index.md\"]]\n\n[[mount path=\"guide\" source=\"../guide\"]]\n\n[[content]]\n",
+		"repo/docs/index.md":      "# Home\n\n[a](guide/a.md)\n",
+		"repo/docs/guide/a.md":    "# A\n",
+		"repo/notes/n.md":         "# N\n",
+	})
+	t.Chdir(filepath.Join(root, "repo"))
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", "docs/site/shell.md", "-o", filepath.Join(root, "out"), "--mount", `path="team" source="notes"`}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	for _, p := range []string{"out/index.html", "out/guide/a.html", "out/team/n.html"} {
+		if _, err := os.Stat(filepath.Join(root, p)); err != nil {
+			t.Errorf("%s not written", p)
+		}
+	}
+	page, _ := os.ReadFile(filepath.Join(root, "out/index.html"))
+	if !strings.Contains(string(page), `href="guide/a.html"`) {
+		t.Errorf("the link between mounts was not rewritten")
+	}
+}
+
+// A shell that is not there is the build's own error, as it was before
+// mounts: the mounts are read only from a shell that exists.
+func TestRunMissingShellExitsOne(t *testing.T) {
+	root := tree(t, map[string]string{"docs/index.md": "# Home\n"})
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", filepath.Join(root, "nope.md"), filepath.Join(root, "docs"), "-o", filepath.Join(root, "out")}, &out, &errb)
+	if code != 1 || !strings.Contains(errb.String(), "site shell") {
+		t.Errorf("exit %d, stderr: %s", code, errb.String())
+	}
+}
+
+func TestRunMountsRefuse(t *testing.T) {
+	root := tree(t, map[string]string{
+		"site/shell.md": "---\nsite: true\n---\n[[mount source=\"../docs\"]]\n\n[[content]]\n",
+		"plain.md":      "---\nsite: true\n---\n[[content]]\n",
+		"docs/index.md": "# Home\n",
+	})
+	shell := filepath.Join(root, "site/shell.md")
+	o := filepath.Join(root, "out")
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--site", shell, filepath.Join(root, "docs"), "-o", o}, "give no files or directories beside them"},
+		{[]string{"--site", shell, "--depth", "1", "-o", o}, "--depth cannot be used with mounts"},
+		{[]string{"--site", shell, "--link-depth", "0", "-o", o}, "--link-depth cannot be used with mounts"},
+		{[]string{"--site", shell}, "mounts need -o"},
+		{[]string{"--mount", `source="x"`, filepath.Join(root, "docs"), "-o", o}, "--mount needs --site"},
+		{[]string{"--site", filepath.Join(root, "plain.md"), "--mount", `path="x"`, "-o", o}, "needs a source"},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(c.args, &out, &errb); code != 2 || !strings.Contains(errb.String(), c.want) {
+			t.Errorf("%v: exit %d, stderr %q; want 2 and %q", c.args, code, errb.String(), c.want)
+		}
+	}
+}
+
 func TestRunSiteRefusesTOCFloat(t *testing.T) {
 	root := tree(t, map[string]string{"shell.md": "---\nsite: true\n---\n[[content]]\n", "a.md": "# A\n"})
 	var out, errb bytes.Buffer

@@ -38,6 +38,17 @@ func (l *stringList) Set(v string) error {
 	return nil
 }
 
+// mountList collects --mount values whole: a mount's exclude attribute
+// holds commas, so they are not split as a stringList's are.
+type mountList []string
+
+func (l *mountList) String() string { return strings.Join(*l, " ") }
+
+func (l *mountList) Set(v string) error {
+	*l = append(*l, v)
+	return nil
+}
+
 // run is the testable entry point. It returns the process exit code.
 //
 // stdout carries only what an invocation was itself asked to report — the
@@ -77,6 +88,8 @@ Building a site: --site shell.md wraps every page in a shell page whose
 markers draw navigation and search; md2html --guide sites explains it.
 A site copies the files its pages show into -o, and the shell's
 repo-url: and unmounted: say where a link out of the site goes.
+A shell's [[mount]] markers, and --mount, place sources from anywhere in
+the repository; md2html --guide sites explains them.
 
 Flags:
 `)
@@ -116,6 +129,8 @@ Flags:
 		installProject = fs.Bool("install-skill-project", false, "install the authoring skill for Claude Code under ./.claude/skills and exit")
 	)
 	var exclude stringList
+	var mountFlags mountList
+	fs.Var(&mountFlags, "mount", `with --site, add a mount for this build, written as a [[mount]] marker's attributes, such as 'path="team" source="notes"' (repeatable)`)
 	var plugins, styles stringList
 	fs.Var(&plugins, "plugin", "load a local plugin directory, for its styles (repeatable, comma-separated)")
 	fs.Var(&styles, "style", "style every page with these styles, stacked in order, unless its front matter sets style (comma-separated; see --list-styles)")
@@ -204,7 +219,38 @@ Flags:
 		}
 		return installAuthoringSkill(*installDir, *installProject, stdout, stderr)
 	}
-	if len(entries) == 0 {
+	if len(mountFlags) > 0 && *sitePath == "" {
+		fmt.Fprint(stderr, "md2html: --mount needs --site; only a site has mounts\n")
+		return 2
+	}
+	var mounts []md2html.Mount
+	// Only a shell that exists has mounts to read; a missing one is the
+	// build's own error below, exit code and all, as it was before mounts.
+	if _, err := os.Stat(*sitePath); *sitePath != "" && err == nil {
+		var err error
+		if mounts, err = md2html.ReadMounts(*sitePath, mountFlags); err != nil {
+			fmt.Fprintf(stderr, "md2html: %v\n", err)
+			return 2
+		}
+	}
+	if len(mounts) > 0 {
+		if len(entries) > 0 {
+			fmt.Fprint(stderr, "md2html: the site's mounts say what it holds; give no files or directories beside them\n")
+			return 2
+		}
+		set := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+		for _, name := range []string{"depth", "link-depth"} {
+			if set[name] {
+				fmt.Fprintf(stderr, "md2html: --%s cannot be used with mounts; a mount's pages are all built and no link is followed\n", name)
+				return 2
+			}
+		}
+		if *outDir == "" {
+			fmt.Fprint(stderr, "md2html: mounts need -o; a mounted site is written to an output directory\n")
+			return 2
+		}
+	} else if len(entries) == 0 {
 		fs.Usage()
 		return 2
 	}
@@ -275,6 +321,7 @@ Flags:
 		NoAssets:   *noAssets,
 		SiteShell:  *sitePath,
 		SourceRoot: *sourceRoot,
+		Mounts:     mounts,
 	}
 	res, err := md2html.Crawl(crawlOpt)
 	if err != nil {
