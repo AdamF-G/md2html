@@ -232,16 +232,27 @@ func LinkRewrite(m map[string]string) Transform {
 			if n.Type != html.ElementNode {
 				return
 			}
-			key := linkAttrFor(n)
-			if key == "" {
-				return
-			}
-			href, ok := attr(n, key)
-			if !ok {
-				return
-			}
-			if repl, found := m[href]; found {
-				setAttr(n, key, repl)
+			for _, key := range linkAttrsFor(n) {
+				v, ok := attr(n, key)
+				if !ok {
+					continue
+				}
+				if key == "srcset" {
+					cs := srcsetURLs(v)
+					changed := false
+					for i, c := range cs {
+						if repl, found := m[c.url]; found {
+							cs[i].url, changed = repl, true
+						}
+					}
+					if changed {
+						setAttr(n, key, joinSrcset(cs))
+					}
+					continue
+				}
+				if repl, found := m[v]; found {
+					setAttr(n, key, repl)
+				}
 			}
 		})
 		return nil

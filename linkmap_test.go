@@ -135,6 +135,18 @@ func TestLinkRewriteLeavesUnmappedLinksAlone(t *testing.T) {
 	}
 }
 
+// LinkRewrite rewrites each srcset candidate on its own, keeping its
+// descriptor, and a poster as it does a src.
+func TestLinkRewriteRewritesSrcsetAndPoster(t *testing.T) {
+	m := map[string]string{"a.png": "../docs/a.png", "b.png": "../docs/b.png", "p.jpg": "../docs/p.jpg"}
+	got := apply(t, `<img srcset="a.png 1x, b.png 2x, c.png 3x"><video poster="p.jpg"></video>`, LinkRewrite(m))
+	for _, want := range []string{`srcset="../docs/a.png 1x, ../docs/b.png 2x, c.png 3x"`, `poster="../docs/p.jpg"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %s", want, got)
+		}
+	}
+}
+
 // Options.LinkMap must take effect without the caller knowing about
 // LinkRewrite — the library-user path.
 func TestConvertAppliesLinkMapFromOptions(t *testing.T) {
