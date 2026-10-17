@@ -2,6 +2,7 @@ package md2html
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -22,8 +23,85 @@ type siteRules struct {
 	unmounted  string // link, unlink or error
 	noAssets   bool   // copy nothing, and leave what would be copied as written
 	excluded   exclusions
-	mounts     []mountRule     // a mounted site's mounts; nil without mounts
-	dirs       map[string]bool // site directories that hold a page, by site path
+	mounts     []mountRule       // a mounted site's mounts; nil without mounts
+	dirs       map[string]bool   // site directories that hold a page, by site path
+	pages      map[string]string // a page's site path without its extension, to its output
+}
+
+// indexPages records the site's pages from its docs: each by its site path
+// without the extension, and every directory that holds one, the root
+// included. Every such directory has a page at its index.html: its own, a
+// README written there, or the one BuildSite writes.
+func (r *siteRules) indexPages(docs []Doc) {
+	r.pages = map[string]string{}
+	r.dirs = map[string]bool{}
+	for _, d := range docs {
+		if d.SitePath == "" {
+			continue
+		}
+		r.pages[strings.TrimSuffix(d.SitePath, path.Ext(d.SitePath))] = d.Out
+		for dir := sitePathDir(d.SitePath); ; dir = sitePathDir(dir) {
+			r.dirs[dir] = true
+			if dir == "" {
+				break
+			}
+		}
+	}
+}
+
+// inSite reads a link a reader follows as a site path, relative to the site
+// directory fromSite ("" is the root), and finds the page it names: the
+// absolute output, and how a report names the page. That is the path
+// without its extension for a page, the directory with a trailing slash for
+// a directory's page, and "the site's root" for the root's. A link that is
+// absolute, climbs above the root, names no page, or is an asset a page
+// loads finds nothing, as does any link in a site without mounts.
+func (r *siteRules) inSite(l Link, fromSite string) (out, at string, ok bool) {
+	if r == nil || r.mounts == nil || l.Loaded {
+		return "", "", false
+	}
+	h := l.Href
+	if i := strings.IndexAny(h, "#?"); i >= 0 {
+		h = h[:i]
+	}
+	h, err := url.PathUnescape(h)
+	if err != nil || h == "" || strings.HasPrefix(h, "/") {
+		return "", "", false
+	}
+	dir := strings.HasSuffix(h, "/")
+	p := path.Join(fromSite, h)
+	if p == ".." || strings.HasPrefix(p, "../") {
+		return "", "", false
+	}
+	if p == "." {
+		p = ""
+	}
+	if dir || path.Ext(p) == "" {
+		if !r.dirs[p] {
+			return "", "", false
+		}
+		if p == "" {
+			return filepath.Join(r.outDir, "index.html"), "the site's root", true
+		}
+		return filepath.Join(r.outDir, filepath.FromSlash(p), "index.html"), p + "/", true
+	}
+	if !IsMarkdownPath(p) {
+		return "", "", false
+	}
+	stem := strings.TrimSuffix(p, path.Ext(p))
+	if o, found := r.pages[stem]; found {
+		return o, stem, true
+	}
+	if isIndexStem(sitePathStem(p)) {
+		d := sitePathDir(p)
+		if r.dirs[d] {
+			if d == "" {
+				return filepath.Join(r.outDir, "index.html"), "the site's root", true
+			}
+			return filepath.Join(r.outDir, filepath.FromSlash(d), "index.html"), d + "/", true
+		}
+	}
+	return "", "", false
 }
 
 // mountRule is a mount with its own excludes resolved.
