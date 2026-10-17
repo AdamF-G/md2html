@@ -1,21 +1,22 @@
-# Follow-ups from Order by Links, Site Links and Mounts
+# Follow-ups from Order by Links, Site Links, Mounts and Directory Pages
 
-Findings the reviews of three plans graded minor and deferred, kept for a
+Findings the reviews of four plans graded minor and deferred, kept for a
 later fix pass. Each says what a reader or user meets; none blocked the
 work it was found in. Tick one off by fixing it, or by deciding it stands
 and saying why.
 
 - Plans: [Order by Links](2026-10-16-order-by-links.md),
   [Site Links and Assets](2026-10-16-site-links-and-assets.md),
-  [Mounts](2026-10-17-mounts.md)
+  [Mounts](2026-10-17-mounts.md),
+  [Directory Pages](2026-10-17-directory-pages.md)
 - Spec: [Mounts](../specs/2026-10-16-mounts-design.md)
 
 ## Order by links (`nav-sort: links`)
 
-- [ ] A link to a subdirectory written as a directory, `[Sub](sub/)`, does
+- [x] A link to a subdirectory written as a directory, `[Sub](sub/)`, does
   not rank it; only a link to its `index.md` does (`site.go`,
-  `rankByLinks`). Either count a link that resolves to a child directory,
-  or say in `sites.md` that the index must be linked.
+  `rankByLinks`). Fixed by Directory Pages: a link to a directory reaches
+  its page and ranks it.
 - [ ] `rankByLinks` falls back to label order without a warning when it
   cannot re-read or parse the index.
 - [ ] The ordering test does not pin a deep link into a subdirectory
@@ -162,3 +163,38 @@ and saying why.
 - [ ] No back-reference to `source-root:` in Mounts; "The tree" and "Links
   and files" still describe the root and "in the site" by the base alone.
 - [ ] The guide does not say `--mount` needs `--site`.
+- [ ] A `title` holding `*`, `<` or `&` makes the whole `[[mount]]` marker
+  drop out silently (older than Directory Pages, found in its review).
+
+## Directory pages: behaviour
+
+- [ ] A written page carries its generated Markdown, the `[[pages …]]`
+  marker, as its source wherever a page's source is shown.
+- [ ] CLI messages about a written page name its `Src`, a file that does
+  not exist.
+- [ ] A directory named `[draft]` gets a page `<title>` of "index":
+  `extractTitle` strips chip tokens from the raw source (as for any page
+  so titled).
+- [ ] `[[pages from="page"]]` on a page with no node, such as the shell's
+  own source, falls back to the whole tree.
+- [ ] Under `nav-sort: links`, a directory reached only by an image
+  (`![l](lo/)`) is ranked, though the link itself is left as written; the
+  rank should skip a loaded link, as `action` does.
+- [ ] A query on a directory link is dropped (`sub/?x=1` becomes
+  `sub/index.html`), as for file links above.
+- [ ] Title case: an invalid UTF-8 first byte becomes U+FFFD;
+  `unicode.ToUpper` where `ToTitle` is right for digraphs; a `title-case:`
+  entry holding a separator (`e-mail`) can never match, and nothing says
+  so.
+- [ ] A `README.md` and `readme.md` in one directory fail with a
+  different collision message than other pairs.
+
+## Directory pages: code and tests
+
+- [ ] The `hasIndex` loop is repeated in `buildTree` and `readmesAtIndex`;
+  `rankByLinks` repeats `dirPage`'s place logic.
+- [ ] No tests: a README at `index.html` colliding with a raw `index.html`
+  asset or across mounts, or `readmesAtIndex` in a mounted site; a root
+  README in the tree test; `from="page"` on a README page, nested depth,
+  a hidden child; non-ASCII or empty items in `TestTitleCase`; directory
+  links in a mounted, hoisted or excluded directory, or a loaded one.
