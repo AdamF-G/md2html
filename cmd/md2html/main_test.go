@@ -999,6 +999,59 @@ func TestRunSiteWritesPagesNotTheShell(t *testing.T) {
 	}
 }
 
+// A site build copies its files into the output and sends a link out of the
+// site to the repository's host. Built again, it replaces its own copies.
+func TestRunSiteCopiesAssetsAndLinksOut(t *testing.T) {
+	root := tree(t, map[string]string{
+		"site/shell.md":     "---\nsite: true\nrepo-url: https://example.org/r/blob/main/{path}\n---\n[[content]]\n",
+		"docs/index.md":     "# Home\n\n![flow](img/flow.png) [licence](../LICENSE)\n",
+		"docs/img/flow.png": "png",
+		"LICENSE":           "MIT",
+	})
+	args := []string{"--site", filepath.Join(root, "site/shell.md"), filepath.Join(root, "docs"), "-o", filepath.Join(root, "out")}
+	for i := 0; i < 2; i++ {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 0 {
+			t.Fatalf("build %d: exit %d, stderr: %s", i+1, code, errb.String())
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(root, "out/img/flow.png")); err != nil || string(b) != "png" {
+		t.Errorf("image not copied: %v", err)
+	}
+	page, _ := os.ReadFile(filepath.Join(root, "out/index.html"))
+	for _, want := range []string{`src="img/flow.png"`, `href="https://example.org/r/blob/main/LICENSE"`} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "out", md2html.AssetLedger)); err != nil {
+		t.Errorf("no ledger: %v", err)
+	}
+}
+
+func TestRunSiteRefusesSomeoneElsesFile(t *testing.T) {
+	root := tree(t, map[string]string{
+		"site/shell.md":     "---\nsite: true\n---\n[[content]]\n",
+		"docs/index.md":     "# Home\n\n![flow](img/flow.png)\n",
+		"docs/img/flow.png": "png",
+		"out/img/flow.png":  "theirs",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", filepath.Join(root, "site/shell.md"), filepath.Join(root, "docs"), "-o", filepath.Join(root, "out")}, &out, &errb)
+	if code != 1 || !strings.Contains(errb.String(), "refusing to overwrite "+filepath.Join(root, "out/img/flow.png")) {
+		t.Errorf("exit %d, stderr: %s", code, errb.String())
+	}
+}
+
+func TestRunSourceRootNeedsSite(t *testing.T) {
+	root := tree(t, map[string]string{"docs/index.md": "# Home\n"})
+	var out, errb bytes.Buffer
+	if code := run([]string{"--source-root", root, filepath.Join(root, "docs"), "-o", filepath.Join(root, "out")}, &out, &errb); code != 2 ||
+		!strings.Contains(errb.String(), "--source-root needs --site") {
+		t.Errorf("exit %d, stderr: %s", code, errb.String())
+	}
+}
+
 func TestRunSiteRefusesTOCFloat(t *testing.T) {
 	root := tree(t, map[string]string{"shell.md": "---\nsite: true\n---\n[[content]]\n", "a.md": "# A\n"})
 	var out, errb bytes.Buffer
