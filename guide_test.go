@@ -2,6 +2,8 @@ package md2html
 
 import (
 	"bytes"
+	"go/ast"
+	"go/parser"
 	"go/scanner"
 	"go/token"
 	"maps"
@@ -1110,6 +1112,159 @@ func TestGuideChartsNamesRealThings(t *testing.T) {
 	for _, s := range []string{`"charts"`, "`font`", "`metrics`", "`builtin:system-sans`", "`pad`", "`width`", "`font-family`", "`--series-1`", "`--chart-surface`", "`md2html-chart`"} {
 		if !strings.Contains(string(styles), s) {
 			t.Errorf("the styles section does not mention %s", s)
+		}
+	}
+}
+
+// warningMessages returns the message of every warning the package and the
+// CLI raise where they raise it: each call to a warning sink (a warn, say,
+// Warn or shellWarn function, or a Warning{src, msg} literal), its message
+// read from the string literals it is built of, with a format verb or any
+// other expression read as "…". A call that only passes on a message built
+// elsewhere is skipped: the call that built it is counted. Messages a
+// dependency builds, such as a grammar's diagnostics, are not seen.
+func warningMessages(t *testing.T) map[string]string {
+	t.Helper()
+	verbs := regexp.MustCompile(`%[-+# 0-9.]*[a-zA-Z]`)
+	var text func(e ast.Expr) string
+	text = func(e ast.Expr) string {
+		switch x := e.(type) {
+		case *ast.BasicLit:
+			if x.Kind == token.STRING {
+				v, err := strconv.Unquote(x.Value)
+				if err == nil {
+					return verbs.ReplaceAllString(v, "…")
+				}
+			}
+		case *ast.BinaryExpr:
+			if x.Op == token.ADD {
+				return text(x.X) + text(x.Y)
+			}
+		case *ast.CallExpr:
+			if s, ok := x.Fun.(*ast.SelectorExpr); ok && s.Sel.Name == "Sprintf" && len(x.Args) > 0 {
+				return text(x.Args[0])
+			}
+		case *ast.ParenExpr:
+			return text(x.X)
+		}
+		return "…"
+	}
+	msgs := map[string]string{}
+	add := func(fset *token.FileSet, at token.Pos, e ast.Expr) {
+		if m := text(e); strings.Trim(m, "… ") != "" {
+			msgs[m] = fset.Position(at).String()
+		}
+	}
+	for _, dir := range []string{".", filepath.Join("cmd", "md2html")} {
+		files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			if strings.HasSuffix(f, "_test.go") {
+				continue
+			}
+			fset := token.NewFileSet()
+			file, err := parser.ParseFile(fset, f, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ast.Inspect(file, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.CallExpr:
+					var name string
+					switch fn := x.Fun.(type) {
+					case *ast.Ident:
+						name = fn.Name
+					case *ast.SelectorExpr:
+						name = fn.Sel.Name
+					}
+					switch name {
+					case "say", "shellWarn":
+						if len(x.Args) > 0 {
+							add(fset, x.Pos(), x.Args[0])
+						}
+					case "warn", "Warn":
+						if len(x.Args) > 0 {
+							add(fset, x.Pos(), x.Args[len(x.Args)-1])
+						}
+					}
+				case *ast.CompositeLit:
+					if id, ok := x.Type.(*ast.Ident); ok && id.Name == "Warning" && len(x.Elts) == 2 {
+						add(fset, x.Pos(), x.Elts[1])
+					}
+				}
+				return true
+			})
+		}
+	}
+	return msgs
+}
+
+// Every warning has an entry in the Warnings section, so a reader who meets
+// one can look it up. An entry quotes the message in bold, or a fig fault
+// in italics, with "…" for what varies, so each quote is a pattern: a
+// warning is listed when every constant run of some entry's quote is in
+// the message. A quote shared by two messages lists both, as "… is not a
+// whole number" does nav-order and a [[pages]] depth. A message whose own
+// words all sit in one quote is listed too.
+func TestEveryWarningIsInTheGuide(t *testing.T) {
+	b, err := GuideSection("warnings")
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := string(b)
+	norm := func(s string) string { return strings.Join(strings.Fields(s), " ") }
+	var patterns [][]string
+	var quotes []string
+	for _, re := range []*regexp.Regexp{
+		regexp.MustCompile(`\*\*(.+?)\*\*`),
+		regexp.MustCompile(`(?s)(?:^|[^*])\*([^*\n][^*]*?)\*`),
+	} {
+		for _, m := range re.FindAllStringSubmatch(section, -1) {
+			quotes = append(quotes, norm(m[1]))
+			var runs []string
+			n := 0
+			for _, r := range strings.Split(norm(m[1]), "…") {
+				if r = strings.Trim(r, ` "`); r != "" {
+					runs = append(runs, r)
+					n += len(r)
+				}
+			}
+			// A quote of a few letters says too little to list anything.
+			if n >= 6 {
+				patterns = append(patterns, runs)
+			}
+		}
+	}
+	msgs := warningMessages(t)
+	if len(msgs) < 50 {
+		t.Fatalf("found only %d warnings in the code; has the way they are raised changed?", len(msgs))
+	}
+	for m, at := range msgs {
+		m = norm(m)
+		listed := false
+		for _, runs := range patterns {
+			all := true
+			for _, r := range runs {
+				all = all && strings.Contains(m, r)
+			}
+			listed = listed || all
+		}
+		// A message whose start is another error's text, as a page's style
+		// failing is, has only its tail to show: it is listed when all of
+		// its own words are in one entry's quote.
+		for _, q := range quotes {
+			all := true
+			for _, r := range strings.Split(m, "…") {
+				if r = strings.Trim(r, ` "`); r != "" {
+					all = all && strings.Contains(q, r)
+				}
+			}
+			listed = listed || all
+		}
+		if !listed {
+			t.Errorf("%s: %q has no entry in the Warnings section", at, m)
 		}
 	}
 }

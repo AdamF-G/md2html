@@ -13,6 +13,13 @@ the message.
 **referenced asset does not exist** — an image or other file, or an
 `.html` link, points at nothing. Fix the path; link pages by their `.md`.
 
+**unreadable: …** — a page md2html found could not be read, such as a
+file without read permission. It is skipped; the rest of the message
+says why.
+
+**parse failed: …** — a page's Markdown could not be read into a page. It
+is skipped; the rest of the message says why.
+
 **refusing to follow … outside … (no -o given)** — without `-o`, links
 may not leave the entry tree. Add `-o`, or add the target's tree as an
 entry point.
@@ -35,10 +42,14 @@ or drop the `toc:` key.
 **… is not a contents list layout** — use `inline` or `float`, or, in
 front matter only, `none`.
 
-**--autotoc "…" is not all or long** — use `all` or `long`. The run stops
-with exit status 2; the library instead warns and ignores the value.
+**… is not all or long** — an `--autotoc` value, or the library's
+`Options.AutoTOC`. Use `all` or `long`. The run stops with exit status 2;
+the library instead warns and ignores the value.
 
 **… is not a language tag** — use a tag such as `en`, `de` or `pt-BR`.
+
+**front matter title-block … is not above or below** — `title-block:`
+takes `above` or `below`. The subtitle and date stay below the title.
 
 **unknown container kind** — use a kind from [Containers](callouts-and-containers.md#containers), or
 the braced form for your own class.
@@ -49,6 +60,13 @@ nothing in it. Name a kind.
 **… container has no definition list** — in a `stats` or `defs`
 container, write each entry as a term line followed by `: ` definition
 lines.
+
+**container title-level … is not 2 to 6** — `title-level` takes a heading
+level from 2 to 6. The title stays a paragraph.
+
+**container title-level has no effect** — on a container with no kind, a
+collapsible kind, whose title is its summary, or a container with no
+title. Remove the attribute.
 
 **… cannot be set from an attribute block** — `href`, `src` or `srcset`;
 write the target in the link itself.
@@ -190,6 +208,10 @@ and every page carries them. Subset the fonts or drop some.
 
 **plugin …: unknown key … ; ignoring it** — the plugin was written for a
 newer md2html, or has a typo in its manifest.
+
+**plugin …: style …'s charts: …** — a setting in a style's `charts` that
+has no effect, such as `pad` beside `font`, whose widths are exact. It is
+ignored; remove it.
 
 **output path collision** — two sources map to one page; rename one.
 
