@@ -21,7 +21,7 @@ var templateRe = regexp.MustCompile(`\{([a-z][a-z0-9-]*)\}`)
 // meta is the front matter of the file holding the markers, which their
 // templates read, and dir is its directory, which [[subdirs]] paths are
 // relative to.
-func listMarkers(meta map[string]string, dir string, warn func(string)) Transform {
+func listMarkers(meta map[string]string, dir, refRoot string, warn func(string)) Transform {
 	say := func(format string, args ...any) {
 		if warn != nil {
 			warn(fmt.Sprintf(format, args...))
@@ -31,7 +31,7 @@ func listMarkers(meta map[string]string, dir string, warn func(string)) Transfor
 		ms := findMarkers(root)
 		// References resolve here, for the keys these markers read and no
 		// others (see resolveRefs).
-		meta := resolveRefs(meta, dir, markerKeys(ms), warn)
+		meta := resolveRefs(meta, dir, refRoot, markerKeys(ms), warn)
 		for _, m := range ms {
 			var items []listItem
 			switch m.name {

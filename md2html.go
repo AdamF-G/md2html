@@ -266,6 +266,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Whether the site's shell will wrap this page. Decided this early
 	// because the contents list depends on it.
 	wrapping := opt.Site != nil && !opt.Fragment && meta["shell"] != "none"
+	refRoot := ""
+	if opt.Site != nil {
+		refRoot = opt.Site.refRoot
+	}
 
 	// The style comes before rendering: a chart is drawn in the page's
 	// face and colours.
@@ -364,7 +368,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Ahead of every other transform: a marker's URL must still be the plain
 	// autolink GFM made it, and the links it expands to then get the same
 	// treatment as any others (external-link marking, for one).
-	transforms = append([]Transform{listMarkers(meta, filepath.Dir(opt.SourcePath), opt.Warn)}, transforms...)
+	transforms = append([]Transform{listMarkers(meta, filepath.Dir(opt.SourcePath), refRoot, opt.Warn)}, transforms...)
 	if opt.Fragment {
 		transforms = append([]Transform{themeToggleMarkerWarning(opt.Warn)}, transforms...)
 	} else {
@@ -453,7 +457,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		section = opt.Site.section(opt.SourcePath)
 		// Before the shell wraps it, and for a shell: none page too. A
 		// facet is read as data, so its @file#key references resolve.
-		opt.Site.record(opt.SourcePath, title, resolveRefs(meta, filepath.Dir(opt.SourcePath), opt.Site.facets, opt.Warn), root)
+		opt.Site.record(opt.SourcePath, title, resolveRefs(meta, filepath.Dir(opt.SourcePath), refRoot, opt.Site.facets, opt.Warn), root)
 		switch v := meta["shell"]; v {
 		case "none":
 		default:

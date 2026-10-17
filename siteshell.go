@@ -76,7 +76,7 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 		m.Parent.RemoveChild(m)
 		tocSlots = append(tocSlots, slot)
 	}
-	ts := append([]Transform{listMarkers(s.shellMeta, s.shellDir, s.shellWarn), s.navMarkers(src, s.shellWarn), themeToggleMarkers()}, transforms...)
+	ts := append([]Transform{listMarkers(s.shellMeta, s.shellDir, s.refRoot, s.shellWarn), s.navMarkers(src, s.shellWarn), themeToggleMarkers()}, transforms...)
 	for _, t := range ts {
 		if err := t.Fn(shell); err != nil {
 			return nil, fmt.Errorf("site shell: transform %s: %w", t.Name, err)

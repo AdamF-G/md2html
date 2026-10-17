@@ -15,8 +15,10 @@ import (
 // no markers is unchanged by references existing. A value found is used as
 // written: one that is itself a reference is not followed, so references
 // cannot loop. A reference that cannot be resolved becomes empty, so its @
-// text never reaches a page, and is warned about.
-func resolveRefs(meta map[string]string, dir string, keys []string, warn func(string)) map[string]string {
+// text never reaches a page, and is warned about. A reference to a file
+// outside root, when root is set, is empty and warned about, as an
+// unreadable one is: a mounted site reads only inside its source root.
+func resolveRefs(meta map[string]string, dir, root string, keys []string, warn func(string)) map[string]string {
 	if meta == nil {
 		return nil
 	}
@@ -43,6 +45,13 @@ func resolveRefs(meta map[string]string, dir string, keys []string, warn func(st
 		p := filepath.FromSlash(file)
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(dir, p)
+		}
+		if root != "" {
+			if real, err := resolve(p); err == nil && !isUnder(real, root) {
+				say("front matter %s refers to %s, which is outside the site's source root; leaving it empty", k, file)
+				out[k] = ""
+				continue
+			}
 		}
 		src, err := os.ReadFile(p)
 		if err != nil {

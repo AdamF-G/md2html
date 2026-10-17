@@ -19,7 +19,7 @@ func TestResolveRefs(t *testing.T) {
 		"chain":    "@versions.md#chained",
 		"shape":    "@versions.md",
 		"author":   "@someone",
-	}, dir, []string{"versions", "plain", "missing", "nokey", "chain", "shape", "absent"},
+	}, dir, "", []string{"versions", "plain", "missing", "nokey", "chain", "shape", "absent"},
 		func(m string) { warnings = append(warnings, m) })
 
 	if got["versions"] != "latest, v0.2, v0.1" || got["plain"] != "unchanged" {
@@ -74,5 +74,25 @@ func TestNavigationMarkersWithoutASiteWarn(t *testing.T) {
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "needs a site shell") {
 		t.Errorf("warnings = %q", warnings)
+	}
+}
+
+// With a root, a reference to a file outside it is empty and warns, as an
+// unreadable one does; without one, it is read as before.
+func TestResolveRefsStaysInsideARoot(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"site/a.md":    "# A\n",
+		"site/vals.md": "---\nv: in\n---\n",
+		"outside.md":   "---\nv: out\n---\n",
+	})
+	dir := filepath.Join(root, "site")
+	meta := map[string]string{"x": "@vals.md#v", "y": "@../outside.md#v"}
+	var warned []string
+	got := resolveRefs(meta, dir, dir, []string{"x", "y"}, func(m string) { warned = append(warned, m) })
+	if got["x"] != "in" || got["y"] != "" || len(warned) != 1 || !strings.Contains(warned[0], "outside the site's source root") {
+		t.Errorf("bounded: %v %q", got, warned)
+	}
+	if got := resolveRefs(meta, dir, "", []string{"y"}, nil); got["y"] != "out" {
+		t.Errorf("unbounded: %v", got)
 	}
 }

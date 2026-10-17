@@ -160,3 +160,15 @@ func TestMountMarkersAndShellContents(t *testing.T) {
 		t.Error("a toc: none page got the shell's contents list")
 	}
 }
+
+func TestMountedSiteReadsInsideTheSourceRoot(t *testing.T) {
+	files := map[string]string{
+		"repo/docs/site/shell.md": "---\nsite: true\nsource-root: ..\n---\n[[mount source=\"../index.md\"]]\n\n[[content]]\n",
+		"repo/docs/index.md":      "---\nversions: @../vals.md#all\n---\n# Home\n\n[[list key=\"versions\"]]\n",
+		"repo/vals.md":            "---\nall: 1, 2\n---\n",
+	}
+	out, warnings, _ := mountPage(t, "", files, "repo/docs/index.md")
+	if strings.Contains(out, ">1<") || !strings.Contains(strings.Join(warnings, "\n"), "outside the site's source root") {
+		t.Errorf("a reference above the source root was read: %q\n%s", warnings, out)
+	}
+}

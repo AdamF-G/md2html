@@ -255,6 +255,11 @@ a key. The value is used as written.
 **front matter … refers to …, which cannot be read** — the file is missing
 or unreadable. The value is left empty; fix the path.
 
+**front matter … refers to …, which is outside the site's source root** —
+in a mounted site, an `@file#key` reference to a file above the source
+root. The value is left empty. Move the file in, or set `source-root:`
+higher.
+
 **… which has no such key** — the referenced file's front matter lacks the
 key. The value is left empty.
 
