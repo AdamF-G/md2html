@@ -91,17 +91,24 @@ it wraps.
 The tree is derived from the pages being built. Its root is the run's
 base, the deepest directory holding every entry point.
 
-- A directory is a node, and its `index.md` is its page and gives its
-  title. A directory without one is a label named after the directory,
-  with a warning. A `README.md` is an ordinary page in its directory.
+- A directory is a node, and its page is its `index.md`, else its
+  `README.md`, which then is not listed again inside it, else a page
+  md2html writes: its name in title case as its title, and a list of its
+  pages. The shell's `title-case:` lists words that keep a fixed
+  spelling, as `title-case: API, CLI`; a mount's `title` names its own
+  directory's page. In a build with `-o`, every directory's page is
+  written at its `index.html`, so a link to the directory reaches it. A
+  directory whose `index.md` or `README.md` the build did not reach keeps
+  its label and warns, with no page written over it.
 - A page's label is its `# Title`, or `nav-title:` when set.
 - Order is `nav-order:` (a whole number) first, then label alphabetically.
-  `nav-sort: links` in a directory's `index.md` puts its children in the
-  order the index links them instead: those with `nav-order:` still come
-  first, then each page or subdirectory the index links, by its first
-  link, then the rest by label. A link counts when it reaches the child's
-  own page; one deeper into a subdirectory does not. A subdirectory orders
-  its own children by its own index.
+  `nav-sort: links` in a directory's page (its `index.md` or
+  `README.md`) puts its children in the order that page links them
+  instead: those with `nav-order:` still come first, then each page or
+  subdirectory it links, by its first link, then the rest by label. A
+  link counts when it reaches the child's own page, or the subdirectory
+  itself; one deeper into a subdirectory does not. A subdirectory orders
+  its own children by its own page.
 - `nav: hidden` keeps a page out of the tree, with every page below it,
   and out of previous and next; a hidden page shows no previous and next
   of its own. It stays in search and is reachable by links. On the root's `index.md` it hides only that page.
@@ -142,6 +149,7 @@ md2html --site docs/site/shell.md -o _site
 | `exclude` | Comma-separated directories and name globs, as `--exclude`, relative to the source. |
 | `nav-title`, `nav-order` | The mount's label and place, over the page's own. |
 | `nav-sort` | `links` orders a directory mount's children by its index's links, and every directory below that sets none. |
+| `title` | The title of the page md2html writes for the mount's own directory, when that directory has no `index.md` or `README.md`; directory mounts only, a file mount refuses it. |
 | `toc` | `shell` drops the mounted pages' own contents lists, so the shell's `[[toc]]` is the only one. |
 
 - A directory mount builds every `.md` below it, at its path under the
@@ -218,7 +226,7 @@ shell; without one they warn and stay as written.
 | Marker | Draws |
 |---|---|
 | `[[content]]` | The current page's body. Exactly one per shell. |
-| `[[pages]]` | The tree below the root as a nested list of links, the current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node, or at the top when that node has nothing below it, as on the root page; `from="root"` (the default) at the top. |
+| `[[pages]]` | The tree below the root as a nested list of links, the current page marked `aria-current="page"`. `depth="N"` limits levels; `from="section"` starts at the current page's top-level node, or at the top when that node has nothing below it, as on the root page; `from="root"` (the default) at the top. `from="page"` starts at the current page, so a directory's page lists what is in it. |
 | `[[breadcrumb]]` | The current page's ancestors, in a `<nav aria-label="Breadcrumb">`; nothing on the root page. |
 | `[[prev-next]]` | The previous and next page in tree order, in a `<nav aria-label="Previous and next">`. |
 
@@ -305,8 +313,13 @@ reference is not followed, and warns, so references cannot loop.
 
 Each of these gives valid output and no warning.
 
-- **A directory's page is its `index.md`.** A `README.md` beside it is an
+- **A directory's page is its `index.md`.** Without one it is the
+  directory's `README.md`; a `README.md` beside an `index.md` is an
   ordinary page in that directory.
+- **A site built in place writes into your sources.** A directory with no
+  `index.md` or `README.md` gets its `index.html` beside its sources, and
+  md2html refuses to overwrite an `index.html` it did not write there:
+  add an `index.md`, or build with `-o`.
 - **Markers on consecutive lines are one paragraph.** `[[breadcrumb]]`
   directly above `[[prev-next]]` expands neither; each marker needs a
   blank line before and after.

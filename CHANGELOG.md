@@ -16,6 +16,12 @@ major version instead.
 
 ### Added
 
+- In a site, a directory's `README.md` is its page when it has no
+  `index.md`, and a directory with neither gets a page md2html writes,
+  titled by its name in title case, with the shell's `title-case:`
+  spellings or a mount's `title`, and listing its pages.
+- `[[pages from="page"]]` lists from the current page, so an index page
+  lists what is in its own directory.
 - `nav-sort: links` in a directory's `index.md` orders the directory's
   children in the site's navigation by the index's own links, so a reading
   order written as a list is not repeated as a `nav-order:` on each page.
@@ -42,6 +48,17 @@ major version instead.
 
 ### Changed
 
+- A site directory without an `index.md` is no longer a label with a
+  warning: it gets a page, from its `README.md` or written by md2html.
+  In a build with `-o` the page is at the directory's `index.html`, and
+  a link to the directory reaches it. A directory whose index or README
+  the build did not reach stays a label, with a warning.
+- A `README.md` that is its directory's page, with `nav: hidden`, now
+  hides the whole directory, as a hidden `index.md` always did; before,
+  it hid only itself.
+- **breaking:** `Doc.Body` holds the Markdown of a page md2html writes
+  itself, whose `Src` names no file; a caller that converts
+  `CrawlResult.Docs` must convert `Body` when it is set.
 - **breaking:** a site build (`--site` with `-o`) copies the files its
   pages show into the output, recorded in `md2html-assets.txt`, instead
   of linking back to the sources, and builds nothing outside its base:
