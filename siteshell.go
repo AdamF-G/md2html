@@ -57,7 +57,7 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	links := ExtractLinks(shell, s.shellDir)
 	// The crawl planned the shell once, for its copies and warnings; each
 	// page plans it again from where the page is written.
-	plan := planLinks(links, out, s.outBySrc, s.crawl, s.rules)
+	plan := planLinks(links, out, "", s.outBySrc, s.crawl, s.rules)
 	if err := linkDrop(plan.drop, plan.anchorDrop).Fn(shell); err != nil {
 		return nil, err
 	}

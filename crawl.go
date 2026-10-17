@@ -334,10 +334,12 @@ type discovered struct {
 // discover reads the document at cur and warns about the links in it that
 // lead to nothing. For each link to a document that exists it then calls
 // follow, when not nil, so what follow says lands among those warnings in
-// the order of the links. ok is false when the document cannot be read,
-// which it has warned about; one that reads but does not parse is still a
-// page, with nothing discovered in it.
-func discover(cur string, res *CrawlResult, follow func(l Link, target string)) (d discovered, ok bool) {
+// the order of the links. A link with no file on disk is first put to
+// found, when not nil, and the crawl says nothing of it when found is true:
+// the site holds what it names. ok is false when the document cannot be
+// read, which it has warned about; one that reads but does not parse is
+// still a page, with nothing discovered in it.
+func discover(cur string, res *CrawlResult, follow func(l Link, target string), found func(l Link) bool) (d discovered, ok bool) {
 	src, err := os.ReadFile(cur)
 	if err != nil {
 		// Warn and skip: an unreadable document must not enter the emit
@@ -366,6 +368,9 @@ func discover(cur string, res *CrawlResult, follow func(l Link, target string)) 
 		switch l.Kind {
 		case LinkAsset:
 			if _, statErr := os.Stat(l.Abs); statErr != nil {
+				if found != nil && found(l) {
+					continue
+				}
 				res.Warnings = append(res.Warnings, Warning{cur,
 					fmt.Sprintf("referenced asset does not exist: %s", l.Href)})
 			}
@@ -375,6 +380,9 @@ func discover(cur string, res *CrawlResult, follow func(l Link, target string)) 
 				continue
 			}
 			if _, statErr := os.Stat(target); statErr != nil {
+				if found != nil && found(l) {
+					continue
+				}
 				res.Warnings = append(res.Warnings, Warning{cur,
 					fmt.Sprintf("link target does not exist: %s", l.Href)})
 				continue
@@ -401,6 +409,11 @@ func checkOutputs(docs []Doc) error {
 		srcByOut[d.Out] = d.Src
 	}
 	return nil
+}
+
+// pageOut is where the page at the site path sp is written under out.
+func pageOut(out, sp string) string {
+	return filepath.Join(out, filepath.FromSlash(strings.TrimSuffix(sp, path.Ext(sp))+".html"))
 }
 
 // readmesAtIndex writes each README that stands as its directory's page, in
@@ -563,7 +576,7 @@ func Crawl(opt CrawlOptions) (*CrawlResult, error) {
 				return
 			}
 			admit(cur, target, l.Href, true, hops+1)
-		})
+		}, nil)
 		if !ok {
 			continue
 		}
@@ -628,12 +641,13 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 			fails = append(fails, src+": "+f+" (unmounted: error)")
 		}
 	}
-	if res.rules != nil {
+	if res.rules != nil && res.rules.mounts == nil {
+		// A mounted crawl indexed its pages before discovery.
 		res.rules.indexPages(res.Docs)
 	}
 	for i := range res.Docs {
 		d := &res.Docs[i]
-		p := planLinks(linksBySrc[d.Src], d.Out, outBySrc, opt, res.rules)
+		p := planLinks(linksBySrc[d.Src], d.Out, sitePathDir(d.SitePath), outBySrc, opt, res.rules)
 		d.LinkMap = p.rewrite
 		if res.rules != nil {
 			d.LinkDrops = p.drop
@@ -658,7 +672,7 @@ func buildLinkMaps(res *CrawlResult, opt CrawlOptions, linksBySrc map[string][]L
 		// only the copies, warnings and failures are kept, and each page
 		// plans the shell's hrefs again from where it is.
 		take(shell, planLinks(ExtractLinks(root, filepath.Dir(shell)),
-			filepath.Join(opt.OutDir, "index.html"), outBySrc, opt, res.rules))
+			filepath.Join(opt.OutDir, "index.html"), "", outBySrc, opt, res.rules))
 	}
 	if len(fails) > 0 {
 		sort.Strings(fails)
@@ -693,17 +707,18 @@ type linkPlan struct {
 	fails         []string
 }
 
-// planLinks plans links, as written in a document whose output is fromOut.
+// planLinks plans links, as written in a document whose output is fromOut
+// and whose site directory is fromSite ("" is the site's root).
 // Without site rules, document links resolve to other emitted documents
 // and asset links point back out at the original file on disk; with them,
 // siteRules.action decides. A site uses it to rewrite its shell's links
 // once per page.
-func planLinks(links []Link, fromOut string, outBySrc map[string]string, opt CrawlOptions, rules *siteRules) linkPlan {
+func planLinks(links []Link, fromOut, fromSite string, outBySrc map[string]string, opt CrawlOptions, rules *siteRules) linkPlan {
 	p := linkPlan{rewrite: map[string]string{}, drop: map[string]bool{}}
 	if rules != nil {
 		p.anchorRewrite, p.anchorDrop = map[string]string{}, map[string]bool{}
 		for _, l := range links {
-			a := rules.action(l, fromOut, outBySrc)
+			a := rules.action(l, fromOut, fromSite, outBySrc)
 			rewrite, drop := p.rewrite, p.drop
 			if !l.Loaded {
 				rewrite, drop = p.anchorRewrite, p.anchorDrop
@@ -895,19 +910,41 @@ func crawlMounts(opt CrawlOptions) (*CrawlResult, error) {
 		order = append(order, src)
 	}
 	sort.Strings(order)
-	linksBySrc := map[string][]Link{}
+	// Every page is placed before any is read, so a link that reaches
+	// nothing on disk can be looked up among them.
 	for _, src := range order {
-		d, ok := discover(src, res, nil)
-		if !ok {
-			continue
-		}
 		sp, _ := rules.place(src)
-		outPath := filepath.Join(out, filepath.FromSlash(strings.TrimSuffix(sp, path.Ext(sp))+".html"))
-		res.Docs = append(res.Docs, Doc{Src: src, Out: outPath, SitePath: sp,
-			Meta: d.meta, Title: d.title, mount: mountOf[src]})
-		linksBySrc[src] = d.links
+		res.Docs = append(res.Docs, Doc{Src: src, Out: pageOut(out, sp), SitePath: sp, mount: mountOf[src]})
 	}
 	readmesAtIndex(res.Docs)
+	rules.indexPages(res.Docs)
+	linksBySrc := map[string][]Link{}
+	kept := res.Docs[:0]
+	dropped := false
+	for _, doc := range res.Docs {
+		fromSite := sitePathDir(doc.SitePath)
+		d, ok := discover(doc.Src, res, nil, func(l Link) bool {
+			_, _, in := rules.inSite(l, fromSite)
+			return in
+		})
+		if !ok {
+			dropped = true
+			continue
+		}
+		doc.Meta, doc.Title = d.meta, d.title
+		kept = append(kept, doc)
+		linksBySrc[doc.Src] = d.links
+	}
+	res.Docs = kept
+	if dropped {
+		// A README stands as its directory's page when the index beside
+		// it was dropped, and the table holds only the pages written.
+		for i := range res.Docs {
+			res.Docs[i].Out = pageOut(out, res.Docs[i].SitePath)
+		}
+		readmesAtIndex(res.Docs)
+		rules.indexPages(res.Docs)
+	}
 	if err := checkOutputs(res.Docs); err != nil {
 		return nil, err
 	}

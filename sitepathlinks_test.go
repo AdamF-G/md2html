@@ -1,6 +1,11 @@
 package md2html
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 // TestInSite checks that a link is read as a site path against the pages a
 // site holds, and that it answers nothing without mounts.
@@ -61,5 +66,163 @@ func TestInSite(t *testing.T) {
 	var none *siteRules
 	if _, _, ok := none.inSite(Link{Href: "a.md"}, ""); ok {
 		t.Error("a nil siteRules answered")
+	}
+}
+
+const sitePathShell = "[[mount source=\".\"]]\n\n[[mount path=\"reference\" source=\"../../../build/scratch/reference\"]]"
+
+var sitePathFiles = map[string]string{
+	"repo/docs/site/index.md":           "# Home\n",
+	"repo/docs/site/guides/deploy.md":   "# Deploy\n\n[ref](../reference/index.md) [dir](../reference/) [bare](../reference) [opts](../reference/engine.md#options) [up](../../x.md) [abs](/reference/index.md)\n",
+	"repo/docs/site/guides/tuning.md":   "# Tuning\n",
+	"build/scratch/reference/index.md":  "# Reference\n",
+	"build/scratch/reference/engine.md": "# Engine\n\n[tuning](../guides/tuning.md)\n",
+}
+
+func countWarnings(res *CrawlResult, sub string) int {
+	n := 0
+	for _, w := range res.Warnings {
+		if strings.Contains(w.Message, sub) {
+			n++
+		}
+	}
+	return n
+}
+
+// TestSitePathLinksAcrossMounts checks that a link to a page of another
+// mount, which is not on disk where the link says, is read as a site path.
+func TestSitePathLinksAcrossMounts(t *testing.T) {
+	res, _, err := mountCrawl(t, sitePathShell, sitePathFiles, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deploy := docByBase(res.Docs, "deploy.md")
+	for href, want := range map[string]string{
+		"../reference/index.md":          "../reference/index.html",
+		"../reference/":                  "../reference/index.html",
+		"../reference":                   "../reference/index.html",
+		"../reference/engine.md#options": "../reference/engine.html#options",
+	} {
+		if got := deploy.AnchorLinkMap[href]; got != want {
+			t.Errorf("deploy %s -> %q, want %q", href, got, want)
+		}
+	}
+	engine := docByBase(res.Docs, "engine.md")
+	if got := engine.AnchorLinkMap["../guides/tuning.md"]; got != "../guides/tuning.html" {
+		t.Errorf("engine ../guides/tuning.md -> %q", got)
+	}
+	if n := countWarnings(res, "does not exist"); n != 2 {
+		t.Errorf("%d does-not-exist warnings, want 2: %v", n, res.Warnings)
+	}
+	for _, href := range []string{"../../x.md", "/reference/index.md"} {
+		if countWarnings(res, "does not exist: "+href) != 1 {
+			t.Errorf("no warning for %s: %v", href, res.Warnings)
+		}
+	}
+}
+
+// TestSitePathLinksNeedTheMount checks that without the mount the same
+// links reach nothing, and say so.
+func TestSitePathLinksNeedTheMount(t *testing.T) {
+	res, _, err := mountCrawl(t, "[[mount source=\".\"]]", sitePathFiles, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countWarnings(res, "link target does not exist: ../reference/index.md") != 1 ||
+		countWarnings(res, "referenced asset does not exist: ../reference/") != 1 {
+		t.Errorf("warnings: %v", res.Warnings)
+	}
+}
+
+// TestSitePathLinkFromTheShell checks that a shell link is read from the
+// site's root, on every page.
+func TestSitePathLinkFromTheShell(t *testing.T) {
+	body := sitePathShell + "\n\n[Ref](reference/index.md)"
+	for rel, want := range map[string]string{
+		"repo/docs/site/guides/deploy.md": `href="../reference/index.html"`,
+		"repo/docs/site/index.md":         `href="reference/index.html"`,
+	} {
+		out, warnings, s := mountPage(t, body, sitePathFiles, rel)
+		if !strings.Contains(out, want) {
+			t.Errorf("%s lacks %s", rel, want)
+		}
+		for _, w := range append(warnings, warningTexts(s)...) {
+			if strings.Contains(w, "which the build does not write") {
+				t.Errorf("%s: %s", rel, w)
+			}
+		}
+	}
+}
+
+func warningTexts(s *Site) []string {
+	var out []string
+	for _, w := range s.Warnings {
+		out = append(out, w.Message)
+	}
+	return out
+}
+
+// TestSitePathLinkToAnUnreadablePage checks that a page the crawl drops is
+// not a page a link can reach.
+func TestSitePathLinkToAnUnreadablePage(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads any file")
+	}
+	res, _, err := mountCrawl(t, sitePathShell, sitePathFiles, func(opt *CrawlOptions) {
+		p := filepath.Join(filepath.Dir(opt.SiteShell), "../../../build/scratch/reference/engine.md")
+		if err := os.Chmod(p, 0); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deploy := docByBase(res.Docs, "deploy.md")
+	const href = "../reference/engine.md#options"
+	if v, ok := deploy.AnchorLinkMap[href]; ok {
+		t.Errorf("mapped to %q", v)
+	}
+	if deploy.AnchorLinkDrops[href] {
+		t.Error("dropped")
+	}
+}
+
+// TestReadmeTakesTheIndexOfAnUnreadableIndex checks that a README stands
+// as its directory's page when the index beside it is dropped as unreadable.
+func TestReadmeTakesTheIndexOfAnUnreadableIndex(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads any file")
+	}
+	files := map[string]string{
+		"repo/home.md":         "# Home\n",
+		"repo/notes/README.md": "# Notes\n",
+		"repo/notes/index.md":  "# Index\n",
+	}
+	res, root, err := mountCrawl(t, "[[mount source=\"../../home.md\"]]\n\n[[mount path=\"notes\" source=\"../../notes\"]]", files, func(opt *CrawlOptions) {
+		if err := os.Chmod(filepath.Join(filepath.Dir(opt.SiteShell), "../../notes/index.md"), 0); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := docByBase(res.Docs, "README.md")
+	if want := filepath.Join(root, "out/notes/index.html"); readme.Out != want {
+		t.Errorf("README written to %s, want %s", readme.Out, want)
+	}
+}
+
+// TestSitePathLinksWithoutMounts checks that a site built from entry points
+// reads no link as a site path.
+func TestSitePathLinksWithoutMounts(t *testing.T) {
+	res, _, err := siteCrawl(t, "", map[string]string{
+		"docs/index.md":    "# Home\n\n[s](sub/index.md)\n",
+		"docs/sub/page.md": "# Page\n",
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countWarnings(res, "link target does not exist: sub/index.md") != 1 {
+		t.Errorf("warnings: %v", res.Warnings)
 	}
 }

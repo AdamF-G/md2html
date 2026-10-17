@@ -266,7 +266,8 @@ type linkAction struct {
 }
 
 // action decides what a site build does with l, a link in the page or
-// shell written to fromOut. outBySrc maps each page built to its output.
+// shell written to fromOut, from the site directory fromSite. outBySrc maps
+// each page built to its output.
 //
 // A page in the site is linked where it is written. Any other file in the
 // site, under the base, is copied to the same place under the output
@@ -274,9 +275,11 @@ type linkAction struct {
 // page loads from outside the site is copied to _assets/, at its path from
 // the source root, or dropped when it has none. A link a reader follows
 // out of the site, to a page or any other file, goes where unmounted: says.
-// A missing file, and one under an excluded path, keep the link as written;
-// in a mounted site an excluded file is outside the site instead.
-func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) linkAction {
+// A link a reader follows to a missing file is read as a site path, and
+// goes to the page it names when the site has one. Otherwise a missing
+// file, and one under an excluded path, keep the link as written; in a
+// mounted site an excluded file is outside the site instead.
+func (r *siteRules) action(l Link, fromOut, fromSite string, outBySrc map[string]string) linkAction {
 	if l.Kind != LinkDoc && l.Kind != LinkAsset {
 		return linkAction{}
 	}
@@ -293,7 +296,12 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 	}
 	fi, err := os.Stat(target)
 	if err != nil {
-		return linkAction{} // missing: the crawl warned
+		// Nothing on disk: a link a reader follows may still name a page
+		// by its site path. Otherwise the crawl warned.
+		if out, _, ok := r.inSite(l, fromSite); ok {
+			return linkAction{rewrite: relHref(fromOut, out) + fragmentOf(l.Href)}
+		}
+		return linkAction{}
 	}
 	if fi.IsDir() {
 		// A link a reader follows to a directory the site holds reaches
