@@ -172,3 +172,33 @@ func TestMountedSiteReadsInsideTheSourceRoot(t *testing.T) {
 		t.Errorf("a reference above the source root was read: %q\n%s", warnings, out)
 	}
 }
+
+// A directory mount that yields no page is said, not left as a hole: one
+// whose files are all excluded, and one with no Markdown at all.
+func TestMountWithNoPagesWarns(t *testing.T) {
+	s, err := mountSite(t, "[[mount source=\"../index.md\"]]\n\n"+
+		"[[mount path=\"notes\" source=\"../specs\" exclude=\"*.md\"]]\n\n"+
+		"[[mount path=\"art\" source=\"../art\"]]", map[string]string{
+		"repo/docs/index.md":   "# Home\n",
+		"repo/docs/specs/a.md": "# A\n",
+		"repo/docs/art/x.txt":  "x",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"2", "3"} {
+		want := "[[mount]] " + n + ": no pages: the mount's source holds no Markdown file the site builds"
+		var count int
+		for _, w := range s.Warnings {
+			if strings.Contains(w.Message, want) {
+				count++
+				if !strings.HasSuffix(w.Src, "shell.md") {
+					t.Errorf("warned under %s, want the shell", w.Src)
+				}
+			}
+		}
+		if count != 1 {
+			t.Errorf("%d warnings containing %q: %v", count, want, s.Warnings)
+		}
+	}
+}

@@ -178,8 +178,8 @@ func parseMount(attrs map[string]string, dir, from string) (Mount, error) {
 	default:
 		return m, fmt.Errorf("%s: toc %q is not page or shell", from, v)
 	}
-	if !m.IsDir && (m.NavSort != "" || len(m.Exclude) > 0) {
-		return m, fmt.Errorf("%s: nav-sort and exclude apply to a directory mount, and %s is a file", from, src)
+	if !m.IsDir && (m.NavSort != "" || len(m.Exclude) > 0 || m.Title != "") {
+		return m, fmt.Errorf("%s: nav-sort, exclude and title apply to a directory mount, and %s is a file", from, src)
 	}
 	return m, nil
 }

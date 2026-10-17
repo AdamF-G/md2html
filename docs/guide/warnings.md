@@ -37,9 +37,14 @@ entry points. Check none were unintended.
 seed such as a symlinked `.md` resolves outside the run's base. A site
 builds only what is under its root; move the file in, or add its tree.
 
-**not building …: no mount holds it** — in a mounted site, a symlinked
-`.md` inside a mount resolves to a file no mount holds. Mount its
-directory, or remove the symlink.
+**not building …: it leads to …, which no mount holds** — in a mounted
+site, a symlinked `.md` inside a mount resolves to a file no mount holds.
+Mount its directory, or remove the symlink.
+
+**…: no pages: the mount's source holds no Markdown file the site builds**
+— in a mounted site, a directory mount yields no page: its `exclude`
+leaves nothing, or its source holds no `.md` file. Check its `exclude`,
+or remove the mount.
 
 **unlinked …, which is outside the site** — in a site whose shell says
 `unmounted: unlink`, or sets no `repo-url:`, a link to a file outside the

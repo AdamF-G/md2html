@@ -152,8 +152,9 @@ md2html --site docs/site/shell.md -o _site
   takes its files out of the enclosing one, and two mounts may share a
   directory, with one value for each setting.
 - A link between mounted pages reaches the page where it is written. A
-  file a mount holds is in the site; anything else is outside it, and
-  follows `unmounted:` (see [Links and files](#links-and-files)).
+  file a mount holds, and no exclude names, is in the site; anything
+  else is outside it, and follows `unmounted:` (see
+  [Links and files](#links-and-files)).
 - `--exclude` applies to every mount, relative to the source root, the
   deepest directory holding the shell and the mounts' sources. A mounted
   site reads chart data and `@file#key` references only from inside it.

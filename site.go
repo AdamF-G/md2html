@@ -313,6 +313,12 @@ func (s *Site) applyMounts() {
 			n = s.bySrc[m.Source]
 		}
 		if n == nil {
+			// A directory mount with no node holds no page the site
+			// builds. A file mount yields its page, or the crawl said why
+			// it could not.
+			if m.IsDir {
+				s.warn(s.shellSrc, fmt.Sprintf("%s: no pages: the mount's source holds no Markdown file the site builds", m.From))
+			}
 			continue
 		}
 		if m.NavTitle != "" {

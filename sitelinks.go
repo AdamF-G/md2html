@@ -195,7 +195,8 @@ type linkAction struct {
 // page loads from outside the site is copied to _assets/, at its path from
 // the source root, or dropped when it has none. A link a reader follows
 // out of the site, to a page or any other file, goes where unmounted: says.
-// A missing file, and one under an excluded path, keep the link as written.
+// A missing file, and one under an excluded path, keep the link as written;
+// in a mounted site an excluded file is outside the site instead.
 func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) linkAction {
 	if l.Kind != LinkDoc && l.Kind != LinkAsset {
 		return linkAction{}
@@ -204,7 +205,11 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 	if err != nil {
 		return linkAction{}
 	}
-	if r.excludedAt(target) {
+	// Without mounts an excluded file keeps its link as written, since
+	// the crawl said it did not follow it. A mounted crawl follows no
+	// links, so there it is outside the site, as any file no mount holds.
+	excluded := r.excludedAt(target)
+	if excluded && r.mounts == nil {
 		return linkAction{}
 	}
 	fi, err := os.Stat(target)
@@ -213,6 +218,12 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 	}
 	if fi.IsDir() {
 		return linkAction{} // a directory is not a file to copy or link
+	}
+	if excluded {
+		if l.Kind == LinkDoc || !l.Loaded {
+			return r.leaving(l, target)
+		}
+		return r.outsideLoaded(l, target, fromOut)
 	}
 	if l.Kind == LinkDoc {
 		if out, ok := outBySrc[target]; ok {
@@ -233,6 +244,13 @@ func (r *siteRules) action(l Link, fromOut string, outBySrc map[string]string) l
 	if !l.Loaded {
 		return r.leaving(l, target)
 	}
+	return r.outsideLoaded(l, target, fromOut)
+}
+
+// outsideLoaded is what a file a page loads from outside the site becomes:
+// a copy under _assets/, at its path from the source root, or dropped when
+// it has none.
+func (r *siteRules) outsideLoaded(l Link, target, fromOut string) linkAction {
 	if r.noAssets {
 		return linkAction{}
 	}

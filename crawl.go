@@ -836,6 +836,9 @@ func crawlMounts(opt CrawlOptions) (*CrawlResult, error) {
 			})
 		}
 		for _, p := range cands {
+			if rules.owner(p) != mr {
+				continue // a deeper mount holds its path, and considers it
+			}
 			real, err := resolve(p)
 			if err != nil {
 				continue
@@ -846,7 +849,7 @@ func crawlMounts(opt CrawlOptions) (*CrawlResult, error) {
 			owner := rules.owner(real)
 			if owner == nil {
 				res.Warnings = append(res.Warnings, Warning{p,
-					fmt.Sprintf("not building %s: no mount holds it", p)})
+					fmt.Sprintf("not building %s: it leads to %s, which no mount holds", p, real)})
 				continue
 			}
 			if owner != mr || rules.excludedAt(real) {

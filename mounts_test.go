@@ -107,6 +107,7 @@ func TestReadMountsRefuses(t *testing.T) {
 		{body: r + `[[mount path="x" source="../guide" toc="both"]]`, want: `toc "both" is not page or shell`},
 		{body: r + `[[mount path="x" source="../../README.md" nav-sort="links"]]`, want: "apply to a directory mount"},
 		{body: r + `[[mount path="x" source="../../README.md" exclude="a"]]`, want: "apply to a directory mount"},
+		{body: r + `[[mount path="x" source="../../README.md" title="T"]]`, want: "nav-sort, exclude and title apply to a directory mount"},
 		{body: r + `[[mount source="../guide"]]`, want: "both mount the site's root"},
 		{body: r + `[[mount path="x" source="../guide"]]` + "\n\n" + `[[mount path="y" source="../guide"]]`, want: "both mount"},
 		{body: r + `[[mount path="g" source="../guide" nav-title="G"]]` + "\n\n" + `[[mount path="g" source="../../notes" nav-title="H"]]`, want: `different nav-title: "G" and "H"`},

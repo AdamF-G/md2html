@@ -225,8 +225,14 @@ Flags:
 	}
 	var mounts []md2html.Mount
 	// Only a shell that exists has mounts to read; a missing one is the
-	// build's own error below, exit code and all, as it was before mounts.
-	if _, err := os.Stat(*sitePath); *sitePath != "" && err == nil {
+	// build's own error below, exit code and all, as it was before mounts,
+	// unless --mount was given, which can only be for a shell's site.
+	_, statErr := os.Stat(*sitePath)
+	if len(mountFlags) > 0 && statErr != nil {
+		fmt.Fprintf(stderr, "md2html: site shell %s: %v\n", *sitePath, statErr)
+		return 2
+	}
+	if *sitePath != "" && statErr == nil {
 		var err error
 		if mounts, err = md2html.ReadMounts(*sitePath, mountFlags); err != nil {
 			fmt.Fprintf(stderr, "md2html: %v\n", err)

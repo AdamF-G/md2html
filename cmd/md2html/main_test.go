@@ -1089,6 +1089,49 @@ func TestRunMissingShellExitsOne(t *testing.T) {
 	}
 }
 
+// A shell given with --mount that is not there is said, with why, rather
+// than answered with the usage alone.
+func TestRunMissingShellWithMountSaysSo(t *testing.T) {
+	root := tree(t, map[string]string{"y/a.md": "# A\n"})
+	t.Chdir(root)
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", "typo.md", "--mount", `path="x" source="y"`, "-o", filepath.Join(root, "out")}, &out, &errb)
+	if code != 2 || !strings.HasPrefix(errb.String(), "md2html: site shell typo.md: ") || strings.Contains(errb.String(), "Usage") {
+		t.Errorf("exit %d, stderr: %s", code, errb.String())
+	}
+}
+
+// A shell's image, beside the shell in a directory the root mount
+// excludes, is outside the site: every page loads it from _assets/.
+func TestRunMountedShellImageFromAnExcludedDirectory(t *testing.T) {
+	root := tree(t, map[string]string{
+		"repo/docs/site/shell.md":  "---\nsite: true\n---\n![logo](logo.png)\n\n[[mount source=\"..\" exclude=\"site\"]]\n\n[[content]]\n",
+		"repo/docs/site/logo.png":  "png",
+		"repo/docs/index.md":       "# Home\n",
+		"repo/docs/guide/index.md": "# Guide\n",
+	})
+	var out, errb bytes.Buffer
+	code := run([]string{"--site", filepath.Join(root, "repo/docs/site/shell.md"), "-o", filepath.Join(root, "out")}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("exit %d, stderr: %s", code, errb.String())
+	}
+	for page, src := range map[string]string{
+		"out/index.html":       `src="_assets/site/logo.png"`,
+		"out/guide/index.html": `src="../_assets/site/logo.png"`,
+	} {
+		b, err := os.ReadFile(filepath.Join(root, page))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), src) {
+			t.Errorf("%s has no %s:\n%s", page, src, b)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "out/_assets/site/logo.png")); err != nil {
+		t.Errorf("the logo was not copied: %v", err)
+	}
+}
+
 func TestRunMountsRefuse(t *testing.T) {
 	root := tree(t, map[string]string{
 		"site/shell.md": "---\nsite: true\n---\n[[mount source=\"../docs\"]]\n\n[[content]]\n",
