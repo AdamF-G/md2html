@@ -69,7 +69,8 @@ The shell's links are rewritten for each page, so a link in it reaches its
 target from every page: a link to a page is to its HTML, and any other
 relative link, an image beside the shell, say, is to the file itself. A
 link to a `.md` the build does not write reaches the Markdown file, and
-warns. The shell's `style:` (and `plugins:`, relative to
+warns. In a mounted site, a shell link that reaches nothing on disk is
+read from the site's root. The shell's `style:` (and `plugins:`, relative to
 the shell) is the site's style: a page's own `style:` wins for that page,
 and `--style` applies where neither sets one. The shell's plugins
 supply no languages to the pages it wraps: those come from `--plugin`
@@ -163,6 +164,12 @@ md2html --site docs/site/shell.md -o _site
   file a mount holds, and no exclude names, is in the site; anything
   else is outside it, and follows `unmounted:` (see
   [Links and files](#links-and-files)).
+- A link that reaches nothing on disk, or an excluded file or directory,
+  is read from where the page appears in the site, so a hand-written
+  page and a generated one can link to each other by their places. Such
+  a link breaks on the hosting page. Generating the pages into the
+  source directory, where they appear in the site, remains the simpler
+  arrangement.
 - `--exclude` applies to every mount, relative to the source root, the
   deepest directory holding the shell and the mounts' sources. A mounted
   site reads chart data and `@file#key` references only from inside it.
@@ -185,7 +192,10 @@ base.
   `md2html-assets.txt` at the output root records the copies, so a later
   build replaces its own and refuses a file someone else put there.
   A link to a directory (`[Home](./)`, `[Docs](sub/)`) is left as
-  written, in a site or out of it; nothing is copied for it.
+  written in a site without mounts; nothing is copied for it. In a
+  mounted site, a link to a directory the site has a page for reaches its
+  page, and one to a directory the site holds without a page is left as
+  written. A link to any other directory follows `unmounted:`.
 - An image or other file a page loads from outside the site is copied to
   `_assets/`, at its path from the source root.
 - A link a reader follows out of the site, to a page or any file, goes
