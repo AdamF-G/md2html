@@ -373,6 +373,17 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	if opt.Site != nil && !opt.Fragment {
 		transforms = append([]Transform{opt.Site.navMarkers(opt.SourcePath, opt.Warn), contentMarkerWarning(opt.Warn)}, transforms...)
 	}
+	// A mount with toc="shell" makes the shell's list its pages' only one:
+	// their own [[toc]] and [TOC] markers go, and their toc: layout with
+	// them; toc: none still keeps the shell's list off the page.
+	if wrapping && opt.Site.tocFromShell(opt.SourcePath) {
+		for _, m := range findTOCMarkers(root) {
+			m.Parent.RemoveChild(m)
+		}
+		if meta["toc"] != "none" {
+			delete(meta, "toc")
+		}
+	}
 	// Resolved even for a fragment, so a bad value is still reported; a
 	// fragment then stays inline, since it can carry no side control.
 	tocMode := opt.TOC
@@ -449,7 +460,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 			if v != "" && opt.Warn != nil {
 				opt.Warn(fmt.Sprintf("front matter shell %q is not none; wrapping the page in the site's shell", v))
 			}
-			if root, err = opt.Site.wrap(root, opt.SourcePath, opt.Transforms, meta["toc-title"], opt.Warn); err != nil {
+			if root, err = opt.Site.wrap(root, opt.SourcePath, opt.Transforms, meta["toc-title"], meta["toc"] == "none", opt.Warn); err != nil {
 				return nil, err
 			}
 			wrapped = true

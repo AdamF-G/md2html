@@ -31,8 +31,9 @@ import (
 // do the contents lists go in, since their links point into the page and
 // must not be renumbered with the shell's. The page's body goes in last, so
 // nothing is transformed twice. Contents lists under a shell are always
-// inline: the shell places them.
-func (s *Site) wrap(content *html.Node, src string, transforms []Transform, label string, warn func(string)) (*html.Node, error) {
+// inline: the shell places them. noTOC, from the page's toc: none, leaves
+// the shell's [[toc]] empty for this page.
+func (s *Site) wrap(content *html.Node, src string, transforms []Transform, label string, noTOC bool, warn func(string)) (*html.Node, error) {
 	var buf bytes.Buffer
 	if transforms == nil {
 		transforms = builtins(s.shellWarn)
@@ -45,6 +46,12 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	shell, err := parseFragment(buf.Bytes())
 	if err != nil {
 		return nil, err
+	}
+	// The shell's mounts made the site; on the page they are nothing.
+	for _, m := range findMarkers(shell) {
+		if m.name == "mount" {
+			replaceMarker(m)
+		}
 	}
 	out := s.outBySrc[src]
 	links := ExtractLinks(shell, s.shellDir)
@@ -77,8 +84,10 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 	}
 	renumberShellIDs(shell, content)
 	for _, slot := range tocSlots {
-		if nav := buildTOC(headingNodes(content), label, false); nav != nil {
-			slot.Parent.InsertBefore(nav, slot)
+		if !noTOC {
+			if nav := buildTOC(headingNodes(content), label, false); nav != nil {
+				slot.Parent.InsertBefore(nav, slot)
+			}
 		}
 		slot.Parent.RemoveChild(slot)
 	}

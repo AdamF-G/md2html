@@ -415,6 +415,13 @@ func (s *Site) section(src string) string {
 	return ""
 }
 
+// tocFromShell reports whether the page at src takes its contents list from
+// the shell alone: its mount says toc="shell".
+func (s *Site) tocFromShell(src string) bool {
+	n := s.bySrc[src]
+	return n != nil && n.doc != nil && n.doc.mount != nil && n.doc.mount.TOC == "shell"
+}
+
 // outline renders the tree as indented labels, for tests.
 func (s *Site) outline() string {
 	var b strings.Builder

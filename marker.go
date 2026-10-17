@@ -27,7 +27,7 @@ var (
 // navMarkerNames are the markers that need a site: outside one they are
 // warned about and left as written.
 var navMarkerNames = map[string]bool{
-	"content": true, "pages": true, "breadcrumb": true, "prev-next": true, "search": true,
+	"content": true, "pages": true, "breadcrumb": true, "prev-next": true, "search": true, "mount": true,
 }
 
 // markerText returns a paragraph's text when it is made only of text and

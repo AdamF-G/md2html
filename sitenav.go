@@ -196,13 +196,14 @@ func (s *Site) prevNext(page *siteNode, from string) *html.Node {
 	return div
 }
 
-// contentMarkerWarning warns about a [[content]] in a page's own body, where
-// it has no meaning: only the shell places the page.
+// contentMarkerWarning warns about a [[content]] or [[mount]] in a page's own
+// body, where it has no meaning: only the shell places the page, and only
+// the shell's mounts make the site.
 func contentMarkerWarning(warn func(string)) Transform {
 	return Transform{Name: "contentMarkerWarning", Fn: func(root *html.Node) error {
 		for _, m := range findMarkers(root) {
-			if m.name == "content" && warn != nil {
-				warn("[[content]] belongs in the site's shell; leaving it as written")
+			if (m.name == "content" || m.name == "mount") && warn != nil {
+				warn(fmt.Sprintf("[[%s]] belongs in the site's shell; leaving it as written", m.name))
 			}
 		}
 		return nil

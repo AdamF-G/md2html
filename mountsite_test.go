@@ -107,3 +107,56 @@ func TestMountTOCShellNeedsTheShellsList(t *testing.T) {
 		t.Errorf("err %v", err)
 	}
 }
+
+// mountPage converts the page at rel (from the temp root) in a mounted site.
+func mountPage(t *testing.T, body string, files map[string]string, rel string) (string, []string, *Site) {
+	t.Helper()
+	res, root, err := mountCrawl(t, body, files, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shell := filepath.Join(root, "repo/docs/site/shell.md")
+	ms, _ := ReadMounts(shell, nil)
+	opt := CrawlOptions{Mounts: ms, SiteShell: shell, OutDir: filepath.Join(root, "out")}
+	s, err := BuildSite(res, shell, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, warnings := sitePage(t, s, res, root, rel)
+	return out, warnings, s
+}
+
+func TestMountMarkersAndShellContents(t *testing.T) {
+	files := map[string]string{
+		"repo/docs/site/shell.md": "---\nsite: true\n---\n[[mount source=\"../index.md\"]]\n\n" +
+			"[[mount path=\"guide\" source=\"../guide\" toc=\"shell\"]]\n\n[[mount path=\"plain\" source=\"../plain\"]]\n\n" +
+			"::: nav {.side}\n[[toc]]\n:::\n\n[[content]]\n",
+		"repo/docs/index.md":   "---\ntoc: none\n---\n# Home\n\n## H\n",
+		"repo/docs/guide/a.md": "---\ntoc: float\n---\n# A\n\n[[toc]]\n\n## One\n\n```\n[[toc]]\n```\n",
+		"repo/docs/plain/b.md": "# B\n\n[[toc]]\n\n## Two\n\n[[mount path=\"x\" source=\"y\"]]\n",
+	}
+	a, aw, _ := mountPage(t, "", files, "repo/docs/guide/a.md")
+	if n := strings.Count(a, `<nav class="toc`); n != 1 {
+		t.Errorf("a toc=\"shell\" page has %d contents lists, want the shell's one:\n%s", n, a)
+	}
+	if !strings.Contains(a, "[[toc]]") {
+		t.Error("a [[toc]] inside a fence was touched")
+	}
+	if strings.Contains(a, "[[mount") {
+		t.Error("the shell's [[mount]] markers were rendered")
+	}
+	if len(aw) != 0 {
+		t.Errorf("warnings %q", aw)
+	}
+	b, bw, _ := mountPage(t, "", files, "repo/docs/plain/b.md")
+	if n := strings.Count(b, `<nav class="toc`); n != 2 {
+		t.Errorf("a page of a mount without toc=\"shell\" has %d contents lists, want its own and the shell's", n)
+	}
+	if !strings.Contains(strings.Join(bw, "\n"), "[[mount]] belongs in the site's shell") || !strings.Contains(b, "[[mount") {
+		t.Errorf("a page's [[mount]] did not warn and stay: %q", bw)
+	}
+	home, _, _ := mountPage(t, "", files, "repo/docs/index.md")
+	if strings.Contains(home, `<nav class="toc`) {
+		t.Error("a toc: none page got the shell's contents list")
+	}
+}
