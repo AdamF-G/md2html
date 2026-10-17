@@ -1,7 +1,3 @@
----
-nav-title: Overview
-nav-order: 1
----
 # md2html
 
 Turn a folder of Markdown documentation into clean, readable HTML pages.

@@ -69,11 +69,11 @@ var guideParts = sync.OnceValue(func() []guidePart {
 // opening first, then the sections by nav-order. Two sections may not
 // share a nav-order: the site breaks such a tie by title and this would by
 // file name, so the two orders could differ with nothing to say so. The
-// opening is exempt, being first here whatever its nav-order says, which
-// places the whole guide among the other docs. Each file loses its front
-// matter, which places the page in the site, and any contents marker,
-// which lists the page's headings there; a reader of --guide gets the
-// index instead.
+// opening is exempt, being first here whatever its nav-order says, though
+// it must still have one, as every file here must. Each file loses its
+// front matter, which places the page in the site, and any contents
+// marker, which lists the page's headings there; a reader of --guide gets
+// the index instead.
 func loadGuide(fsys fs.FS) ([]guidePart, error) {
 	names, err := fs.Glob(fsys, "*.md")
 	if err != nil {

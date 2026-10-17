@@ -1,9 +1,9 @@
 /* The layout of md2html's documentation site, on top of the built-in
    `proof` style, which supplies the look: the palette, the serif headings
-   and the band of ink behind the header. The shell (site/shell.md) puts a
-   header, a section nav, the breadcrumb, the page's <main>, previous/next
-   and a footer straight into <body>; this places them, and narrow screens
-   get them stacked in source order. */
+   and the band of ink behind the header. The shell (docs/site/shell.md)
+   puts a header, a section nav, the breadcrumb, the page's <main>,
+   previous/next and a footer straight into <body>; this places them, and
+   narrow screens get them stacked in source order. */
 
 body { padding-top: 0; }
 

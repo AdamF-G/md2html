@@ -1,6 +1,3 @@
----
-nav-order: 3
----
 # Changelog
 
 Notable changes to md2html, newest first. A version is a git tag, and the

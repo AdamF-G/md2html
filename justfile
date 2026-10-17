@@ -64,11 +64,12 @@ grammars:
     go run ./internal/highlight/gen write -work "$work" -pkg "$pkg" \
         -out plugins/grammars -golden internal/highlight/testdata/conformance -notices THIRD_PARTY_NOTICES
 
-# The documentation site: the repo's own Markdown, wrapped in site/shell.md.
+# The documentation site: docs/site/shell.md mounts the repo's own Markdown
+# and wraps it, so the shell says what the site holds and where.
 # .github/workflows/pages.yml runs the same command to publish it to GitHub
 # Pages, so change the two together.
 
 # Build the documentation site into _site/.
 site:
     rm -rf _site
-    go run ./cmd/md2html --site site/shell.md --no-source --exclude docs/plans -o _site index.md README.md CHANGELOG.md docs
+    go run ./cmd/md2html --site docs/site/shell.md --no-source -o _site

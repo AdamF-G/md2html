@@ -1,6 +1,3 @@
----
-nav-order: 2
----
 # Design notes
 
 Each note is the design a feature was built from: the problem, the

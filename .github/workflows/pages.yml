@@ -26,7 +26,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Build the site
-        run: go run ./cmd/md2html --site site/shell.md --no-source --exclude docs/plans -o _site index.md README.md CHANGELOG.md docs
+        run: go run ./cmd/md2html --site docs/site/shell.md --no-source -o _site
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
