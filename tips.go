@@ -102,3 +102,32 @@ func insideLink(n *html.Node) bool {
 	}
 	return false
 }
+
+// tipDelayRule is the page's tip delay as a rule for its stylesheet: its
+// own front matter's tip-delay, else the site shell's, else none, which
+// leaves tip.css's default. It goes on main.md2html, the element a
+// fragment's stylesheet scopes itself to, so a fragment never sets
+// anything on its host's :root. A value that is not a plain time is
+// passed over with a warning, to the page's warn or the shell's.
+func tipDelayRule(page, shell string, warn, shellWarn func(string)) string {
+	rule := func(v string) string { return "\nmain.md2html { --md2html-tip-delay: " + v + "; }\n" }
+	// The shell's value is checked even when the page's wins, so a bad
+	// one is reported whichever page is built first; shellWarn keeps it
+	// once.
+	shellOK := shell == "" || validTipDelay(shell)
+	if !shellOK && shellWarn != nil {
+		shellWarn(fmt.Sprintf("front matter tip-delay %q is not a time such as 150ms; using the default delay", shell))
+	}
+	if page != "" {
+		if validTipDelay(page) {
+			return rule(page)
+		}
+		if warn != nil {
+			warn(fmt.Sprintf("front matter tip-delay %q is not a time such as 150ms; using the site's or the default delay", page))
+		}
+	}
+	if shell != "" && shellOK {
+		return rule(shell)
+	}
+	return ""
+}

@@ -162,9 +162,11 @@ A style with `"base": "none"`, or a caller's own `Options.CSS`, leaves out
 of the note. So the rules that make a tip work are written into the page's
 stylesheet whenever the page has a tip, whatever the style (my call):
 hiding it, showing it on hover and focus after the delay, its placement
-over the host, reduced motion and print. `default.css` adds only the look:
-colours, padding, radius and the `cursor: help` cue. This is how a chart
-carries its own hover rules.
+over the host, reduced motion and print. This is how a chart carries its
+own hover rules. The look, colours, padding, radius and the `cursor: help`
+cue, goes in the same rules, ahead of the page's style so a style can
+restyle it. In `default.css` it would change every page, tip or not,
+which the v0.12.0 output goldens forbid.
 
 ## 6. What the reader sees {#look}
 
@@ -199,8 +201,12 @@ skips `.md2html-tooltip`:
   span's `tip` is part of its block, which the title already drops.
 
 Copying the page's text as a reader sees it should not pick up a hidden
-tip. A tip that is not shown is `visibility: hidden`, which browsers leave
-out of a copy.
+tip. A tip that is not shown is `display: none`, which browsers leave out
+of a copy. It also takes no room: a `visibility: hidden` box still counts
+toward the page's overflow, and near the end of a line on a phone it
+scrolled the whole page sideways. The shown tip starts from hidden by
+`@starting-style`, so it still waits out the delay; a browser without
+`@starting-style` shows it at once.
 
 ## 8. Warnings {#warnings}
 

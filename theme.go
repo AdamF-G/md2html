@@ -29,6 +29,19 @@ var siteCSS string
 //go:embed highlight.css
 var highlightCSS string
 
+// tipCSS is what makes a tip work: the tooltip hidden, shown over its
+// host on hover or focus after the page's delay, and printed after it.
+// Like highlightCSS it is part of no style. renderPage and renderFragment
+// put it ahead of the page's style when the page has a tip (see
+// needsTipCSS), whatever the style, since a page whose style left these
+// rules out would show every note as a second copy in its text. It holds
+// the look too, ahead of the style so a style can restyle it: in
+// default.css it would change every page, tip or none, which the v0.12.0
+// goldens forbid.
+//
+//go:embed tip.css
+var tipCSS string
+
 // builtinFS holds every built-in plugin, one directory each under plugins/.
 // A contributor adds a plugin by adding a directory; nothing here changes.
 //

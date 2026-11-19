@@ -347,3 +347,42 @@ func TestTipsShellAndPageIDsDistinct(t *testing.T) {
 		}
 	}
 }
+
+// The shell's tip-delay is the site's; a page's own wins for that page.
+func TestTipDelayShellThenPage(t *testing.T) {
+	s, res, root := siteFixture(t, map[string]string{
+		"shell/site.md": "---\nsite: true\ntip-delay: 300ms\n---\n[[content]]\n",
+		"docs/index.md": "# Home\n\n[b]{tip=\"n\"}\n",
+		"docs/a.md":     "---\ntip-delay: 0ms\n---\n# A\n\n[b]{tip=\"n\"}\n",
+	}, "shell/site.md")
+	home, _ := sitePage(t, s, res, root, "docs/index.md")
+	a, _ := sitePage(t, s, res, root, "docs/a.md")
+	if !strings.Contains(home, "--md2html-tip-delay: 300ms;") {
+		t.Error("a page without its own delay lacks the shell's")
+	}
+	if !strings.Contains(a, "--md2html-tip-delay: 0ms;") || strings.Contains(a, "300ms") {
+		t.Error("a page's own delay does not win")
+	}
+}
+
+// The shell's tip-delay is the last before the default, so a bad one
+// says the default applies, not "the site's".
+func TestTipDelayBadShellValueNamesTheDefault(t *testing.T) {
+	s, res, root := siteFixture(t, map[string]string{
+		"shell/site.md": "---\nsite: true\ntip-delay: soon\n---\n[[content]]\n",
+		"docs/index.md": "# Home\n\n[b]{tip=\"n\"}\n",
+	}, "shell/site.md")
+	sitePage(t, s, res, root, "docs/index.md")
+	var found bool
+	for _, w := range s.Warnings {
+		if strings.Contains(w.Message, "soon") {
+			found = true
+			if !strings.Contains(w.Message, "using the default delay") || strings.Contains(w.Message, "site's") {
+				t.Errorf("shell warning = %q, want it to name only the default", w.Message)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("no shell warning for soon: %v", s.Warnings)
+	}
+}

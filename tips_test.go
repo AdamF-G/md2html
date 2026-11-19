@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -228,6 +229,132 @@ func TestTipsDroppedLinkKeepsTip(t *testing.T) {
 	got := string(out)
 	if strings.Contains(got, "<a") || !strings.Contains(got, `<span class="md2html-tip-host" tabindex="0" aria-describedby="md2html-tooltip-1">g</span>`) {
 		t.Errorf("dropped link lost its tip\ngot: %s", got)
+	}
+}
+
+// styleOf returns the <style> element's contents of a converted page.
+func styleOf(t *testing.T, page string) string {
+	t.Helper()
+	i, j := strings.Index(page, "<style>"), strings.Index(page, "</style>")
+	if i < 0 || j < i {
+		t.Fatalf("no <style> in:\n%s", page)
+	}
+	return page[i:j]
+}
+
+func convertOpt(t *testing.T, src string, opt Options) (string, []string) {
+	t.Helper()
+	var w []string
+	opt.Warn = func(m string) { w = append(w, m) }
+	out, err := Convert([]byte(src), opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out), w
+}
+
+func TestTipCSSOnlyWithTips(t *testing.T) {
+	for _, frag := range []bool{false, true} {
+		with, _ := convertOpt(t, "[b]{tip=\"n\"}\n", Options{Fragment: frag})
+		without, _ := convertOpt(t, "[b]{.chip}\n", Options{Fragment: frag})
+		if !strings.Contains(styleOf(t, with), tipCSS) {
+			t.Errorf("fragment=%v: a page with a tip lacks tip.css", frag)
+		}
+		if strings.Contains(styleOf(t, without), tipCSS) {
+			t.Errorf("fragment=%v: a page without a tip has tip.css", frag)
+		}
+	}
+}
+
+// The rules that hide a tip ship with the page, not the style: without
+// them the note would sit in the text as a second copy.
+func TestTipCSSWithoutDefaultStyle(t *testing.T) {
+	got, _ := convertOpt(t, "[b]{tip=\"n\"}\n", Options{CSS: "/**/"})
+	if !strings.Contains(styleOf(t, got), tipCSS) {
+		t.Error("tip.css missing when the caller replaces the stylesheet")
+	}
+}
+
+func TestTipCSSHidesUntilHover(t *testing.T) {
+	norm := strings.Join(strings.Fields(tipCSS), " ")
+	for _, want := range []string{
+		"visibility: hidden",
+		".md2html-tip-host:hover + .md2html-tooltip",
+		".md2html-tip-host:focus-visible + .md2html-tooltip",
+		"visibility: visible",
+		"var(--md2html-tip-delay, 100ms)",
+		"prefers-reduced-motion",
+		"@media print",
+		`content: " ("`,
+	} {
+		if !strings.Contains(norm, want) {
+			t.Errorf("tip.css lacks %q", want)
+		}
+	}
+}
+
+// The charts' tooltips are md2html-tip on SVG; nothing here may match them.
+func TestTipCSSLeavesChartTipsAlone(t *testing.T) {
+	if m := regexp.MustCompile(`\.md2html-tip[^-a-z]`).FindString(tipCSS); m != "" {
+		t.Errorf("tip.css selects the charts' .md2html-tip: %q", m)
+	}
+}
+
+func TestTipDelayFrontMatter(t *testing.T) {
+	got, _ := convertOpt(t, "---\ntip-delay: 150ms\n---\n[b]{tip=\"n\"}\n", Options{})
+	if !strings.Contains(styleOf(t, got), "main.md2html { --md2html-tip-delay: 150ms; }") {
+		t.Errorf("front matter delay not set\n%s", styleOf(t, got))
+	}
+}
+
+func TestTipDelayFrontMatterRefused(t *testing.T) {
+	got, w := convertOpt(t, "---\ntip-delay: 0ms; background:red\n---\n[b]{tip=\"n\"}\n", Options{})
+	if strings.Contains(styleOf(t, got), "--md2html-tip-delay:") {
+		t.Errorf("refused delay reached the style\n%s", styleOf(t, got))
+	}
+	if len(w) != 1 || !strings.Contains(w[0], "background:red") {
+		t.Errorf("warnings = %q, want one naming the value", w)
+	}
+}
+
+// The look lives in tip.css, not default.css, so a page without a tip is
+// unchanged (TestUnchangedOutput), and goes ahead of the style so a style
+// can restyle it.
+func TestTipCSSLook(t *testing.T) {
+	norm := strings.Join(strings.Fields(tipCSS), " ")
+	// :where() keeps the cue at no specificity, so any style's rule for a
+	// chip wins; start aligns a right-to-left page's note to the right.
+	for _, want := range []string{"var(--chart-surface", ":where(.md2html-tip-host:not(a)) { cursor: help; }", "text-align: start"} {
+		if !strings.Contains(norm, want) {
+			t.Errorf("tip.css lacks %q", want)
+		}
+	}
+	if strings.Contains(norm, "text-align: left") {
+		t.Error("tip.css aligns notes left, wrong for a right-to-left page")
+	}
+	if regexp.MustCompile(`\.md2html-tip-host[^{]*\{[^}]*text-decoration`).MatchString(tipCSS) {
+		t.Error("tip.css underlines a tip host")
+	}
+	if strings.Contains(defaultCSS, "md2html-tooltip") {
+		t.Error("default.css styles tips; every page would change")
+	}
+	got, _ := convertOpt(t, "[b]{tip=\"n\"}\n", Options{})
+	style := styleOf(t, got)
+	if strings.Index(style, tipCSS) > strings.Index(style, defaultCSS) {
+		t.Error("tip.css comes after the style, which then cannot restyle it")
+	}
+}
+
+// A front matter tip-delay that is not a time warns even on a page with
+// no tip: the design note says such a value is ignored with a warning,
+// and a page that gains a tip later should not be the first to hear.
+func TestTipDelayFrontMatterWarnsWithoutTips(t *testing.T) {
+	got, w := convertOpt(t, "---\ntip-delay: soon\n---\nNo tips here.\n", Options{})
+	if len(w) != 1 || !strings.Contains(w[0], "soon") {
+		t.Errorf("warnings = %q, want one naming soon", w)
+	}
+	if strings.Contains(got, "--md2html-tip-delay") {
+		t.Error("a page with no tip got a delay rule")
 	}
 }
 

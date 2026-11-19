@@ -1,0 +1,81 @@
+/* Tips: what makes [x]{tip="..."} work, written into any page that has
+   one, whatever its style, ahead of the style, so a style restyles the
+   look below by naming the same classes. The wrap is
+   the box the tooltip is placed against, centred over its host; hiding
+   is immediate and showing waits for --md2html-tip-delay, set by front
+   matter on main.md2html or by the host's own tip-delay on its wrap. */
+.md2html-tip-wrap { position: relative; display: inline; }
+.md2html-tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.35rem);
+  left: 50%;
+  translate: -50% 0;
+  width: max-content;
+  max-width: min(30ch, calc(100vw - 2rem));
+  z-index: 10;
+  white-space: normal;
+  pointer-events: none;
+  /* Hidden takes no room: a visibility-hidden box still counts toward
+     the page's overflow, and near the end of a line on a phone it
+     scrolled the whole page sideways. */
+  display: none;
+  visibility: hidden;
+  transition: display 0s allow-discrete, visibility 0s linear 0s;
+}
+/* The look. It borrows the chart tips' surface, so the two match in both
+   themes, with fallbacks for a style that defines none of the tokens.
+   Only a span shows the help cursor: a link keeps its pointer. Nothing
+   is underlined; a style that wants a cue names .md2html-tip-host. */
+.md2html-tooltip {
+  background: var(--chart-surface, Canvas);
+  color: var(--fg, CanvasText);
+  border: 1px solid var(--rule, GrayText);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: normal;
+  line-height: 1.4;
+  text-align: start;
+  text-transform: none;
+  letter-spacing: normal;
+}
+:where(.md2html-tip-host:not(a)) { cursor: help; }
+.md2html-tip-host:hover + .md2html-tooltip,
+.md2html-tip-host:focus-visible + .md2html-tooltip {
+  display: block;
+  visibility: visible;
+  transition-delay: var(--md2html-tip-delay, 100ms);
+}
+/* Leaving display: none there is no earlier style to transition from, so
+   the shown tip starts from hidden and waits out the delay. A browser
+   without @starting-style shows it at once. */
+@starting-style {
+  .md2html-tip-host:hover + .md2html-tooltip,
+  .md2html-tip-host:focus-visible + .md2html-tooltip { visibility: hidden; }
+}
+@supports (position-try-fallbacks: flip-block) {
+  .md2html-tooltip { position-try-fallbacks: flip-block; }
+}
+/* The delay is a pause, not a motion, so it stays; only a fade a style
+   adds goes. */
+@media (prefers-reduced-motion: reduce) {
+  .md2html-tooltip { animation: none; transition-property: display, visibility; }
+}
+/* Paper cannot hover, so the note prints after its host. */
+@media print {
+  .md2html-tooltip {
+    position: static;
+    display: inline;
+    visibility: visible;
+    translate: none;
+    width: auto;
+    max-width: none;
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+  .md2html-tooltip::before { content: " ("; }
+  .md2html-tooltip::after { content: ")"; }
+}

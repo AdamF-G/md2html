@@ -491,6 +491,11 @@ func needsSiteCSS(body []byte, wrapped bool) bool {
 	return wrapped || bytes.Contains(body, []byte(`class="md2html-list`)) || hasThemeToggle(body)
 }
 
+// needsTipCSS reports whether body has a tip, so needs tipCSS.
+func needsTipCSS(body []byte) bool {
+	return bytes.Contains(body, []byte(`class="md2html-tooltip"`))
+}
+
 // needsHighlightCSS reports whether a page has a highlighted fence.
 func needsHighlightCSS(body []byte) bool {
 	return bytes.Contains(body, []byte(` md2html-hl"`)) || bytes.Contains(body, []byte(` md2html-hl `))
@@ -529,6 +534,9 @@ func renderPage(body []byte, title, lang, section, css, mermaidURL string, sourc
 	}
 	if needsHighlightCSS(body) {
 		b.WriteString(highlightCSS)
+	}
+	if needsTipCSS(body) {
+		b.WriteString(tipCSS)
 	}
 	b.WriteString(css)
 	b.WriteString("\n</style>\n</head>\n<body>\n")
@@ -590,6 +598,9 @@ func renderFragment(body []byte, title, css, runtime string) []byte {
 	}
 	if needsHighlightCSS(body) {
 		b.WriteString(highlightCSS)
+	}
+	if needsTipCSS(body) {
+		b.WriteString(tipCSS)
 	}
 	b.WriteString(css)
 	b.WriteString("\n</style>\n<main class=\"md2html\">\n")

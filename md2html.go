@@ -242,7 +242,7 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 	// Markdown, so by the time a tree exists it has become an <hr> and a
 	// setext heading, with no way back to the key/value lines.
 	//
-	// Only title/subtitle/date/title-block/lang/toc/toc-title/plugins/style are read below. A block carrying some other
+	// Only title/subtitle/date/title-block/lang/toc/toc-title/plugins/style/tip-delay are read below. A block carrying some other
 	// flat key (an "author:" line, say) is still accepted and still
 	// stripped from the body — it parsed as valid front matter — but the
 	// key itself is silently dropped: there is nowhere in the page for it
@@ -480,6 +480,16 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		return nil, err
 	}
 	css := style.css
+	// Read on every page, so a bad value warns before any tip needs it;
+	// written only where a tip uses it.
+	var shellDelay string
+	var shellWarn func(string)
+	if opt.Site != nil {
+		shellDelay, shellWarn = opt.Site.shellMeta["tip-delay"], opt.Site.shellWarn
+	}
+	if rule := tipDelayRule(meta["tip-delay"], shellDelay, opt.Warn, shellWarn); needsTipCSS(body) {
+		css += rule
+	}
 	mermaidURL := opt.MermaidURL
 	if mermaidURL == "" {
 		mermaidURL = mermaidCDN
