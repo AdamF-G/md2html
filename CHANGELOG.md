@@ -9,6 +9,32 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
+## Unreleased
+
+### Added
+
+- A bracketed span keeps `title` and the other global attributes, and any
+  `data-` or `aria-` name, as a link's attribute block does, so a chip can
+  carry a hover note: `[beta]{.chip title="May change before 1.0."}`. Any
+  other name is dropped, and a boolean attribute takes a value,
+  `hidden=""`.
+- A span block left on the page as text warns when it was clearly meant as
+  attributes: a bare word beside a class, an id or a `key="value"`, or a
+  name no attribute can have.
+
+### Changed
+
+- A span block with a bare word stays as written. `map[key]{value}` used
+  to render `map<span>key</span>` and lose `{value}`; it now renders as
+  typed, quietly, and `[x]{.chip draft}` stays as typed with a warning.
+  The silent trap is gone from the guide.
+- A span's `key="value"` pairs that the attribute rules keep now reach the
+  page, where before every pair was dropped.
+- A span block with a name no attribute can have stays as written and
+  warns, where before it rendered a span without that name.
+- A span block left as text keeps its text in the page title too, as it
+  does on the page.
+
 ## v0.15.0 — 2026-10-17
 
 ### Added

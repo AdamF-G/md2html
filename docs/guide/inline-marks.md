@@ -27,11 +27,25 @@ is neutral.
 
 The span syntax takes any class: `[lead in]{.lead}` is a
 `<span class="lead">`, unstyled unless your stylesheet names it. The label
-must be plain text, since `[**x**]{.chip}` stays literal, and only classes
-and an id are kept.
+must be plain text, since `[**x**]{.chip}` stays literal.
 
-A bracketed word touching braces that hold no class, id or `key="value"`
-stays as you wrote it: `map[key]{value}` renders `map[key]{value}`.
+A span keeps the attributes a link's attribute block keeps: `title`,
+`lang`, `dir`, `role` and the other global attributes, and any `data-` or
+`aria-` name. A `title` gives a chip a hover note:
+
+```markdown
+[beta]{.chip title="May change before 1.0."}
+```
+
+renders `<span class="chip" title="May change before 1.0.">beta</span>`.
+Any other name, such as `onclick`, is dropped. A boolean attribute takes a
+value, `hidden=""`. A quote inside a value is written with the other kind,
+`title='a "b"'`, since Markdown drops the backslash from `\"`.
+
+A block with a bare word, or a name no attribute can have, stays as you
+wrote it. Beside a class, an id or a `key="value"` it also
+[warns](warnings.md). Bare words alone stay quietly: `map[key]{value}`
+renders `map[key]{value}`.
 
 A badge stays literal inside a code span, a code block or a link's text.
 A backslash does not stop it, so write `` `[draft]` `` to show the word.

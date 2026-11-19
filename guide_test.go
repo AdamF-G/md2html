@@ -127,6 +127,21 @@ func TestGuideClaims(t *testing.T) {
 			want:  []string{`<p class="subtitle">Draft, do not circulate</p>`},
 		},
 		{
+			name:  "a span keeps its title",
+			quote: "renders `<span class=\"chip\" title=\"May change before 1.0.\">beta</span>`",
+			src:   "[beta]{.chip title=\"May change before 1.0.\"}\n",
+			want:  []string{`<span class="chip" title="May change before 1.0.">beta</span>`},
+		},
+		{
+			name:  "a bare word beside a class stays as written and warns",
+			quote: "Beside a class, an id or a `key=\"value\"` it also\n[warns](warnings.md)",
+			src:   "[x]{.chip hidden}\n",
+			want:  []string{"[x]{.chip hidden}"},
+			not:   []string{"<span"},
+			warns: true,
+			warn:  "has no value",
+		},
+		{
 			name:  "a name no attribute can have stays as written and warns",
 			quote: "**bracketed span … is not an attribute name**",
 			src:   "[x]{.chip a/b=1}\n",
@@ -146,7 +161,7 @@ func TestGuideClaims(t *testing.T) {
 		},
 		{
 			name:  "a bracketed word touching braces of bare words stays as written",
-			quote: "`map[key]{value}` renders `map[key]{value}`",
+			quote: "`map[key]{value}`\nrenders `map[key]{value}`",
 			src:   "map[key]{value}\n",
 			want:  []string{"map[key]{value}"},
 			not:   []string{"<span"},
