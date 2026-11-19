@@ -41,8 +41,8 @@ quote only after `=`. Then:
   the heading's. It stays in the heading's text, where Chips or LinkAttrs
   reads it as the span's or the link's, with their own warnings. This is
   how `## Rollback [beta]{.chip}` becomes a chip.
-- **Such a block that nothing takes** (`## Call f(x){#call}`,
-  `## Array[0]{#a}`, a footnote reference or a code span before it) stays
+- **Such a block that nothing takes** (`## Call f(x){#call}`, `## Lit\]{#x}`,
+  or a footnote reference before it) stays
   as text, as written, and warns, saying to write a space before the brace
   for the heading's block (my call). A check after Chips and LinkAttrs
   finds a heading whose text still ends in a `{…}` that `parseAttrs` reads
@@ -147,7 +147,9 @@ code in the same process may use goldmark.
 6. **A bare word or a bad name beside an id or a class** still stays as
    text, but now warns, and so does a block touching `]` or `)` that no
    span or link takes, such as `## Call f(x){#call}`, which used to set the
-   heading's id.
+   heading's id. (`## Array[0]{#a}` is a bracketed span, so its block is
+   the span's; a code span before the block leaves a backtick before the
+   brace, so the block is the heading's.)
 7. **A page title** drops a link's block, as it already dropped a span's:
    `# See [docs](d.md) and [x](y.md){.k} more` was titled
    "See docs and x{.k} more".

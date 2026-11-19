@@ -105,3 +105,62 @@ func TestHeadingBlocks(t *testing.T) {
 		}
 	}
 }
+
+// A block touching a "]" or a ")" is left for a span or a link; when
+// none takes it, it stays as text and says how to give it to the heading.
+func TestHeadingUnclaimedBlockWarns(t *testing.T) {
+	// A code span before the block is not among them: the byte before
+	// the "{" is a backtick, so the block is the heading's.
+	for _, src := range []string{"## Call f(x){#call}\n", "## Note[^1]{#n}\n\n[^1]: x\n", "## Lit\\]{#x}\n"} {
+		h, w := headingOut(t, src)
+		if len(w) != 1 || !strings.Contains(w[0], "write a space before") {
+			t.Errorf("%q: warnings %q, want one", src, w)
+		}
+		if !strings.Contains(h, "{#") {
+			t.Errorf("%q: block left the text: %s", src, h)
+		}
+	}
+}
+
+func TestHeadingClaimedBlockQuiet(t *testing.T) {
+	if _, w := headingOut(t, "## R [b]{.chip}\n"); len(w) != 0 {
+		t.Errorf("warnings %q, want none", w)
+	}
+	if _, w := headingOut(t, "## See [d](https://e.x){.x}\n"); len(w) != 0 {
+		t.Errorf("warnings %q, want none", w)
+	}
+}
+
+// The title is read before any transform, so a link's block, which a
+// heading now leaves for the link, has to be dropped there too.
+func TestTitleDropsLinkBlock(t *testing.T) {
+	for src, want := range map[string]string{
+		"# See [docs](d.md){.x}\n":                    "<title>See docs</title>",
+		"# See [docs](d.md) and [x](y.md){.k} more\n": "<title>See docs and x more</title>",
+	} {
+		out, err := Convert([]byte(src), Options{CSS: "/**/"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(out), want) {
+			t.Errorf("%q: want %s in\n%s", src, want, out)
+		}
+	}
+}
+
+// A span or a link that refused its own block leaves it in the heading's
+// text, but it was never the heading's: telling the author to give it to
+// the heading would move a chip's class onto the <h2>.
+func TestHeadingRefusedSpanBlockIsTheSpans(t *testing.T) {
+	_, w := headingOut(t, "## Bad [beta]{.chip data-flag}\n")
+	if len(w) != 1 || !strings.Contains(w[0], "has no value") {
+		t.Errorf("warnings %q, want only the span's", w)
+	}
+}
+
+func TestHeadingRefusedLinkBlockSaysFixIt(t *testing.T) {
+	_, w := headingOut(t, "## Bad link [d](https://e.x){#i bad/name=1}\n")
+	if len(w) != 1 || !strings.Contains(w[0], "after a link") || !strings.Contains(w[0], "fix the block") {
+		t.Errorf("warnings %q, want one saying to fix the link's block", w)
+	}
+}

@@ -41,7 +41,7 @@ func extractTitle(root *nethtml.Node, sourcePath string) string {
 			return
 		}
 		if n.Type == nethtml.ElementNode && n.DataAtom == atom.H1 {
-			if t := strings.TrimSpace(stripChipTokens(textOf(n))); t != "" {
+			if t := strings.TrimSpace(stripChipTokens(titleText(n))); t != "" {
 				found = t
 			}
 		}
@@ -54,6 +54,35 @@ func extractTitle(root *nethtml.Node, sourcePath string) string {
 	}
 	base := filepath.Base(sourcePath)
 	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
+// titleText is h's text for a page title, less the attribute block a
+// link or an image carries: the title is read before LinkAttrs takes it,
+// and a heading leaves # See [docs](d.md){.x} its link's block, which would
+// otherwise title the page "See docs{.x}". A span's block is
+// stripChipTokens' to drop.
+func titleText(h *nethtml.Node) string {
+	var b strings.Builder
+	var visit func(*nethtml.Node)
+	visit = func(x *nethtml.Node) {
+		if x.Type == nethtml.TextNode {
+			d := x.Data
+			if p := x.PrevSibling; p != nil && p.Type == nethtml.ElementNode && (p.DataAtom == atom.A || p.DataAtom == atom.Img) && strings.HasPrefix(d, "{") {
+				if end := braceSpan(d, 0); end > 0 {
+					if _, ok := parseAttrs(d[1:end]); ok {
+						d = d[end+1:]
+					}
+				}
+			}
+			b.WriteString(d)
+			return
+		}
+		for c := x.FirstChild; c != nil; c = c.NextSibling {
+			visit(c)
+		}
+	}
+	visit(h)
+	return b.String()
 }
 
 // mermaidCDN is the pinned MermaidJS build a standalone page loads to render

@@ -138,6 +138,17 @@ or remove the `tip-delay`.
 block never closes, so the block stays on the page as text. Close the
 quote.
 
+**heading … touches a ] or ) but no span or link took it** — a heading
+ends in a block straight after a `]` or a `)`, which a heading leaves for
+the span or link before it, and there is none, as in `## Call f(x){#x}` or
+after a footnote reference. The block stays as text. Write a space before
+the brace to give it to the heading: `## Call f(x) {#x}`.
+
+**heading … after a link is not a block the link takes** — a heading ends
+in a link whose block the link refused, a name no attribute can have, say.
+The block stays as text. Fix it, or write a space before the brace to give
+it to the heading.
+
 **… has no value** — a span's or a heading's block holds a bare word
 beside a `.class`, an `#id` or a `key="value"`, so the block stays on the
 page as text. Write a boolean attribute with a value, `hidden=""`.

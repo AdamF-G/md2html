@@ -281,8 +281,68 @@ func Chips() Transform { return chips(nil) }
 func chips(warn func(string)) Transform {
 	return Transform{Name: "chips", Fn: func(root *html.Node) error {
 		rewriteText(root, func(s string) []*html.Node { return chipNodes(s, warn) })
+		if warn != nil {
+			warnUnclaimedHeadingBlocks(root, warn)
+		}
 		return nil
 	}}
+}
+
+// warnUnclaimedHeadingBlocks reports a heading that still ends in an
+// attribute block once spans and links have taken theirs. A heading leaves
+// a block touching a "]" or a ")" for the span or link before it
+// (takeHeadingBlock); in ## Call f(x){#call}, or after a footnote
+// reference, there is none, and the block would sit in the heading as
+// text with no word. Only a block meant as attributes, with an id, a class
+// or a key=value, is reported. LinkAttrs runs before Chips, so by now
+// both have had their turn.
+func warnUnclaimedHeadingBlocks(root *html.Node, warn func(string)) {
+	walk(root, func(n *html.Node) {
+		if n.Type != html.ElementNode || !isHeading(n) {
+			return
+		}
+		last := n.LastChild
+		if last == nil || last.Type != html.TextNode {
+			return
+		}
+		s := strings.TrimRight(last.Data, " \t")
+		for i := 0; i < len(s); i++ {
+			if s[i] != '{' || braceSpan(s, i) != len(s)-1 {
+				continue
+			}
+			a, ok := parseAttrs(s[i+1 : len(s)-1])
+			if !ok || (a.id == "" && len(a.classes) == 0 && len(a.bare) == len(a.kv)) {
+				return
+			}
+			title := strings.TrimSpace(strings.TrimSuffix(textOf(n), s[i:]))
+			prev := last.PrevSibling
+			switch {
+			case i == 0 && prev != nil && prev.Type == html.ElementNode && (prev.DataAtom == atom.A || prev.DataAtom == atom.Img):
+				// A link's or an image's block LinkAttrs refused: it was
+				// never the heading's, so the fix is in the block.
+				warn(fmt.Sprintf("heading %q: %s after a link is not a block the link takes; fix the block, or write a space before it to give it to the heading", title, s[i:]))
+			case i > 0 && s[i-1] == ']' && spanLabelRe.MatchString(s[:i]):
+				// A bracketed span's block, which checkAttrBlock refused and
+				// has warned about, or left quietly as text: the span's, not
+				// the heading's.
+			case (i > 0 && (s[i-1] == ']' || s[i-1] == ')')) || (i == 0 && prev != nil && prev.Type == html.ElementNode):
+				warn(fmt.Sprintf("heading %q: %s touches a ] or ) but no span or link took it; write a space before it to give it to the heading", title, s[i:]))
+			}
+			return
+		}
+	})
+}
+
+// spanLabelRe matches a bracketed span's label at the end of a string, as
+// chipRe reads one.
+var spanLabelRe = regexp.MustCompile(`\[[^\]\n]+\]$`)
+
+func isHeading(n *html.Node) bool {
+	switch n.DataAtom {
+	case atom.H1, atom.H2, atom.H3, atom.H4, atom.H5, atom.H6:
+		return true
+	}
+	return false
 }
 
 // stripChipTokens removes chip tokens from a plain string.
