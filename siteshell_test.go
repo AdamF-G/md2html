@@ -386,3 +386,31 @@ func TestTipDelayBadShellValueNamesTheDefault(t *testing.T) {
 		t.Errorf("no shell warning for soon: %v", s.Warnings)
 	}
 }
+
+// The shell drops a link it cannot keep before its transforms run, so
+// LinkAttrs found no <a> to read the block for, and the block stayed on
+// every page as text. A page reads its blocks first; the shell now does
+// too, so a dropped shell link keeps its tip, as a page's does, and loses
+// any other block with it.
+func TestSiteShellDroppedLinkKeepsItsBlock(t *testing.T) {
+	root := writeTree(t, map[string]string{
+		"repo/site/shell.md": "---\nsite: true\n---\n[lic](../LICENSE){tip=\"n\"} and [k](../LICENSE){.kept}\n\n[[content]]\n",
+		"repo/docs/index.md": "# Home\n",
+		"repo/LICENSE":       "MIT",
+	})
+	opt := CrawlOptions{Entries: []string{filepath.Join(root, "repo/docs")}, OutDir: filepath.Join(root, "out"),
+		Depth: -1, LinkDepth: -1, SiteShell: filepath.Join(root, "repo/site/shell.md")}
+	res := mustCrawl(t, opt)
+	s, err := BuildSite(res, opt.SiteShell, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, _ := sitePage(t, s, res, filepath.Join(root, "repo"), "docs/index.md")
+	out = out[strings.Index(out, "</style>"):] // tip.css's own comment names {tip=
+	if strings.Contains(out, "{tip=") || strings.Contains(out, "{.kept}") {
+		t.Errorf("a dropped shell link left its block as text:\n%s", out)
+	}
+	if !strings.Contains(out, `<span class="md2html-tip-host" tabindex="0" aria-describedby="md2html-tooltip-1">lic</span>`) {
+		t.Errorf("the dropped shell link lost its tip:\n%s", out)
+	}
+}

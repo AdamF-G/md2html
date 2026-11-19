@@ -53,6 +53,14 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 			replaceMarker(m)
 		}
 	}
+	// Link blocks are read before any link is dropped, as on a page,
+	// where LinkAttrs runs among the transforms and linkDrop after them.
+	// Read after, a dropped link left its {…} on every page as text, and
+	// its tip was lost. LinkAttrs never sets an href, so the links below
+	// are the same, and the shell's transforms then find no block left.
+	if err := LinkAttrs(s.shellWarn).Fn(shell); err != nil {
+		return nil, err
+	}
 	out := s.outBySrc[src]
 	links := ExtractLinks(shell, s.shellDir)
 	// The crawl planned the shell once, for its copies and warnings; each

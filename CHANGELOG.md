@@ -46,6 +46,13 @@ major version instead.
   fence used to drop `ID=`, and on a link or a span an `ID=` beat an
   `#id` or `id=` written after it.
 
+### Fixed
+
+- A link the site shell drops, one it has nowhere to send, no longer
+  leaves its attribute block on every page as text: the shell reads its
+  link blocks before dropping links, as a page does, so the block goes
+  with the link and a `tip` stays on its text.
+
 ## v0.15.0 — 2026-10-17
 
 ### Added
