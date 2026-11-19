@@ -22,6 +22,12 @@ type attrs struct {
 	// value. id and class are lifted out into their own fields rather
 	// than left here, so a caller never has to know both spellings.
 	kv map[string]string
+	// bare holds the keys written with no "=", in the order written,
+	// leaving out #id and .class. They are in kv too, with an empty value,
+	// which is all a container or a link block needs. A bracketed span
+	// needs to tell {hidden} from {hidden=""}, since only the second is an
+	// attribute.
+	bare []string
 }
 
 // parseAttrs reads the inside of an attribute block — the text between the
@@ -56,14 +62,22 @@ func parseAttrs(content string) (attrs, bool) {
 			found = true
 		case tok.key != "":
 			a.kv[tok.key] = tok.val
+			if !tok.eq {
+				a.bare = append(a.bare, tok.key)
+			}
 			found = true
 		}
 	}
 	return a, found
 }
 
-// attrToken is one key, with the value that followed its "=" if any.
-type attrToken struct{ key, val string }
+// attrToken is one key, with the value that followed its "=" if any. eq
+// reports whether there was an "=", so a bare key can be told from one
+// with an empty value.
+type attrToken struct {
+	key, val string
+	eq       bool
+}
 
 // attrTokens splits an attribute block on whitespace, keeping a quoted
 // value together and honouring a backslash escape inside one.
@@ -91,7 +105,7 @@ func attrTokens(s string) []attrToken {
 		if i < len(s) && s[i] == '=' {
 			i++
 			val, next := readAttrValue(s, i)
-			out = append(out, attrToken{key: key.String(), val: val})
+			out = append(out, attrToken{key: key.String(), val: val, eq: true})
 			i = next
 			continue
 		}

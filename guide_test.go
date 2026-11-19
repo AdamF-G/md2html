@@ -127,11 +127,11 @@ func TestGuideClaims(t *testing.T) {
 			want:  []string{`<p class="subtitle">Draft, do not circulate</p>`},
 		},
 		{
-			name:  "a bracketed word touching braces becomes a span",
-			quote: "renders `map<span>key</span>`",
+			name:  "a bracketed word touching braces of bare words stays as written",
+			quote: "`map[key]{value}` renders `map[key]{value}`",
 			src:   "map[key]{value}\n",
-			want:  []string{"map<span>key</span>"},
-			not:   []string{"value"},
+			want:  []string{"map[key]{value}"},
+			not:   []string{"<span"},
 		},
 		{
 			name:  "a backslash does not escape a status word or §",

@@ -1,9 +1,11 @@
 package md2html
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
+	gmhtml "github.com/yuin/goldmark/renderer/html"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 )
@@ -16,8 +18,13 @@ import (
 // brackets. The c: form is the escape hatch for a label outside the
 // vocabulary — explicit, so it can never fire by accident. The label is
 // capped and excludes newlines so a stray "[c:" cannot swallow a paragraph.
+//
+// A span's block may hold a quoted value, and a "}" inside one belongs to
+// the value: [x]{title="a } b"} is one span, not a span with ` b"}` left
+// after it. An unclosed quote matches nothing, so the text stays as
+// written.
 var chipRe = regexp.MustCompile(
-	`\[([^\]\n]+)\]\{([^}\n]*)\}` +
+	`\[([^\]\n]+)\]\{((?:[^}"'\n]|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')*)\}` +
 		`|\[(proven|verified|designed|planned|draft|deprecated|c:[^\]\n]{0,60})\]`)
 
 // statusWords is the closed vocabulary the bare form recognizes, and the
@@ -27,10 +34,80 @@ var statusWords = map[string]bool{
 	"planned": true, "draft": true, "deprecated": true,
 }
 
+// spanAttrs is what a bracketed span's block sets on its <span>.
+type spanAttrs struct {
+	id      string
+	classes []string
+	// extra holds every other kept attribute, by lowercased name in
+	// sorted order.
+	extra []html.Attribute
+}
+
+// spanBlock decides what a bracketed span's attribute block means. It is
+// the one place that decides, so the page and its title — stripChipTokens
+// reads the same text — cannot disagree about whether a block is a span.
+//
+// ok is false when the block stays on the page as the author wrote it.
+// why is then a warning for the author when the block was clearly meant
+// as attributes and has something they can fix, and empty when it stays
+// quietly: an empty block, or one of bare words alone, which is far more
+// often prose, a regex or terminal markup than a span.
+//
+// A name a link block may set is kept here too, by the same rule: any of
+// goldmark's global attributes, and any data- or aria- name, lowercased.
+// Any other safe name, an event handler most obviously, is dropped while
+// the rest of the block applies. A name that is not safe stays literal
+// rather than dropped, as it does on a link: such a block is not an
+// attribute block.
+//
+// A bare key, {.chip hidden}, keeps the block literal too. Pandoc has no
+// bare-key form, and before spans kept attributes one silently ate the
+// braces. A boolean attribute takes a value, hidden="".
+func spanBlock(label, block string) (span spanAttrs, why string, ok bool) {
+	a, found := parseAttrs(block)
+	if !found {
+		return spanAttrs{}, "", false
+	}
+	if a.id == "" && len(a.classes) == 0 && len(a.bare) == len(a.kv) {
+		return spanAttrs{}, "", false
+	}
+	keys := sortedKeys(a.kv)
+	for _, k := range keys {
+		if !safeAttrName(k) {
+			return spanAttrs{}, fmt.Sprintf("bracketed span [%s]: %q is not an attribute name; leaving the block as text", label, k), false
+		}
+	}
+	if len(a.bare) > 0 {
+		k := a.bare[0]
+		return spanAttrs{}, fmt.Sprintf("bracketed span [%s]: %s has no value; write %s=\"\" for a boolean attribute, or the block stays as text", label, k, k), false
+	}
+
+	span = spanAttrs{id: a.id, classes: a.classes}
+	// Walking the keys in sorted order makes the winner of two spellings
+	// of one name, Title and title, the same on every run.
+	kept := map[string]string{}
+	for _, k := range keys {
+		name := strings.ToLower(k)
+		switch {
+		case name == "id":
+			span.id = a.kv[k]
+		case name == "class":
+			span.classes = append(span.classes, strings.Fields(a.kv[k])...)
+		case strings.HasPrefix(name, "data-"), strings.HasPrefix(name, "aria-"),
+			gmhtml.GlobalAttributeFilter.Contains([]byte(name)):
+			kept[name] = a.kv[k]
+		}
+	}
+	for _, name := range sortedKeys(kept) {
+		span.extra = append(span.extra, html.Attribute{Key: name, Val: kept[name]})
+	}
+	return span, "", true
+}
+
 // spanNode builds the <span> for a bracketed span — Pandoc's
 // bracketed_spans — from its label and the contents of its attribute
-// block. It returns nil for a block that holds no attributes, so
-// "[thing]{}" stays literal rather than becoming an empty element.
+// block. It returns nil for a block spanBlock leaves literal, so
+// "[thing]{}" stays as written rather than becoming an empty element.
 //
 // A chip earns its modifier class here rather than in the vocabulary
 // regex: [proven]{.chip} carries chip-proven, while [proven]{.lead} is
@@ -38,7 +115,7 @@ var statusWords = map[string]bool{
 // the author already wrote a chip-* class of their own, so
 // [shipped]{.chip .chip-ok} keeps exactly the classes it names.
 func spanNode(label, block string) []*html.Node {
-	a, ok := parseAttrs(block)
+	a, _, ok := spanBlock(label, block)
 	if !ok {
 		return nil
 	}
@@ -53,6 +130,7 @@ func spanNode(label, block string) []*html.Node {
 	if len(classes) > 0 {
 		span.Attr = append(span.Attr, html.Attribute{Key: "class", Val: strings.Join(classes, " ")})
 	}
+	span.Attr = append(span.Attr, a.extra...)
 	span.AppendChild(&html.Node{Type: html.TextNode, Data: label})
 	return []*html.Node{span}
 }
@@ -161,8 +239,16 @@ func stripChipTokens(s string) string {
 			// business in a browser tab; any other span is ordinary prose
 			// the author wrapped for styling, so its label survives with
 			// only the syntax removed.
+			//
+			// A block the page leaves as text stays in the title as text
+			// too, so the tab and the page say the same thing.
 			label, block := s[loc[2]:loc[3]], s[loc[4]:loc[5]]
-			if a, ok := parseAttrs(block); !ok || !hasClassToken(a.classes, "chip") {
+			a, _, ok := spanBlock(label, block)
+			if !ok {
+				b.WriteString(s[loc[0]:loc[1]])
+				continue
+			}
+			if !hasClassToken(a.classes, "chip") {
 				b.WriteString(label)
 				continue
 			}

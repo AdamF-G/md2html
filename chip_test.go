@@ -71,6 +71,13 @@ func TestStripChipTokens(t *testing.T) {
 		{"Rollback [c:since v2] plan", "Rollback plan"},
 		{"Rollback [1]", "Rollback [1]"},
 		{"Rollback", "Rollback"},
+		{`Rollback [beta]{.chip title="a b"}`, "Rollback"},
+		{`Rollback [x]{title="a } b"}`, "Rollback x"},
+		// A block that stays literal on the page keeps its text in the
+		// title too, so the two never disagree.
+		{"A [x]{b} B", "A [x]{b} B"},
+		{"A [x]{.chip hidden} B", "A [x]{.chip hidden} B"},
+		{"A [x]{} B", "A [x]{} B"},
 	}
 	for _, c := range cases {
 		if got := stripChipTokens(c.in); got != c.want {
@@ -219,5 +226,74 @@ func TestGuideChipClassesAreStyled(t *testing.T) {
 		if !regexp.MustCompile(`\.` + m[1] + `\b[^{]*\{[^}]*color:`).MatchString(defaultCSS) {
 			t.Errorf("the guide names .%s but no default stylesheet rule colours it", m[1])
 		}
+	}
+}
+
+// spanHTML renders src between two words of a paragraph through Chips.
+func spanHTML(t *testing.T, src string) string {
+	t.Helper()
+	return apply(t, "<p>x "+src+" y</p>", Chips())
+}
+
+// A span keeps the attributes a link block keeps, so a chip can carry a
+// hover explanation.
+func TestChipsBracketedSpanKeepsAttributes(t *testing.T) {
+	cases := []struct{ name, src, want string }{
+		{"title", `[beta]{.chip title="May change before 1.0."}`,
+			`<span class="chip" title="May change before 1.0.">beta</span>`},
+		{"data and aria", `[x]{data-sort="name" aria-label="L"}`,
+			`<span aria-label="L" data-sort="name">x</span>`},
+		{"order", `[x]{#i .c title="t" lang="fr"}`,
+			`<span id="i" class="c" lang="fr" title="t">x</span>`},
+		{"lowercased", `[x]{.c Title="t" ID="i"}`,
+			`<span id="i" class="c" title="t">x</span>`},
+		{"disallowed dropped", `[x]{.chip onclick="alert(1)" href="h" title="t"}`,
+			`<span class="chip" title="t">x</span>`},
+		{"boolean with value", `[x]{.chip hidden=""}`,
+			`<span class="chip" hidden="">x</span>`},
+		{"status word", `[proven]{.chip title="t"}`,
+			`<span class="chip chip-proven" title="t">proven</span>`},
+		{"quoted brace", `[x]{title="a } b"}`,
+			`<span title="a } b">x</span>`},
+	}
+	for _, c := range cases {
+		if got := spanHTML(t, c.src); !strings.Contains(got, c.want) {
+			t.Errorf("%s: %s\nwant: %s\ngot:  %s", c.name, c.src, c.want, got)
+		}
+	}
+}
+
+// Title and title are one attribute. Which value wins must not depend on
+// map order.
+func TestChipsBracketedSpanSameNameTwoCases(t *testing.T) {
+	first := spanHTML(t, `[x]{title="a" Title="b"}`)
+	if !strings.Contains(first, `<span title="a">x</span>`) {
+		t.Fatalf("got %s, want title=\"a\"", first)
+	}
+	for i := 0; i < 20; i++ {
+		if got := spanHTML(t, `[x]{title="a" Title="b"}`); got != first {
+			t.Fatalf("run %d differs:\n%s\n%s", i, first, got)
+		}
+	}
+}
+
+// A bare key is prose or a mistake, never an attribute: Pandoc has no
+// bare-key form, and today's span silently ate the braces. The whole
+// match stays, so a status word inside it does not become a chip either.
+func TestChipsBracketedSpanBareKeyStaysLiteral(t *testing.T) {
+	for _, src := range []string{`[a]{b}`, `[x]{b c}`, `[x]{.chip hidden}`, `[proven]{.chip hidden}`} {
+		got := spanHTML(t, src)
+		if strings.Contains(got, "<span") || !strings.Contains(got, src) {
+			t.Errorf("%s did not stay literal\ngot: %s", src, got)
+		}
+	}
+}
+
+// A name no attribute can have would break out of the attribute list if
+// written; the block stays as text instead.
+func TestChipsBracketedSpanUnsafeNameStaysLiteral(t *testing.T) {
+	got := spanHTML(t, `[T]{.chip on"x=1}`)
+	if strings.Contains(got, "<span") || !strings.Contains(got, "[T]{.chip on") {
+		t.Errorf("unsafe name not left literal\ngot: %s", got)
 	}
 }

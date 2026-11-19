@@ -30,6 +30,9 @@ The span syntax takes any class: `[lead in]{.lead}` is a
 must be plain text, since `[**x**]{.chip}` stays literal, and only classes
 and an id are kept.
 
+A bracketed word touching braces that hold no class, id or `key="value"`
+stays as you wrote it: `map[key]{value}` renders `map[key]{value}`.
+
 A badge stays literal inside a code span, a code block or a link's text.
 A backslash does not stop it, so write `` `[draft]` `` to show the word.
 `[c:label]` also makes a badge, up to 60 characters.

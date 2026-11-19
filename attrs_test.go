@@ -155,3 +155,17 @@ func TestBraceBlockDeclinesAfterAnUnclosedBrace(t *testing.T) {
 		t.Errorf("balanced braces in the head broke the block: in=%q ok=%v", in, ok)
 	}
 }
+
+// A bracketed span has to tell a bare key from one written with "=":
+// {.chip hidden} stays literal while {.chip hidden=""} keeps the
+// attribute. Both still land in kv, so the parser's other callers see no
+// change.
+func TestParseAttrsRecordsBareKeys(t *testing.T) {
+	a, _ := parseAttrs(`#i .c b x=1 y=""`)
+	if len(a.bare) != 1 || a.bare[0] != "b" {
+		t.Errorf("bare = %v, want [b]", a.bare)
+	}
+	if _, ok := a.kv["b"]; !ok {
+		t.Errorf("bare key b left kv: %v", a.kv)
+	}
+}
