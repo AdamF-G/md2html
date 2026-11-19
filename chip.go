@@ -88,6 +88,15 @@ type spanAttrs struct {
 // bare-key form, and before spans kept attributes one silently ate the
 // braces. A boolean attribute takes a value, hidden="".
 func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool) {
+	return checkAttrBlock("bracketed span ["+label+"]", block, true, warn)
+}
+
+// checkAttrBlock is the one reading of an attribute block a span and a
+// heading share: what spanBlock says above, for either. who names the
+// element in a warning, `bracketed span [x]` or `heading "x"`. tips is
+// false for a heading, which hosts no tip, so tip and tip-delay are
+// dropped there as any name it does not take, without a word.
+func checkAttrBlock(who, block string, tips bool, warn func(string)) (span spanAttrs, ok bool) {
 	if warn == nil {
 		warn = func(string) {}
 	}
@@ -99,7 +108,7 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 		return spanAttrs{}, false
 	}
 	if a.unclosed != "" {
-		warn(fmt.Sprintf("bracketed span [%s]: the value of %s has no closing quote; leaving the block as text", label, a.unclosed))
+		warn(fmt.Sprintf("%s: the value of %s has no closing quote; leaving the block as text", who, a.unclosed))
 		return spanAttrs{}, false
 	}
 	keys := sortedKeys(a.kv)
@@ -111,13 +120,13 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 				// quote ends its value early and the rest reads as a name.
 				hint = "; a quote inside a value takes the other kind of quote"
 			}
-			warn(fmt.Sprintf("bracketed span [%s]: `%s` is not an attribute name; leaving the block as text%s", label, k, hint))
+			warn(fmt.Sprintf("%s: `%s` is not an attribute name; leaving the block as text%s", who, k, hint))
 			return spanAttrs{}, false
 		}
 	}
 	if len(a.bare) > 0 {
 		k := a.bare[0]
-		warn(fmt.Sprintf("bracketed span [%s]: %s has no value; write %s=\"\" for a boolean attribute, or the block stays as text", label, k, k))
+		warn(fmt.Sprintf("%s: %s has no value; write %s=\"\" for a boolean attribute, or the block stays as text", who, k, k))
 		return spanAttrs{}, false
 	}
 
@@ -130,10 +139,14 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 		name := strings.ToLower(k)
 		switch name {
 		case "tip":
-			span.tip = a.kv[k]
+			if tips {
+				span.tip = a.kv[k]
+			}
 			continue
 		case "tip-delay":
-			delay = a.kv[k]
+			if tips {
+				delay = a.kv[k]
+			}
 			continue
 		}
 		if strings.HasPrefix(name, "data-") || strings.HasPrefix(name, "aria-") ||
@@ -147,9 +160,9 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 	switch {
 	case delay == "":
 	case span.tip == "":
-		warn(fmt.Sprintf("bracketed span [%s]: tip-delay without a tip does nothing", label))
+		warn(fmt.Sprintf("%s: tip-delay without a tip does nothing", who))
 	case !validTipDelay(delay):
-		warn(fmt.Sprintf("bracketed span [%s]: tip-delay %q is not a time such as 150ms; using the page's delay", label, delay))
+		warn(fmt.Sprintf("%s: tip-delay %q is not a time such as 150ms; using the page's delay", who, delay))
 	default:
 		span.tipDelay = delay
 	}

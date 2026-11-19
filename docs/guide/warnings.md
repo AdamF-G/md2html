@@ -119,7 +119,7 @@ title. Remove the attribute.
 **… cannot be set from an attribute block** — `href`, `src` or `srcset`;
 write the target in the link itself.
 
-**bracketed span … is not an attribute name** — a span's block holds a
+**… is not an attribute name** — a span's or a heading's block holds a
 name with a character no attribute name can have, so the block stays on
 the page as text. Fix or remove the name. A quote inside a value loses its
 backslash to Markdown and ends the value early, which also lands here:
@@ -134,11 +134,11 @@ a number and `ms` or `s`: `0ms`, `150ms`, `0.2s`.
 block with no `tip`, so there is nothing for it to delay. Add the `tip`,
 or remove the `tip-delay`.
 
-**bracketed span … has no closing quote** — a quoted value in a span's
+**… has no closing quote** — a quoted value in a span's or a heading's
 block never closes, so the block stays on the page as text. Close the
 quote.
 
-**bracketed span … has no value** — a span's block holds a bare word
+**… has no value** — a span's or a heading's block holds a bare word
 beside a `.class`, an `#id` or a `key="value"`, so the block stays on the
 page as text. Write a boolean attribute with a value, `hidden=""`.
 
