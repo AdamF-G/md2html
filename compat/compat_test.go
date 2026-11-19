@@ -122,6 +122,7 @@ func TestAgreeOnConstructs(t *testing.T) {
 		{"fenced div, braced", "::: {.callout}\nBody.\n:::\n", "div", "callout"},
 		{"fenced div, id and classes", "::: {#note .callout .compact}\nB.\n:::\n", "div", "compact"},
 		{"heading attributes", "## T {#breaking .lead}\n", "h2", "lead"},
+		{"span at the end of a heading", "## R [b]{.chip}\n", "span", "chip"},
 		{"definition list", "Term\n:   The definition.\n", "dl", ""},
 		{"pipe table", "| A | B |\n|---|---|\n| 1 | 2 |\n", "table", ""},
 		{"bracketed span", "x [proven]{.chip} y\n", "span", "chip"},
@@ -303,5 +304,20 @@ func TestTaskListsAgree(t *testing.T) {
 		if n := strings.Count(out, "checked"); n != 1 {
 			t.Errorf("%s checks %d boxes, want 1\ngot: %s", name, n, out)
 		}
+	}
+}
+
+// A heading's block reads like md2html's other attribute blocks, so it
+// takes a single-quoted value, which Pandoc's attribute grammar does not:
+// pandoc leaves {title='x'} in the heading's text. It is a leniency of
+// md2html's, outside the shared subset, not a disagreement inside it, and
+// is pinned so a Pandoc that learns single quotes is noticed.
+func TestHeadingSingleQuotesAreOurs(t *testing.T) {
+	const src = "## T {title='x'}\n"
+	if p := pandoc(t, src); strings.Contains(p, `title="x"`) {
+		t.Error("pandoc now takes a single-quoted heading value; the leniency is shared")
+	}
+	if !strings.Contains(ours(t, src), `title="x"`) {
+		t.Error("md2html stopped taking a single-quoted heading value")
 	}
 }

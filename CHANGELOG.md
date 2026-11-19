@@ -46,6 +46,42 @@ major version instead.
   fence used to drop `ID=`, and on a link or a span an `ID=` beat an
   `#id` or `id=` written after it.
 
+- **breaking:** a heading's attribute block is read like a span's, by
+  md2html's own parser, so every attribute block follows one set of rules.
+  What changes on an existing page:
+  1. A heading ending `]{…}` or `){…}` gives the block to the span or link
+     before it: `## Rollback [beta]{.chip}` ends in a chip, and
+     `## See [docs](d.md){.ext}` classes the link, not the `<h2>`. Write a
+     space before the brace to keep a block on the heading.
+  2. A single-quoted or an unquoted value applies: `{title='x'}`,
+     `{lang=fr}`. Before, the whole block, id included, stayed in the
+     heading's text.
+  3. An unquoted number is its value: `{data-step=1}` was empty.
+  4. An empty `{}` at the end of a heading stays as text; it was removed.
+  5. `aria-` names reach the heading; they were dropped.
+  6. A bare word or a bad name beside an id or a class still stays as
+     text, and now warns, as does a block touching `]` or `)` that no span
+     or link takes, such as `## Call f(x){#call}`, which set the heading's
+     id.
+  7. A page's title drops a link's block, as it did a span's.
+
+  A plain `{#id .class}` with a space before it is unchanged, and bare
+  words alone, as in `## GET /v1/jobs/{id}`, still render as written. To
+  find what to check in existing docs:
+
+  ```sh
+  # 1. a heading ending in a span's or a link's block
+  grep -rnE '^#{1,6} .*[])]\{[^}]*\}[[:space:]]*$' --include='*.md' .
+  # 2-3. a heading block with a quote or an unquoted value
+  grep -rnE "^#{1,6} .*\{[^}]*('|=[^\"[:space:]}])[^}]*\}[[:space:]]*$" --include='*.md' .
+  # 4. a heading ending in an empty {}
+  grep -rnE '^#{1,6} .*\{\}[[:space:]]*$' --include='*.md' .
+  ```
+
+  These search `#` headings; an underlined heading's text line is read the
+  same way and is not searched. Silent trap 17, a heading's block needing
+  double quotes, is gone.
+
 ### Fixed
 
 - A link the site shell drops, one it has nowhere to send, no longer

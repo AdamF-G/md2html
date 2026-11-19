@@ -43,27 +43,23 @@ before you finish.
 15. **A fragment in a link is never checked.** `./b.md#no-such` passes.
 16. **Two explicit `{#same}` ids both stay.** The page then has duplicate
     ids, and links go to the first.
-17. **A heading's attribute block needs double-quoted values.** A bare key
-    or a single-quoted value, as in `## Setup {#setup data-flag}`, leaves
-    the whole block in the heading text, id included. See
-    [Headings and anchors](page-structure.md#headings-and-anchors).
-18. **An attribute block works only after a heading, link, image or span,
+17. **An attribute block works only after a heading, link, image or span,
     or on a container or code fence's opening line.** After a paragraph or
     list item, `{.lead}` stays literal text.
-19. **A style's light colours set only on `:root`.** The default stylesheet
+18. **A style's light colours set only on `:root`.** The default stylesheet
     also sets them on `:root[data-theme="light"]`, which wins. A page
     switched to light then shows the default's colours. Set each colour on
     `:root[data-theme="light"]` too. See
     [What a style can change](styles.md#what-a-style-can-change).
-20. **A chart that tells its categories apart only by
+19. **A chart that tells its categories apart only by
     opacity has a weak legend.** Shades of one colour are hard to match to
     their legend entries, more so where overlapping marks add up, and
     hovering the legend highlights nothing. Give each category its own
     colour with a `color` encoding.
-21. **A literal colour in a chart's spec doubles its size.** It cannot
+20. **A literal colour in a chart's spec doubles its size.** It cannot
     follow the theme, so the chart is drawn twice, once per theme. Use a
     `token:` colour. See [Colours](charts.md#colours).
-22. **A template outside a marker stays literal.** `{version}` expands only
+21. **A template outside a marker stays literal.** `{version}` expands only
     in a marker's attributes.
-23. **A fence whose language has no grammar renders plain.** Only a near
+22. **A fence whose language has no grammar renders plain.** Only a near
     miss of a known name warns. `--list-languages` lists the names.
