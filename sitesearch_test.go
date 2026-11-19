@@ -122,3 +122,21 @@ func TestSearchIndexURLsAreEncoded(t *testing.T) {
 		t.Errorf("want the url encoded:\n%s", idx)
 	}
 }
+
+// A tip's note is text in the page, beside its host. It is not the
+// page's content, so the search index leaves it out of headings and
+// text alike.
+func TestSearchSkipsTips(t *testing.T) {
+	s, res, root := siteFixture(t, map[string]string{
+		"shell/site.md": "---\nsite: true\n---\n[[search]]\n\n[[content]]\n",
+		"docs/index.md": "# Home\n\n## Rollback [x]{.chip tip=\"SECRETNOTE\"} plan\n\nIntro [y]{tip=\"SECRETNOTE\"} text.\n\n::: defs\nkey [k]{tip=\"SECRETNOTE\"}\n: the key\n:::\n",
+	}, "shell/site.md")
+	sitePage(t, s, res, root, "docs/index.md")
+	idx := string(s.SearchIndex())
+	if strings.Contains(idx, "SECRETNOTE") {
+		t.Errorf("the note is in the search index:\n%s", idx)
+	}
+	if !strings.Contains(idx, `"text":"Intro y text."`) {
+		t.Errorf("the paragraph's own text is missing:\n%s", idx)
+	}
+}

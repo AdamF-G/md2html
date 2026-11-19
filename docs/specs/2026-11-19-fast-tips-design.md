@@ -89,7 +89,10 @@ nothing and warns, since it can only be a mistake.
 - **Where it is written:** as a custom property, `--md2html-tip-delay`. The
   page's value goes on `main.md2html`, which is the element a fragment's
   stylesheet already scopes itself to, so a fragment never sets anything on
-  the host's `:root`. An element's value goes in its own `style` attribute.
+  the host's `:root`. An element's value goes in the `style` attribute of
+  its tip's wrap: a custom property inherits only from an ancestor, and
+  the tooltip is the host's sibling, so the host's own style would never
+  reach it.
 
 The delay applies to showing the tip. Hiding is immediate, so a tip never
 lingers over the text below it.
@@ -129,8 +132,8 @@ takes focus, so it gets no `tabindex`:
   tips can clash with a page's. The shell's ids are already renumbered on
   a clash (`renumberShellIDs`), and that renumbering must update
   `aria-describedby` as well as `href="#…"`.
-- **A host's own `tip-delay`** becomes `style="--md2html-tip-delay: 0ms"`,
-  appended to any `style` the author wrote.
+- **A host's own `tip-delay`** becomes `style="--md2html-tip-delay: 0ms"`
+  on the wrap, leaving any `style` the author wrote on the host alone.
 
 ### Where the markup comes from
 
@@ -147,8 +150,10 @@ host, focusable, as a tipped span's is.
 ### A tipped span inside a link
 
 `[[beta]{tip="…"}](x.md)` would put a focusable host inside the `<a>` and
-the note into the link's name, which is what §5 avoids. The span's tip is
-dropped, with a warning saying to put the tip on the link (my call).
+the note into the link's name, which is what §5 avoids. Markdown cannot
+make one: Chips leaves a link's text alone, so the span stays literal.
+The tip pass still drops a tip it finds inside a link, without a word,
+since no author input reaches it.
 
 ### Without the default stylesheet
 
@@ -204,8 +209,7 @@ requires:
 
 - an invalid `tip-delay`, in front matter or on an element, naming the
   value and saying which delay applies instead;
-- a `tip-delay` on an element without a `tip`;
-- a tipped span inside a link, whose tip is dropped.
+- a `tip-delay` on an element without a `tip`.
 
 ## Approaches
 
@@ -248,7 +252,7 @@ slow one.
   after HeadingAnchors, SectionLinks and TOC.
 - How Chips and LinkAttrs hand the note to it: an internal attribute
   removed when the markup is written is the obvious way.
-- The wording of the three warnings.
+- The wording of the two warnings.
 - The guide page the feature is documented on: `inline-marks.md` for
   spans and `links-and-images.md` for links, with front matter's table in
   `page-structure.md`.

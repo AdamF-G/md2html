@@ -82,6 +82,7 @@ func (s *Site) wrap(content *html.Node, src string, transforms []Transform, labe
 			return nil, fmt.Errorf("site shell: transform %s: %w", t.Name, err)
 		}
 	}
+	writeTips(shell)
 	renumberShellIDs(shell, content)
 	for _, slot := range tocSlots {
 		if !noTOC {
@@ -198,10 +199,20 @@ func renumberShellIDs(shell, content *html.Node) {
 			return
 		}
 		for i, a := range n.Attr {
-			if a.Key == "href" && strings.HasPrefix(a.Val, "#") {
+			switch {
+			case a.Key == "href" && strings.HasPrefix(a.Val, "#"):
 				if to, ok := renamed[a.Val[1:]]; ok {
 					n.Attr[i].Val = "#" + to
 				}
+			case a.Key == "aria-describedby":
+				// A tip's host names its tooltip by id.
+				refs := strings.Fields(a.Val)
+				for j, r := range refs {
+					if to, ok := renamed[r]; ok {
+						refs[j] = to
+					}
+				}
+				n.Attr[i].Val = strings.Join(refs, " ")
 			}
 		}
 	})

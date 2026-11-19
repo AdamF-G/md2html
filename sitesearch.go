@@ -53,11 +53,11 @@ func (s *Site) record(src, title string, meta map[string]string, root *html.Node
 		}
 		switch {
 		case n.DataAtom == atom.Dt:
-			if t := strings.TrimSpace(textOf(n)); t != "" {
+			if t := strings.TrimSpace(searchText(n)); t != "" {
 				e.Terms = append(e.Terms, t)
 			}
 		case n.DataAtom == atom.P && e.Text == "" && !hasClass(n, "subtitle") && !hasClass(n, "docdate") && !hasClass(n, "eyebrow"):
-			t := strings.Join(strings.Fields(textOf(n)), " ")
+			t := strings.Join(strings.Fields(searchText(n)), " ")
 			if len(t) > searchTextLimit {
 				t = t[:searchTextLimit]
 				for !utf8.ValidString(t) {
@@ -117,4 +117,26 @@ func (s *Site) searchBox(from string) *html.Node {
 		"placeholder", "Search", "aria-label", "Search this site", "autocomplete", "off"))
 	div.AppendChild(elem("ol", "class", "md2html-search-results"))
 	return div
+}
+
+// searchText is n's text without any tip's note: the note is text in the
+// page, beside its host, but not the page's content. textOf keeps every
+// text node, which its other callers want.
+func searchText(n *html.Node) string {
+	var b strings.Builder
+	var visit func(*html.Node)
+	visit = func(x *html.Node) {
+		if x.Type == html.TextNode {
+			b.WriteString(x.Data)
+			return
+		}
+		if x.Type == html.ElementNode && hasClass(x, "md2html-tooltip") {
+			return
+		}
+		for c := x.FirstChild; c != nil; c = c.NextSibling {
+			visit(c)
+		}
+	}
+	visit(n)
+	return b.String()
 }

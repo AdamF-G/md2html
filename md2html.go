@@ -446,6 +446,10 @@ func Convert(src []byte, opt Options) ([]byte, error) {
 		}
 	}
 
+	// After every transform, linkDrop and linkRewrite included: see
+	// writeTips.
+	writeTips(root)
+
 	// Still in the tree only when there was nothing to list, or a caller's
 	// own transforms had no TOC to replace it.
 	if autoMarker != nil && autoMarker.Parent != nil {

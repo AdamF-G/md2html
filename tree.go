@@ -101,7 +101,7 @@ func headingText(n *html.Node) string {
 			b.WriteString(x.Data)
 			return
 		}
-		if x.Type == html.ElementNode && (hasClass(x, "chip") || (x.DataAtom == atom.A && hasClass(x, "anchor"))) {
+		if x.Type == html.ElementNode && (hasClass(x, "chip") || hasClass(x, "md2html-tooltip") || (x.DataAtom == atom.A && hasClass(x, "anchor"))) {
 			return
 		}
 		for c := x.FirstChild; c != nil; c = c.NextSibling {

@@ -334,6 +334,23 @@ func linkDrop(m, anchors map[string]bool) Transform {
 			}
 			switch n.DataAtom {
 			case atom.A:
+				// A dropped link's tip stays, on its text: a span takes
+				// the link's place and its tip, for writeTips to host.
+				if tip, ok := attr(n, tipAttr); ok {
+					span := elem("span", tipAttr, tip)
+					if d, ok := attr(n, tipDelayAttr); ok {
+						setAttr(span, tipDelayAttr, d)
+					}
+					p.InsertBefore(span, n)
+					for c := n.FirstChild; c != nil; {
+						next := c.NextSibling
+						n.RemoveChild(c)
+						span.AppendChild(c)
+						c = next
+					}
+					n.Parent.RemoveChild(n)
+					continue
+				}
 				for c := n.FirstChild; c != nil; {
 					next := c.NextSibling
 					n.RemoveChild(c)

@@ -3,6 +3,7 @@ package md2html
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -324,5 +325,25 @@ func TestShellLinksFollowTheSiteRules(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("the dropped link was warned about %d times", n)
+	}
+}
+
+// The shell's tips and the page's are numbered separately, so their ids
+// clash; renumbering the shell's must take its aria-describedby along.
+func TestTipsShellAndPageIDsDistinct(t *testing.T) {
+	s, res, root := siteFixture(t, map[string]string{
+		"shell/site.md": "---\nsite: true\n---\n[S]{tip=\"shell\"}\n\n[[content]]\n",
+		"docs/index.md": "# Home\n\n[P]{tip=\"page\"}\n",
+	}, "shell/site.md")
+	out, _ := sitePage(t, s, res, root, "docs/index.md")
+	ids := regexp.MustCompile(`id="(md2html-tooltip-[^"]+)"`).FindAllStringSubmatch(out, -1)
+	if len(ids) != 2 || ids[0][1] == ids[1][1] {
+		t.Fatalf("tooltip ids = %v, want two distinct\n%s", ids, out)
+	}
+	for _, wrap := range regexp.MustCompile(`<span class="md2html-tip-wrap">.*?</span></span>`).FindAllString(out, -1) {
+		d := regexp.MustCompile(`aria-describedby="([^"]+)"`).FindStringSubmatch(wrap)
+		if d == nil || !strings.Contains(wrap, `id="`+d[1]+`"`) {
+			t.Errorf("describedby does not name its own tooltip: %s", wrap)
+		}
 	}
 }
