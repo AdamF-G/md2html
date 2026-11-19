@@ -21,11 +21,30 @@ import (
 //
 // A span's block may hold a quoted value, and a "}" inside one belongs to
 // the value: [x]{title="a } b"} is one span, not a span with ` b"}` left
-// after it. An unclosed quote matches nothing, so the text stays as
-// written.
+// after it. Only a quote straight after "=" opens a value. Anywhere else a
+// quote is an ordinary character, so the apostrophe in title=don't, or in
+// [x]{it's .c}, can neither cost the span nor run on into a later block.
+//
+// A block the quoted form cannot match — a stray quote, or a value whose
+// quote never closes — is matched by the second form, which ends at the
+// first "}" as every block once did. spanBlock then says what is wrong
+// with it, rather than the text staying with no word.
 var chipRe = regexp.MustCompile(
-	`\[([^\]\n]+)\]\{((?:[^}"'\n]|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')*)\}` +
+	`\[([^\]\n]+)\]\{((?:[^}"'\n]|="(?:[^"\\\n]|\\.)*"|='(?:[^'\\\n]|\\.)*')*)\}` +
+		`|\[([^\]\n]+)\]\{([^}\n]*)\}` +
 		`|\[(proven|verified|designed|planned|draft|deprecated|c:[^\]\n]{0,60})\]`)
+
+// spanMatch reports the label and block of a chipRe match that is a
+// bracketed span, from whichever of its two forms matched.
+func spanMatch(s string, loc []int) (label, block string, ok bool) {
+	switch {
+	case loc[2] >= 0:
+		return s[loc[2]:loc[3]], s[loc[4]:loc[5]], true
+	case loc[6] >= 0:
+		return s[loc[6]:loc[7]], s[loc[8]:loc[9]], true
+	}
+	return "", "", false
+}
 
 // statusWords is the closed vocabulary the bare form recognizes, and the
 // set that gives a bracketed span its chip-<word> modifier class.
@@ -48,10 +67,12 @@ type spanAttrs struct {
 // reads the same text — cannot disagree about whether a block is a span.
 //
 // ok is false when the block stays on the page as the author wrote it.
-// why is then a warning for the author when the block was clearly meant
-// as attributes and has something they can fix, and empty when it stays
-// quietly: an empty block, or one of bare words alone, which is far more
-// often prose, a regex or terminal markup than a span.
+// warn, which may be nil, then hears why when the block was clearly meant
+// as attributes and has something the author can fix. It hears nothing
+// when the block stays quietly: an empty block, or one of bare words
+// alone, which is far more often prose, a regex or terminal markup than a
+// span. Only the page's rewrite passes a warn; the title reads the same
+// text again and stays silent, so one block warns once.
 //
 // A name a link block may set is kept here too, by the same rule: any of
 // goldmark's global attributes, and any data- or aria- name, lowercased.
@@ -63,23 +84,38 @@ type spanAttrs struct {
 // A bare key, {.chip hidden}, keeps the block literal too. Pandoc has no
 // bare-key form, and before spans kept attributes one silently ate the
 // braces. A boolean attribute takes a value, hidden="".
-func spanBlock(label, block string) (span spanAttrs, why string, ok bool) {
+func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool) {
+	if warn == nil {
+		warn = func(string) {}
+	}
 	a, found := parseAttrs(block)
 	if !found {
-		return spanAttrs{}, "", false
+		return spanAttrs{}, false
 	}
 	if a.id == "" && len(a.classes) == 0 && len(a.bare) == len(a.kv) {
-		return spanAttrs{}, "", false
+		return spanAttrs{}, false
+	}
+	if a.unclosed != "" {
+		warn(fmt.Sprintf("bracketed span [%s]: the value of %s has no closing quote; leaving the block as text", label, a.unclosed))
+		return spanAttrs{}, false
 	}
 	keys := sortedKeys(a.kv)
 	for _, k := range keys {
 		if !safeAttrName(k) {
-			return spanAttrs{}, fmt.Sprintf("bracketed span [%s]: %q is not an attribute name; leaving the block as text", label, k), false
+			hint := ""
+			if strings.Contains(k, `"`) {
+				// Markdown drops the backslash from \", so an escaped
+				// quote ends its value early and the rest reads as a name.
+				hint = "; a quote inside a value takes the other kind of quote"
+			}
+			warn(fmt.Sprintf("bracketed span [%s]: `%s` is not an attribute name; leaving the block as text%s", label, k, hint))
+			return spanAttrs{}, false
 		}
 	}
 	if len(a.bare) > 0 {
 		k := a.bare[0]
-		return spanAttrs{}, fmt.Sprintf("bracketed span [%s]: %s has no value; write %s=\"\" for a boolean attribute, or the block stays as text", label, k, k), false
+		warn(fmt.Sprintf("bracketed span [%s]: %s has no value; write %s=\"\" for a boolean attribute, or the block stays as text", label, k, k))
+		return spanAttrs{}, false
 	}
 
 	span = spanAttrs{id: a.id, classes: a.classes}
@@ -101,7 +137,7 @@ func spanBlock(label, block string) (span spanAttrs, why string, ok bool) {
 	for _, name := range sortedKeys(kept) {
 		span.extra = append(span.extra, html.Attribute{Key: name, Val: kept[name]})
 	}
-	return span, "", true
+	return span, true
 }
 
 // spanNode builds the <span> for a bracketed span — Pandoc's
@@ -115,7 +151,7 @@ func spanBlock(label, block string) (span spanAttrs, why string, ok bool) {
 // the author already wrote a chip-* class of their own, so
 // [shipped]{.chip .chip-ok} keeps exactly the classes it names.
 func spanNode(label, block string) []*html.Node {
-	a, _, ok := spanBlock(label, block)
+	a, ok := spanBlock(label, block, nil)
 	if !ok {
 		return nil
 	}
@@ -163,13 +199,19 @@ func hasClassTokenPrefix(classes []string, prefix string) bool {
 // Declining must be a real nil, never an empty non-nil slice — splitMatches
 // treats any non-nil result, empty included, as "rendered" and deletes the
 // matched text.
-func chipNodes(s string) []*html.Node {
+//
+// warn, which may be nil, hears why a bracketed span's block was left as
+// text, when spanBlock has a reason the author can act on.
+func chipNodes(s string, warn func(string)) []*html.Node {
 	return splitMatches(s, chipRe, func(loc []int) []*html.Node {
-		if loc[2] >= 0 {
+		if label, block, ok := spanMatch(s, loc); ok {
 			// Bracketed span: [label]{...}.
-			return spanNode(s[loc[2]:loc[3]], s[loc[4]:loc[5]])
+			if _, ok := spanBlock(label, block, warn); !ok {
+				return nil
+			}
+			return spanNode(label, block)
 		}
-		token := s[loc[6]:loc[7]]
+		token := s[loc[10]:loc[11]]
 		class, label := "chip", token
 		if strings.HasPrefix(token, "c:") {
 			label = strings.TrimSpace(token[2:])
@@ -195,9 +237,15 @@ func chipNodes(s string) []*html.Node {
 //
 // A heading's marker is kept out of its slug by HeadingAnchors, which is
 // why this transform must run before it.
-func Chips() Transform {
+func Chips() Transform { return chips(nil) }
+
+// chips is Chips with a warning for a bracketed span's block that is left
+// on the page as text for a reason the author can fix. Only this rewrite
+// warns: stripChipTokens reads a heading's text again for the page title,
+// and staying silent there is what keeps one block to one warning.
+func chips(warn func(string)) Transform {
 	return Transform{Name: "chips", Fn: func(root *html.Node) error {
-		rewriteText(root, chipNodes)
+		rewriteText(root, func(s string) []*html.Node { return chipNodes(s, warn) })
 		return nil
 	}}
 }
@@ -234,7 +282,7 @@ func stripChipTokens(s string) string {
 	for _, loc := range locs {
 		b.WriteString(s[last:loc[0]])
 		last = loc[1]
-		if loc[2] >= 0 {
+		if label, block, ok := spanMatch(s, loc); ok {
 			// A bracketed span. Only a chip is a status marker that has no
 			// business in a browser tab; any other span is ordinary prose
 			// the author wrapped for styling, so its label survives with
@@ -242,9 +290,8 @@ func stripChipTokens(s string) string {
 			//
 			// A block the page leaves as text stays in the title as text
 			// too, so the tab and the page say the same thing.
-			label, block := s[loc[2]:loc[3]], s[loc[4]:loc[5]]
-			a, _, ok := spanBlock(label, block)
-			if !ok {
+			a, isSpan := spanBlock(label, block, nil)
+			if !isSpan {
 				b.WriteString(s[loc[0]:loc[1]])
 				continue
 			}

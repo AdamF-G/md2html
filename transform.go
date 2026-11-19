@@ -45,14 +45,14 @@ func Builtins() []Transform {
 // specific positions in it (id-resolving transforms after anchors are
 // assigned), so new entries belong at their documented position, not
 // appended to the end. warn is threaded through so a transform can report
-// a non-fatal problem; Containers and LinkAttrs use it so far.
+// a non-fatal problem; Containers, LinkAttrs and Chips use it so far.
 func builtins(warn func(string)) []Transform {
 	return []Transform{
 		Containers(warn),
 		Alerts(),
 		LinkAttrs(warn),
 		TableScroll(),
-		Chips(),
+		chips(warn),
 		HeadingAnchors(),
 		SectionLinks(),
 		TOC(),
@@ -394,6 +394,7 @@ func ExternalLinks() Transform {
 // A transform that starts reporting belongs here as well as in builtins,
 // or its warnings reach only callers who passed no list of their own.
 var warnAware = map[string]func(func(string)) Transform{
+	"chips":      chips,
 	"containers": Containers,
 	"linkAttrs":  LinkAttrs,
 }

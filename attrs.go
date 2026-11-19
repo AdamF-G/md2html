@@ -28,6 +28,10 @@ type attrs struct {
 	// needs to tell {hidden} from {hidden=""}, since only the second is an
 	// attribute.
 	bare []string
+	// unclosed names the first key whose quoted value never closed, as in
+	// title="abc. The value runs to the end of the block, which is all a
+	// container or a link block needs; a bracketed span refuses it.
+	unclosed string
 }
 
 // parseAttrs reads the inside of an attribute block — the text between the
@@ -62,6 +66,9 @@ func parseAttrs(content string) (attrs, bool) {
 			found = true
 		case tok.key != "":
 			a.kv[tok.key] = tok.val
+			if tok.unclosed && a.unclosed == "" {
+				a.unclosed = tok.key
+			}
 			if !tok.eq {
 				a.bare = append(a.bare, tok.key)
 			}
@@ -77,6 +84,8 @@ func parseAttrs(content string) (attrs, bool) {
 type attrToken struct {
 	key, val string
 	eq       bool
+	// unclosed reports a quoted value whose closing quote never came.
+	unclosed bool
 }
 
 // attrTokens splits an attribute block on whitespace, keeping a quoted
@@ -104,8 +113,8 @@ func attrTokens(s string) []attrToken {
 		}
 		if i < len(s) && s[i] == '=' {
 			i++
-			val, next := readAttrValue(s, i)
-			out = append(out, attrToken{key: key.String(), val: val, eq: true})
+			val, next, closed := readAttrValue(s, i)
+			out = append(out, attrToken{key: key.String(), val: val, eq: true, unclosed: !closed})
 			i = next
 			continue
 		}
@@ -115,8 +124,9 @@ func attrTokens(s string) []attrToken {
 }
 
 // readAttrValue reads the value at s[i:], quoted or bare, and returns it
-// along with the index just past it.
-func readAttrValue(s string, i int) (string, int) {
+// along with the index just past it. closed is false only for a quoted
+// value that runs off the end of s.
+func readAttrValue(s string, i int) (val string, next int, closed bool) {
 	var v strings.Builder
 	if i < len(s) && (s[i] == '"' || s[i] == '\'') {
 		quote := s[i]
@@ -128,10 +138,10 @@ func readAttrValue(s string, i int) (string, int) {
 			v.WriteByte(s[i])
 			i++
 		}
-		if i < len(s) {
-			i++ // closing quote
+		if i >= len(s) {
+			return v.String(), i, false
 		}
-		return v.String(), i
+		return v.String(), i + 1, true // past the closing quote
 	}
 	for i < len(s) && !isAttrSpace(s[i]) {
 		if s[i] == '\\' && i+1 < len(s) {
@@ -140,7 +150,7 @@ func readAttrValue(s string, i int) (string, int) {
 		v.WriteByte(s[i])
 		i++
 	}
-	return v.String(), i
+	return v.String(), i, true
 }
 
 func isAttrSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\n' }

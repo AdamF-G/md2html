@@ -291,9 +291,136 @@ func TestChipsBracketedSpanBareKeyStaysLiteral(t *testing.T) {
 
 // A name no attribute can have would break out of the attribute list if
 // written; the block stays as text instead.
+//
+// on"x has an unclosed quote, so chipRe never matches it; a/b reaches
+// spanBlock and is refused there.
 func TestChipsBracketedSpanUnsafeNameStaysLiteral(t *testing.T) {
-	got := spanHTML(t, `[T]{.chip on"x=1}`)
-	if strings.Contains(got, "<span") || !strings.Contains(got, "[T]{.chip on") {
-		t.Errorf("unsafe name not left literal\ngot: %s", got)
+	for _, src := range []string{`[T]{.chip on"x=1}`, `[T]{.chip a/b=1}`} {
+		got := spanHTML(t, src)
+		if strings.Contains(got, "<span") || !strings.Contains(got, "[T]{.chip ") {
+			t.Errorf("%s: unsafe name not left literal\ngot: %s", src, got)
+		}
+	}
+}
+
+// warnings converts src and returns its output and every warning raised.
+func warnings(t *testing.T, src string) (string, []string) {
+	t.Helper()
+	var w []string
+	got := convert(t, src, func(m string) { w = append(w, m) })
+	return got, w
+}
+
+// A block clearly meant as attributes, with a fault the author can fix,
+// stays on the page as text and says why.
+func TestChipsWarnOnUnsafeName(t *testing.T) {
+	_, w := warnings(t, "x [T]{.chip a/b=1} y\n")
+	if len(w) != 1 || !strings.Contains(w[0], "is not an attribute name") || !strings.Contains(w[0], "`a/b`") {
+		t.Errorf("warnings = %q, want one naming a/b", w)
+	}
+}
+
+func TestChipsWarnOnBareKeyBesideAttributes(t *testing.T) {
+	_, w := warnings(t, "x [s]{.chip hidden} y\n")
+	if len(w) != 1 || !strings.Contains(w[0], `hidden=""`) {
+		t.Errorf("warnings = %q, want one suggesting hidden=\"\"", w)
+	}
+}
+
+// Bare words alone are prose, a regex or terminal markup far more often
+// than a span, so they stay quiet.
+func TestChipsQuietOnBareKeysAlone(t *testing.T) {
+	if _, w := warnings(t, "[a]{b} [c]{d e} [f]{}\n"); len(w) != 0 {
+		t.Errorf("warnings = %q, want none", w)
+	}
+}
+
+// Markdown takes the backslash before a quote, so an escaped quote in a
+// value breaks the block; the warning is how the author finds out.
+func TestChipsBackslashQuoteInValueWarns(t *testing.T) {
+	got, w := warnings(t, "x [s]{.chip title=\"a \\\"b\\\"\"} y\n")
+	if strings.Contains(got, "<span") {
+		t.Errorf("rendered a span\ngot: %s", got)
+	}
+	if len(w) != 1 || !strings.Contains(w[0], "the other kind of quote") {
+		t.Errorf("warnings = %q, want one pointing at the other quote", w)
+	}
+}
+
+func TestChipsSingleQuotesHoldADoubleQuote(t *testing.T) {
+	got, _ := warnings(t, "x [s]{.chip title='a \"b\"'} y\n")
+	if !strings.Contains(got, `title="a &#34;b&#34;"`) {
+		t.Errorf("double quote lost from a single-quoted value\ngot: %s", got)
+	}
+}
+
+// A heading's text is read twice, for the page and for its title; only
+// the page's reading warns.
+func TestChipsWarnOnceInHeading(t *testing.T) {
+	var w []string
+	if _, err := Convert([]byte("## A [x]{.chip hidden} b\n"), Options{CSS: "/**/", Warn: func(m string) { w = append(w, m) }}); err != nil {
+		t.Fatal(err)
+	}
+	if len(w) != 1 {
+		t.Errorf("warnings = %q, want exactly one", w)
+	}
+}
+
+// The CLI builds its list from Builtins(), whose Chips has no sink;
+// Convert has to rebuild it against Options.Warn, as it does for the
+// other builtins that warn.
+func TestChipsWarnThroughBuiltins(t *testing.T) {
+	var w []string
+	if _, err := Convert([]byte("x [s]{.chip hidden} y\n"), Options{
+		Fragment: true, CSS: "/**/", Transforms: Builtins(),
+		Warn: func(m string) { w = append(w, m) },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(w) != 1 {
+		t.Errorf("warnings = %q, want exactly one", w)
+	}
+}
+
+// A quote that opens no value is an ordinary character: an apostrophe in
+// a bare value, or in a word, must not cost the author the span, or join
+// the block to a later one.
+func TestChipsBracketedSpanStrayQuote(t *testing.T) {
+	cases := []struct{ src, want string }{
+		{`[x]{.c title=don't}`, `<span class="c" title="don&#39;t">x</span>`},
+		{`[a]{.c data-n=O'Neil}`, `<span class="c" data-n="O&#39;Neil">a</span>`},
+	}
+	for _, c := range cases {
+		if got := spanHTML(t, c.src); !strings.Contains(got, c.want) {
+			t.Errorf("%s\nwant: %s\ngot:  %s", c.src, c.want, got)
+		}
+	}
+}
+
+// A stray quote that breaks a block meant as attributes says so, naming
+// the block it is in, not a run joined to the next block.
+func TestChipsWarnOnStrayQuote(t *testing.T) {
+	cases := []struct{ src, warn string }{
+		{"x [x]{.c title=\"a\"b\"} y\n", "`b\"`"},
+		{"x [x]{it's .c} end. [z]{.c} y\n", "`it's`"},
+		{"x [x]{.c title=\"abc} y\n", "no closing quote"},
+	}
+	for _, c := range cases {
+		got, w := warnings(t, c.src)
+		if len(w) != 1 || !strings.Contains(w[0], c.warn) || !strings.Contains(w[0], "[x]") {
+			t.Errorf("%q: warnings = %q, want one for [x] containing %s", c.src, w, c.warn)
+		}
+		if strings.Contains(got, `<span class="c">x</span>`) {
+			t.Errorf("%q: rendered a span from a broken block\ngot: %s", c.src, got)
+		}
+	}
+}
+
+// The other-quote hint is for a double-quoted value Markdown broke; an
+// apostrophe in a word is not one, and the hint would mislead.
+func TestChipsApostropheWarningHasNoQuoteHint(t *testing.T) {
+	_, w := warnings(t, "x [x]{it's .c} y\n")
+	if len(w) != 1 || strings.Contains(w[0], "other kind of quote") {
+		t.Errorf("warnings = %q, want one without the quote hint", w)
 	}
 }

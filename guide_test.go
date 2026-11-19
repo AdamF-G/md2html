@@ -127,6 +127,24 @@ func TestGuideClaims(t *testing.T) {
 			want:  []string{`<p class="subtitle">Draft, do not circulate</p>`},
 		},
 		{
+			name:  "a name no attribute can have stays as written and warns",
+			quote: "**bracketed span … is not an attribute name**",
+			src:   "[x]{.chip a/b=1}\n",
+			want:  []string{"[x]{.chip a/b=1}"},
+			not:   []string{"<span"},
+			warns: true,
+			warn:  "is not an attribute name",
+		},
+		{
+			name:  "a value with no closing quote stays as written and warns",
+			quote: "**bracketed span … has no closing quote**",
+			src:   "[x]{.chip title=\"abc}\n",
+			want:  []string{"[x]{.chip title="},
+			not:   []string{"<span"},
+			warns: true,
+			warn:  "has no closing quote",
+		},
+		{
 			name:  "a bracketed word touching braces of bare words stays as written",
 			quote: "`map[key]{value}` renders `map[key]{value}`",
 			src:   "map[key]{value}\n",
@@ -1293,6 +1311,21 @@ func TestEveryWarningIsInTheGuide(t *testing.T) {
 		}
 		if !listed {
 			t.Errorf("%s: %q has no entry in the Warnings section", at, m)
+		}
+	}
+}
+
+// The span warnings are built inside spanBlock. The scanner has to see
+// them, or TestEveryWarningIsInTheGuide passes with their entries gone.
+func TestWarningScannerSeesSpanWarnings(t *testing.T) {
+	msgs := warningMessages(t)
+	for _, want := range []string{"is not an attribute name", "has no value", "has no closing quote"} {
+		seen := false
+		for m := range msgs {
+			seen = seen || strings.Contains(m, "bracketed span") && strings.Contains(m, want)
+		}
+		if !seen {
+			t.Errorf("no scanned warning says bracketed span … %s", want)
 		}
 	}
 }

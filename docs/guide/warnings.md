@@ -119,6 +119,20 @@ title. Remove the attribute.
 **… cannot be set from an attribute block** — `href`, `src` or `srcset`;
 write the target in the link itself.
 
+**bracketed span … is not an attribute name** — a span's block holds a
+name with a character no attribute name can have, so the block stays on
+the page as text. Fix or remove the name. A quote inside a value loses its
+backslash to Markdown and ends the value early, which also lands here:
+write the value in the other kind of quote, `title='a "b"'`.
+
+**bracketed span … has no closing quote** — a quoted value in a span's
+block never closes, so the block stays on the page as text. Close the
+quote.
+
+**bracketed span … has no value** — a span's block holds a bare word
+beside a `.class`, an `#id` or a `key="value"`, so the block stays on the
+page as text. Write a boolean attribute with a value, `hidden=""`.
+
 **fig fence: …; rendering it as a code block** — the figure is shown as
 its YAML source. The rest of the message names the fault:
 
