@@ -72,19 +72,22 @@ For an anchor that survives rewording, give the heading an explicit id:
 ## Breaking change in v2 {#breaking-v2}
 ```
 
-A heading's attribute block takes an `id`, classes, and `key="value"`
-pairs, with a stricter grammar than a container's. Write every value in
-double quotes: `{data-step="1"}`. An unquoted number becomes an empty
-value, and a bare key (`{data-flag}`) or a single-quoted value leaves the
-whole block, id included, as literal heading text. It takes the common
-global attributes (`title`, `lang`, `dir`, `role`, `style`…) and `data-`
-names; `aria-` names and event handlers are dropped. An explicit id is
-never rewritten, and generated slugs avoid it. GitHub shows the block as
-literal text.
+A heading's attribute block reads like a [span's](inline-marks.md): an
+`id`, classes, and `key=value` pairs, in double quotes, single quotes or
+none, `{data-step=1 title='Step one'}`. It keeps the global attributes
+(`title`, `lang`, `dir`, `role`, `style`…) and any `data-` or `aria-` name;
+an event handler is dropped. An explicit id is never rewritten, and
+generated slugs avoid it. GitHub shows the block as literal text.
 
-An attribute block at the end of a heading line belongs to the heading,
-even straight after a link: `## See [docs](./docs.md){.ext}` puts the class
-on the `<h2>`.
+A block that touches a span or a link is theirs, not the heading's:
+`## Rollback [beta]{.chip}` ends in a chip, and
+`## See [docs](./docs.md){.ext}` classes the link. Write a space before the
+brace to give the block to the heading: `## See [docs](./docs.md) {.ext}`.
+
+A block with a bare word beside an id or a class, `{#setup data-flag}`, or
+a name no attribute can have, stays in the heading's text and
+[warns](warnings.md). Bare words alone stay quietly, so
+`## GET /v1/jobs/{id}` renders as written.
 
 ## Contents list
 

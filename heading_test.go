@@ -3,6 +3,8 @@ package md2html
 import (
 	"strings"
 	"testing"
+
+	"github.com/yuin/goldmark/parser"
 )
 
 // A heading's block is checked by the span's rules, under the heading's
@@ -20,5 +22,86 @@ func TestCheckAttrBlockHeadingWho(t *testing.T) {
 	a, ok := checkAttrBlock(`heading "T"`, `#t tip="n" tip-delay="0ms"`, false, collect)
 	if !ok || a.id != "t" || a.tip != "" || len(w) != 0 {
 		t.Errorf("got %+v ok=%v warnings %q; want id t, no tip, no warning", a, ok, w)
+	}
+}
+
+// A parser option set on goldmark reaches the heading parsers wrapped.
+func TestHeadingParsersTakeParserOptions(t *testing.T) {
+	var got parser.OptionName
+	for _, p := range headingParsers(nil) {
+		if o, ok := p.Value.(parser.SetOptioner); ok {
+			if hp, ok := p.Value.(*headingAttrParser); ok {
+				hp.BlockParser = optionSpy{BlockParser: hp.BlockParser, saw: &got}
+				o.SetOption("probe", true)
+			}
+		}
+	}
+	if got != "probe" {
+		t.Errorf("option not forwarded: got %q", got)
+	}
+}
+
+type optionSpy struct {
+	parser.BlockParser
+	saw *parser.OptionName
+}
+
+func (s optionSpy) SetOption(name parser.OptionName, _ interface{}) { *s.saw = name }
+
+// headingOut converts src and returns the first heading's element, from
+// its opening tag to the anchor HeadingAnchors adds (or its close), and
+// the warnings.
+func headingOut(t *testing.T, src string) (string, []string) {
+	t.Helper()
+	var w []string
+	got := convert(t, src, func(m string) { w = append(w, m) })
+	i := strings.Index(got, "<h")
+	if i < 0 {
+		t.Fatalf("no heading in:\n%s", got)
+	}
+	h := got[i:]
+	if j := strings.Index(h, `<a class="anchor"`); j >= 0 {
+		h = h[:j]
+	} else if j := strings.Index(h, "</h"); j >= 0 {
+		h = h[:j]
+	}
+	return h, w
+}
+
+func TestHeadingBlocks(t *testing.T) {
+	cases := []struct {
+		src, want, not string
+		warns          int
+		warn           string
+	}{
+		{"## A {#a .k}\n", `<h2 id="a" class="k">A`, "{", 0, ""},
+		{"## Rollback [beta]{.chip}\n", `<span class="chip">beta</span>`, `<h2 class`, 0, ""},
+		{"## See [d](https://e.x){.x}\n", `class="x"`, `<h2 class`, 0, ""},
+		{"## T {title='q'}\n", `title="q"`, "{", 0, ""},
+		{"## T {lang=fr}\n", `lang="fr"`, "{", 0, ""},
+		{"## T {data-step=1}\n", `data-step="1"`, "{", 0, ""},
+		{"## T {aria-label=\"L\"}\n", `aria-label="L"`, "{", 0, ""},
+		{"## T {#t onclick=\"x\"}\n", `id="t"`, "onclick", 0, ""},
+		{"## Don't panic {#calm}\n", `id="calm">Don&#39;t panic`, "{", 0, ""},
+		{"## It's 5\" tall {#x}\n", `id="x"`, "{", 0, ""},
+		{"## GET /v1/jobs/{id}\n", `GET /v1/jobs/{id}`, "", 0, ""},
+		{"## T {}\n", `T {}`, "", 0, ""},
+		{"## Setup {#s data-flag}\n", `{#s data-flag}`, "", 1, "has no value"},
+		{"## T {#t a/b=1}\n", `{#t a/b=1}`, "", 1, "is not an attribute name"},
+		{"## Title ## {#id}\n", `id="id">Title`, "#", 0, ""},
+		{"## Title ##\n", `>Title`, "#", 0, ""},
+		{"## T {title=\"a } *b*\"}\n", `title="a } *b*"`, "<em>", 0, ""},
+		{"## T {#t tip=\"n\"}\n", `id="t"`, "tooltip", 0, ""},
+		{"Title [z]{.chip}\n---\n", `<span class="chip">z</span>`, `<h2 class`, 0, ""},
+		{"Title {#t}\n===\n", `<h1 id="t">Title`, "{", 0, ""},
+	}
+	for _, c := range cases {
+		h, w := headingOut(t, c.src)
+		if !strings.Contains(h, c.want) || (c.not != "" && strings.Contains(h, c.not)) {
+			t.Errorf("%q:\n got %s\nwant %s, without %q", c.src, h, c.want, c.not)
+		}
+		if len(w) != c.warns || (c.warn != "" && !strings.Contains(w[0], c.warn)) {
+			t.Errorf("%q: warnings %q, want %d with %q", c.src, w, c.warns, c.warn)
+		}
 	}
 }

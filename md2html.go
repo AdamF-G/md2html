@@ -223,13 +223,22 @@ func newParser(warn func(string), charts chartContext, hl highlightContext) gold
 			&mermaid.Extender{RenderMode: mermaid.RenderModeClient, NoScript: true},
 			&fences.Extender{SplitInfo: parseContainerInfo},
 		),
-		goldmark.WithParserOptions(parser.WithAttribute()),
+		// Headings read their {…} through headingParsers, not goldmark's
+		// attribute option, which stays off.
+		goldmark.WithParser(parser.NewParser(
+			parser.WithBlockParsers(headingParsers(warn)...),
+			parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+			parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+		)),
 		goldmark.WithRendererOptions(
 			goldhtml.WithUnsafe(),
 			// Priority below goldmark's own (1000) so this wins for
 			// fenced code blocks; every other node keeps the default
 			// renderer.
-			renderer.WithNodeRenderers(util.Prioritized(newCodeFenceRenderer(warn, charts, hl), 100)),
+			renderer.WithNodeRenderers(
+				util.Prioritized(newCodeFenceRenderer(warn, charts, hl), 100),
+				util.Prioritized(headingRenderer{}, 100),
+			),
 		),
 	)
 }
