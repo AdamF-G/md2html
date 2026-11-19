@@ -14,18 +14,6 @@ follow-ups file under `docs/plans/` instead.
   A fix has to tell a span's block from a heading's own `{#id .class}`
   (a `]` just before the `{`, say) without breaking existing heading
   attributes.
-- [ ] A styled tooltip for a chip's hover note, and perhaps for links and
-  other marks. A native `title` shows after the browser's own delay, in the
-  browser's own style, and no CSS can change either, so a custom tooltip
-  means a component in the default stylesheet: something like `data-tip`,
-  shown by `:hover` with `::after { content: attr(data-tip) }` and a
-  `transition-delay`. Open questions: keyboard users, since a span takes no
-  focus without `tabindex`; touch, which has no hover; screen readers, which
-  don't reliably read a pseudo-element, so the note belongs in
-  `aria-describedby` or `aria-label` too; clipping inside a scrolling table;
-  print; and which elements it covers. Spans keeping `title`, `data-` and
-  `aria-` names is the groundwork, so this adds CSS and perhaps a rewrite
-  of `title` rather than any parsing.
 
 ## Build
 

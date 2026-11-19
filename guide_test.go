@@ -160,6 +160,22 @@ func TestGuideClaims(t *testing.T) {
 			warn:  "has no closing quote",
 		},
 		{
+			name:  "a tip shows after the front matter's delay",
+			quote: "tip-delay: 150ms\n---\nShips in [beta]{.chip tip=\"May change before 1.0.\"}",
+			src:   "---\ntip-delay: 150ms\n---\nShips in [beta]{.chip tip=\"May change before 1.0.\"}\n",
+			page:  true,
+			want: []string{
+				`<span class="chip md2html-tip-host" tabindex="0" aria-describedby="md2html-tooltip-1">beta</span><span class="md2html-tooltip" id="md2html-tooltip-1" role="tooltip" aria-hidden="true">May change before 1.0.</span>`,
+				"main.md2html { --md2html-tip-delay: 150ms; }",
+			},
+		},
+		{
+			name:  "an element's own tip-delay wins",
+			quote: `[stable]{.chip tip="No breaking changes." tip-delay="0ms"}`,
+			src:   "[stable]{.chip tip=\"No breaking changes.\" tip-delay=\"0ms\"}\n",
+			want:  []string{`<span class="md2html-tip-wrap" style="--md2html-tip-delay: 0ms">`},
+		},
+		{
 			name:  "a bracketed word touching braces of bare words stays as written",
 			quote: "`map[key]{value}`\nrenders `map[key]{value}`",
 			src:   "map[key]{value}\n",

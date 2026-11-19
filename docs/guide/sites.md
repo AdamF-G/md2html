@@ -72,7 +72,8 @@ link to a `.md` the build does not write reaches the Markdown file, and
 warns. In a mounted site, a shell link that reaches nothing on disk is
 read from the site's root. The shell's `style:` (and `plugins:`, relative to
 the shell) is the site's style: a page's own `style:` wins for that page,
-and `--style` applies where neither sets one. The shell's plugins
+and `--style` applies where neither sets one. The shell's `tip-delay:` is
+the site's in the same way. The shell's plugins
 supply no languages to the pages it wraps: those come from `--plugin`
 and each page's own `plugins:`. Its other keys describe the shell:
 `title` and `lang` stay each page's own. A page with `shell: none`

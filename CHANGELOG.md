@@ -18,6 +18,13 @@ major version instead.
   carry a hover note: `[beta]{.chip title="May change before 1.0."}`. Any
   other name is dropped, and a boolean attribute takes a value,
   `hidden=""`.
+- A fast tip: `tip="…"` on a bracketed span or a link shows its note on
+  hover, and when Tab reaches it, after a delay you set, where a `title`
+  waits for the browser's own. `tip-delay:` in front matter sets the
+  delay, the shell's for a site and a page's own for that page, and
+  `tip-delay="…"` on the element sets its own. It needs no script, so it
+  works in a fragment; a screen reader hears the note as the element's
+  description, print shows it, and the site's search leaves it out.
 - A span block left on the page as text warns when it was clearly meant as
   attributes: a bare word beside a class, an id or a `key="value"`, or a
   name no attribute can have.

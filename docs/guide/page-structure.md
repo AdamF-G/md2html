@@ -32,6 +32,7 @@ toc-title: Contents
 | `style` | The page's styles, stacked in order. Replaces `--style`. See [Styles](styles.md). |
 | `plugins` | Plugin directories, relative to the page: styles this page's `style:` can draw on, and languages its fences are highlighted in. |
 | `highlight` | `false` leaves the page's code plain. See [Highlighting](code-blocks.md#highlighting). |
+| `tip-delay` | How long a [tip](inline-marks.md#fast-tips) waits before it shows, such as `150ms`. In a site shell, every page's. Default `100ms`. |
 
 `lang` is what screen readers use to pick a voice. A value that is not a
 language tag, such as `en_US`, warns and is ignored.

@@ -53,5 +53,10 @@ dropped. `href`, `src` and `srcset` warn: write the target in the link. A
 block with a space before it, with nothing in it, or with something that is
 not an attribute name (`{{version}}`) stays as literal text.
 
+A link takes `tip="…"` for a note that shows on hover and when Tab reaches
+it, sooner than its `title` would: see
+[Fast tips](inline-marks.md#fast-tips). A tap on a phone follows the link,
+so the note does not show there. An image drops a `tip`.
+
 Off-site links get `target="_blank" rel="noopener noreferrer"`, added to
 any `rel` you wrote.

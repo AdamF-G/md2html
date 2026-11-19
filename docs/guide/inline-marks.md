@@ -47,6 +47,38 @@ wrote it. Beside a class, an id or a `key="value"` it also
 [warns](warnings.md). Bare words alone stay quietly: `map[key]{value}`
 renders `map[key]{value}`.
 
+### Fast tips {#fast-tips}
+
+A `title` shows after the browser's own delay, about a second. A `tip`
+shows when the pointer lands, after a short delay you set:
+
+```markdown
+---
+tip-delay: 150ms
+---
+Ships in [beta]{.chip tip="May change before 1.0."}, and
+[stable]{.chip tip="No breaking changes." tip-delay="0ms"} needs none.
+```
+
+Hovering "beta", or reaching it with Tab, shows its note after 150ms, and
+"stable" shows its note at once. On most phones a tap shows it too. A
+[link](links-and-images.md) takes a `tip` the same way.
+
+The delay is a number and `ms` or `s`: `0ms`, `150ms`, `0.2s`. An element's
+own `tip-delay` wins, then the page's front matter, then the site shell's,
+then `100ms`. A value that is not a time [warns](warnings.md) and the next
+one down applies.
+
+A `title` keeps the browser's tooltip, so a block may have both. An empty
+`tip=""` makes none. A screen reader hears the note once, as the
+element's description, and print shows it in brackets after the element.
+The site's search leaves it out.
+
+A tip sits above its element and can be cut off inside a scrolling table.
+A tipped span shows the question-mark pointer and nothing else; a style
+adds a cue through `.md2html-tip-host` and restyles the note through
+`.md2html-tooltip`.
+
 A badge stays literal inside a code span, a code block or a link's text.
 A backslash does not stop it, so write `` `[draft]` `` to show the word.
 `[c:label]` also makes a badge, up to 60 characters.
