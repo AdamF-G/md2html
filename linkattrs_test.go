@@ -174,3 +174,15 @@ func TestLinkAttrsDropsNamesOutsideTheAllowlist(t *testing.T) {
 		t.Errorf("attribute block left in the text\ngot: %s", got)
 	}
 }
+
+// Title and title are one attribute. Which value wins must not depend on
+// map order: the keys are read sorted, so title, sorting after Title,
+// wins, as on a span.
+func TestLinkAttrsSameNameTwoCases(t *testing.T) {
+	for i := 0; i < 50; i++ {
+		got := convert(t, "[x](u.md){title=\"a\" Title=\"b\"}\n", nil)
+		if !strings.Contains(got, `title="a"`) || strings.Contains(got, `title="b"`) {
+			t.Fatalf("run %d: got %s, want title=\"a\"", i, got)
+		}
+	}
+}

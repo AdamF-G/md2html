@@ -80,20 +80,16 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 	// wrote. Dropping only the bad names and removing the block would
 	// silently delete prose that happens to touch a link, like
 	// "[docs](d.md){{version}}".
+	//
+	// The keys are read in sorted order, so when two spellings of one
+	// name meet, Title and title, the same one wins on every run. id and
+	// class never reach kv: parseAttrs lifts them whatever their case.
 	kv := make(map[string]string, len(a.kv))
-	for k, v := range a.kv {
+	for _, k := range sortedKeys(a.kv) {
 		if !safeAttrName(k) {
 			return
 		}
-		kv[strings.ToLower(k)] = v
-	}
-	if v, ok := kv["id"]; ok {
-		a.id = v
-		delete(kv, "id")
-	}
-	if v, ok := kv["class"]; ok {
-		a.classes = append(a.classes, strings.Fields(v)...)
-		delete(kv, "class")
+		kv[strings.ToLower(k)] = a.kv[k]
 	}
 
 	if a.id != "" {
