@@ -99,6 +99,31 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		existing, _ := attr(el, "class")
 		setAttr(el, "class", strings.Join(mergeTokens(existing, strings.Join(a.classes, " ")), " "))
 	}
+	// tip and tip-delay are not attributes. On a link they are recorded
+	// for writeTips; an image has alt, and a tip on one inside a link
+	// would compete with the link's, so an image drops them as it drops
+	// any name it does not take.
+	tip, delay := kv["tip"], kv["tip-delay"]
+	_, hasDelay := kv["tip-delay"]
+	delete(kv, "tip")
+	delete(kv, "tip-delay")
+	if el.DataAtom == atom.A {
+		href, _ := attr(el, "href")
+		switch {
+		case !hasDelay:
+		case tip == "":
+			warn(fmt.Sprintf("link %s: tip-delay without a tip does nothing", href))
+		case !validTipDelay(delay):
+			warn(fmt.Sprintf("link %s: tip-delay %q is not a time such as 150ms; using the page's delay", href, delay))
+			delay = ""
+		}
+		if tip != "" {
+			setAttr(el, tipAttr, tip)
+			if hasDelay && validTipDelay(delay) {
+				setAttr(el, tipDelayAttr, delay)
+			}
+		}
+	}
 	for _, k := range sortedKeys(kv) {
 		switch {
 		case targetAttrs[k]:

@@ -125,6 +125,14 @@ the page as text. Fix or remove the name. A quote inside a value loses its
 backslash to Markdown and ends the value early, which also lands here:
 write the value in the other kind of quote, `title='a "b"'`.
 
+**… tip-delay … is not a time such as 150ms** — a span's or a link's
+`tip-delay` is not a plain CSS time, so the page's delay applies instead.
+Write a number and `ms` or `s`: `0ms`, `150ms`, `0.2s`.
+
+**… tip-delay without a tip does nothing** — a `tip-delay` sits in a
+block with no `tip`, so there is nothing for it to delay. Add the `tip`,
+or remove the `tip-delay`.
+
 **bracketed span … has no closing quote** — a quoted value in a span's
 block never closes, so the block stays on the page as text. Close the
 quote.

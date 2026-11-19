@@ -60,6 +60,9 @@ type spanAttrs struct {
 	// extra holds every other kept attribute, by lowercased name in
 	// sorted order.
 	extra []html.Attribute
+	// tip is the block's tip="…", empty for none, and tipDelay its
+	// tip-delay when that is a valid time.
+	tip, tipDelay string
 }
 
 // spanBlock decides what a bracketed span's attribute block means. It is
@@ -122,8 +125,17 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 	// Walking the keys in sorted order makes the winner of two spellings
 	// of one name, Title and title, the same on every run.
 	kept := map[string]string{}
+	delay := ""
 	for _, k := range keys {
 		name := strings.ToLower(k)
+		switch name {
+		case "tip":
+			span.tip = a.kv[k]
+			continue
+		case "tip-delay":
+			delay = a.kv[k]
+			continue
+		}
 		if strings.HasPrefix(name, "data-") || strings.HasPrefix(name, "aria-") ||
 			gmhtml.GlobalAttributeFilter.Contains([]byte(name)) {
 			kept[name] = a.kv[k]
@@ -131,6 +143,15 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 	}
 	for _, name := range sortedKeys(kept) {
 		span.extra = append(span.extra, html.Attribute{Key: name, Val: kept[name]})
+	}
+	switch {
+	case delay == "":
+	case span.tip == "":
+		warn(fmt.Sprintf("bracketed span [%s]: tip-delay without a tip does nothing", label))
+	case !validTipDelay(delay):
+		warn(fmt.Sprintf("bracketed span [%s]: tip-delay %q is not a time such as 150ms; using the page's delay", label, delay))
+	default:
+		span.tipDelay = delay
 	}
 	return span, true
 }
@@ -162,6 +183,12 @@ func spanNode(label, block string) []*html.Node {
 		span.Attr = append(span.Attr, html.Attribute{Key: "class", Val: strings.Join(classes, " ")})
 	}
 	span.Attr = append(span.Attr, a.extra...)
+	if a.tip != "" {
+		span.Attr = append(span.Attr, html.Attribute{Key: tipAttr, Val: a.tip})
+		if a.tipDelay != "" {
+			span.Attr = append(span.Attr, html.Attribute{Key: tipDelayAttr, Val: a.tipDelay})
+		}
+	}
 	span.AppendChild(&html.Node{Type: html.TextNode, Data: label})
 	return []*html.Node{span}
 }
