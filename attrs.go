@@ -42,7 +42,9 @@ type attrs struct {
 // Both spellings of a class reach the same place: ".one" and class="one two"
 // accumulate into classes in the order written. An id may be written either
 // way too; the last one wins, matching the directive syntax the CommonMark
-// proposal settled on and Pandoc's own behavior.
+// proposal settled on and Pandoc's own behavior. The names ignore case, as
+// HTML's do, so ID= is the id and Class= a class: left in kv, an ID beat
+// every id written after it.
 func parseAttrs(content string) (attrs, bool) {
 	a := attrs{kv: map[string]string{}}
 	found := false
@@ -58,10 +60,10 @@ func parseAttrs(content string) (attrs, bool) {
 				a.classes = append(a.classes, name)
 				found = true
 			}
-		case tok.key == "id":
+		case strings.EqualFold(tok.key, "id"):
 			a.id = tok.val
 			found = true
-		case tok.key == "class":
+		case strings.EqualFold(tok.key, "class"):
 			a.classes = append(a.classes, strings.Fields(tok.val)...)
 			found = true
 		case tok.key != "":

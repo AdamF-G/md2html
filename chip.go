@@ -124,13 +124,8 @@ func spanBlock(label, block string, warn func(string)) (span spanAttrs, ok bool)
 	kept := map[string]string{}
 	for _, k := range keys {
 		name := strings.ToLower(k)
-		switch {
-		case name == "id":
-			span.id = a.kv[k]
-		case name == "class":
-			span.classes = append(span.classes, strings.Fields(a.kv[k])...)
-		case strings.HasPrefix(name, "data-"), strings.HasPrefix(name, "aria-"),
-			gmhtml.GlobalAttributeFilter.Contains([]byte(name)):
+		if strings.HasPrefix(name, "data-") || strings.HasPrefix(name, "aria-") ||
+			gmhtml.GlobalAttributeFilter.Contains([]byte(name)) {
 			kept[name] = a.kv[k]
 		}
 	}

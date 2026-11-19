@@ -1129,3 +1129,10 @@ func TestContainerHeaderAndFooterKinds(t *testing.T) {
 		}
 	}
 }
+
+// ID= is the container's id, as id= is. It used to be dropped.
+func TestContainerUppercaseIDIsTheID(t *testing.T) {
+	if got := convert(t, "::: {ID=\"c\" .note}\nhi\n:::\n", nil); !strings.Contains(got, `<div id="c" class="note">`) {
+		t.Errorf("ID= not used as the id\ngot: %s", got)
+	}
+}

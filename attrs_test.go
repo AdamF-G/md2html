@@ -1,6 +1,9 @@
 package md2html
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseAttrsClassesAndID(t *testing.T) {
 	a, ok := parseAttrs(`#note .callout .compact`)
@@ -167,5 +170,30 @@ func TestParseAttrsRecordsBareKeys(t *testing.T) {
 	}
 	if _, ok := a.kv["b"]; !ok {
 		t.Errorf("bare key b left kv: %v", a.kv)
+	}
+}
+
+// HTML attribute names ignore case, so ID= and Class= are the id and a
+// class, in the order written, like any other spelling of them.
+func TestParseAttrsIDAndClassIgnoreCase(t *testing.T) {
+	cases := []struct {
+		in, id  string
+		classes string
+	}{
+		{`id="b" ID="a"`, "a", ""},
+		{`ID="a" #b`, "b", ""},
+		{`#b ID="a"`, "a", ""},
+		{`Class="x" .y`, "", "x y"},
+	}
+	for _, c := range cases {
+		a, _ := parseAttrs(c.in)
+		if a.id != c.id || strings.Join(a.classes, " ") != c.classes {
+			t.Errorf("%s: id %q classes %q, want %q %q", c.in, a.id, a.classes, c.id, c.classes)
+		}
+		for k := range a.kv {
+			if strings.EqualFold(k, "id") || strings.EqualFold(k, "class") {
+				t.Errorf("%s: %s left in kv", c.in, k)
+			}
+		}
 	}
 }

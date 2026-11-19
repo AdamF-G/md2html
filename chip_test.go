@@ -424,3 +424,17 @@ func TestChipsApostropheWarningHasNoQuoteHint(t *testing.T) {
 		t.Errorf("warnings = %q, want one without the quote hint", w)
 	}
 }
+
+// The last id written wins, whatever its case.
+func TestChipsBracketedSpanLastIDWins(t *testing.T) {
+	for src, want := range map[string]string{
+		`[x]{#b ID="a"}`:     `<span id="a">x</span>`,
+		`[x]{ID="a" #b}`:     `<span id="b">x</span>`,
+		`[x]{id="b" ID="a"}`: `<span id="a">x</span>`,
+		`[x]{ID="a" id="b"}`: `<span id="b">x</span>`,
+	} {
+		if got := spanHTML(t, src); !strings.Contains(got, want) {
+			t.Errorf("%s: want %s\ngot: %s", src, want, got)
+		}
+	}
+}
