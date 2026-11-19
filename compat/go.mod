@@ -18,6 +18,8 @@ require (
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/dlclark/regexp2/v2 v2.8.1 // indirect
 	github.com/dop251/goja v0.0.0-20261013122152-245c54f48cfc // indirect
+	github.com/eugenioenko/regexp2/v2 v2.8.2 // indirect
+	github.com/eugenioenko/textmate-go v0.2.2 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect

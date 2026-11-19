@@ -188,9 +188,9 @@ That is a measured claim, not an aspiration. `compat/` runs each construct
 through both tools and sorts every construct into one of three buckets:
 the ones where md2html and `pandoc -f commonmark_x` produce the same
 structure, the ones Pandoc passes through untouched, and the ones Pandoc
-renders as a labelled code block. Task lists are the single divergence
-inside the shared subset — `commonmark_x` does not implement them and
-md2html follows GFM.
+renders as a labelled code block. Inside the shared subset the two agree,
+task lists included: Pandoc 3.13's `commonmark_x` renders them as md2html
+does, following GFM. An older Pandoc does not implement them there.
 
 The practical consequence is that a document written for md2html mostly
 survives `pandoc -f commonmark_x`, and a document written for Pandoc

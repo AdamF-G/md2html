@@ -289,16 +289,19 @@ func TestBracedCodeFencePreservesLanguageAndCaption(t *testing.T) {
 
 // --- The claim this suite backs ---------------------------------------
 //
-// Task lists are the one documented divergence inside the shared subset:
-// commonmark_x does not implement them and +task_lists does not enable
-// them on that reader, while md2html follows GFM. Pinned so the README's
-// "one documented divergence" stays a measured statement.
-func TestTaskListsAreTheDocumentedDivergence(t *testing.T) {
+// Task lists were the one divergence inside the shared subset, until
+// commonmark_x learned them: pandoc 3.13, the version this was last
+// measured with, renders them as md2html does, following GFM. An older
+// pandoc fails here, and the README's claim is then stale for it. Pinned
+// so the README's "the two agree" stays a measured statement.
+func TestTaskListsAgree(t *testing.T) {
 	const src = "- [ ] not done\n- [x] done\n"
-	if strings.Contains(pandoc(t, src), "<input") {
-		t.Error("pandoc grew task list support; the documented divergence is stale")
-	}
-	if !strings.Contains(ours(t, src), "<input") {
-		t.Error("md2html stopped rendering task lists")
+	for name, out := range map[string]string{"pandoc": pandoc(t, src), "md2html": ours(t, src)} {
+		if n := strings.Count(out, `type="checkbox"`); n != 2 {
+			t.Errorf("%s renders %d checkboxes, want 2\ngot: %s", name, n, out)
+		}
+		if n := strings.Count(out, "checked"); n != 1 {
+			t.Errorf("%s checks %d boxes, want 1\ngot: %s", name, n, out)
+		}
 	}
 }
