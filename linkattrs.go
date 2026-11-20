@@ -2,6 +2,7 @@ package md2html
 
 import (
 	"fmt"
+	stdhtml "html"
 	"strings"
 
 	gmhtml "github.com/yuin/goldmark/renderer/html"
@@ -89,11 +90,12 @@ func applyLinkAttrs(el *html.Node, warn func(string)) {
 		if !safeAttrName(k) {
 			return
 		}
-		kv[strings.ToLower(k)] = a.kv[k]
+		// Taken before Markdown saw it (rawBlockParser), so decoded here.
+		kv[strings.ToLower(k)] = stdhtml.UnescapeString(a.kv[k])
 	}
 
 	if a.id != "" {
-		setAttr(el, "id", a.id)
+		setAttr(el, "id", stdhtml.UnescapeString(a.id))
 	}
 	if len(a.classes) > 0 {
 		existing, _ := attr(el, "class")

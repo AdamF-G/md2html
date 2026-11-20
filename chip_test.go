@@ -335,15 +335,12 @@ func TestChipsQuietOnBareKeysAlone(t *testing.T) {
 	}
 }
 
-// Markdown takes the backslash before a quote, so an escaped quote in a
-// value breaks the block; the warning is how the author finds out.
-func TestChipsBackslashQuoteInValueWarns(t *testing.T) {
+// A block is taken before Markdown sees it, so \" escapes a quote inside
+// a double-quoted value, as attrTokens reads it.
+func TestChipsBackslashQuoteInValue(t *testing.T) {
 	got, w := warnings(t, "x [s]{.chip title=\"a \\\"b\\\"\"} y\n")
-	if strings.Contains(got, "<span") {
-		t.Errorf("rendered a span\ngot: %s", got)
-	}
-	if len(w) != 1 || !strings.Contains(w[0], "the other kind of quote") {
-		t.Errorf("warnings = %q, want one pointing at the other quote", w)
+	if !strings.Contains(got, `title="a &#34;b&#34;"`) || len(w) != 0 {
+		t.Errorf("escaped quote lost, or warned %q\ngot: %s", w, got)
 	}
 }
 

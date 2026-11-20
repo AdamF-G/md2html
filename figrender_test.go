@@ -633,3 +633,12 @@ func TestFigSplitItemPanelsCarryTheSameClasses(t *testing.T) {
 		t.Errorf("want 1 plain panel, got %d:\n%s", n, out)
 	}
 }
+
+// A span in a fig label reads its block as a span in prose does: the fig
+// parser takes the block raw too, so Markdown in a value stays text.
+func TestFigLabelSpanBlockIsRaw(t *testing.T) {
+	got := convert(t, "```fig\nitems:\n  - box: \"[b]{title=\\\"a *b* c\\\"}\"\n```\n", nil)
+	if !strings.Contains(got, `<span title="a *b* c">b</span>`) {
+		t.Errorf("fig label span lost its title\ngot: %s", got)
+	}
+}

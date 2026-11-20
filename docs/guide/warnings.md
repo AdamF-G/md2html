@@ -121,9 +121,8 @@ write the target in the link itself.
 
 **… is not an attribute name** — a span's or a heading's block holds a
 name with a character no attribute name can have, so the block stays on
-the page as text. Fix or remove the name. A quote inside a value loses its
-backslash to Markdown and ends the value early, which also lands here:
-write the value in the other kind of quote, `title='a "b"'`.
+the page as text. Fix or remove the name. An unescaped quote that ends a
+value early, `title="a"b"`, also lands here: write it `\"`.
 
 **… tip-delay … is not a time such as 150ms** — a span's or a link's
 `tip-delay`, or the front matter's, is not a plain CSS time, so the next

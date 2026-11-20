@@ -37,11 +37,15 @@ func newFigRenderer() *figRenderer {
 	//
 	// No extensions either: a label wants CommonMark inline syntax — code
 	// spans, emphasis, links — not tables or footnotes. Unsafe matches the
-	// main parser, so raw HTML in a label behaves as it does in prose.
+	// main parser, so raw HTML in a label behaves as it does in prose. The
+	// one addition is md2html's own: a span's or a link's {…} block taken
+	// raw (rawBlockParser), so a badge in a label reads its block as one in
+	// prose does.
 	return &figRenderer{md: goldmark.New(
 		goldmark.WithParser(parser.NewParser(
 			parser.WithBlockParsers(util.Prioritized(parser.NewParagraphParser(), 1000)),
-			parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+			parser.WithInlineParsers(append(parser.DefaultInlineParsers(),
+				util.Prioritized(rawBlockParser{}, 150))...),
 			parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
 		)),
 		goldmark.WithRendererOptions(goldhtml.WithUnsafe()),

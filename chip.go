@@ -2,6 +2,7 @@ package md2html
 
 import (
 	"fmt"
+	stdhtml "html"
 	"regexp"
 	"strings"
 
@@ -116,9 +117,9 @@ func checkAttrBlock(who, block string, tips bool, warn func(string)) (span spanA
 		if !safeAttrName(k) {
 			hint := ""
 			if strings.Contains(k, `"`) {
-				// Markdown drops the backslash from \", so an escaped
-				// quote ends its value early and the rest reads as a name.
-				hint = "; a quote inside a value takes the other kind of quote"
+				// A quote that ended its value early, title="a"b", leaves
+				// the rest to read as a name.
+				hint = "; a quote inside a double-quoted value is written \\\""
 			}
 			warn(fmt.Sprintf("%s: `%s` is not an attribute name; leaving the block as text%s", who, k, hint))
 			return spanAttrs{}, false
@@ -130,6 +131,13 @@ func checkAttrBlock(who, block string, tips bool, warn func(string)) (span spanA
 		return spanAttrs{}, false
 	}
 
+	// A value is the text the author typed, taken before Markdown saw it
+	// (rawBlockParser, headingAttrParser), so a character reference in it
+	// is decoded here, once: title="a &amp; b" is "a & b".
+	for k, v := range a.kv {
+		a.kv[k] = stdhtml.UnescapeString(v)
+	}
+	a.id = stdhtml.UnescapeString(a.id)
 	span = spanAttrs{id: a.id, classes: a.classes}
 	// Walking the keys in sorted order makes the winner of two spellings
 	// of one name, Title and title, the same on every run.

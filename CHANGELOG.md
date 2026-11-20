@@ -41,6 +41,11 @@ major version instead.
   warns, where before it rendered a span without that name.
 - A span block left as text keeps its text in the page title too, as it
   does on the page.
+- A span's or a link's block is taken as written, before inline Markdown:
+  a value holding `*b*` or `<b>` keeps it as text, where the whole span
+  stayed literal and a `<b>` reached the page, and `\"` is a quote inside a
+  double-quoted value. A `{…}` straight after `]` or `)` in prose is
+  likewise left unparsed: `f(x){*a*}` shows `{*a*}`.
 - An attribute block's `ID=` and `Class=` are its id and a class, as
   `id=` and `class=` are, in the order written. A container or a code
   fence used to drop `ID=`, and on a link or a span an `ID=` beat an

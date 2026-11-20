@@ -39,8 +39,9 @@ A span keeps the attributes a link's attribute block keeps: `title`,
 
 renders `<span class="chip" title="May change before 1.0.">beta</span>`.
 Any other name, such as `onclick`, is dropped. A boolean attribute takes a
-value, `hidden=""`. A quote inside a value is written with the other kind,
-`title='a "b"'`, since Markdown drops the backslash from `\"`.
+value, `hidden=""`. A value is the text you typed: Markdown and HTML in it
+stay as written, `\"` is a quote inside a double-quoted value, and an
+entity such as `&amp;` is its character.
 
 A block with a bare word, or a name no attribute can have, stays as you
 wrote it. Beside a class, an id or a `key="value"` it also

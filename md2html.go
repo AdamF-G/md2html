@@ -227,7 +227,9 @@ func newParser(warn func(string), charts chartContext, hl highlightContext) gold
 		// attribute option, which stays off.
 		goldmark.WithParser(parser.NewParser(
 			parser.WithBlockParsers(headingParsers(warn)...),
-			parser.WithInlineParsers(parser.DefaultInlineParsers()...),
+			parser.WithInlineParsers(append(parser.DefaultInlineParsers(),
+				// A span's or a link's {…}, taken before Markdown sees it.
+				util.Prioritized(rawBlockParser{}, 150))...),
 			parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
 		)),
 		goldmark.WithRendererOptions(
