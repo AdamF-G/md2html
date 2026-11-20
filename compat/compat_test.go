@@ -26,6 +26,7 @@ package compat
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -38,6 +39,33 @@ import (
 // to. It is deliberately one word: every extension the shared subset needs
 // is already on by default in it.
 const pandocDialect = "commonmark_x"
+
+// TestPandocIsThePinnedVersion holds the suite to the Pandoc it was
+// calibrated against. pandoc-version names that release, and CI installs
+// exactly it, so a red run here means the local pandoc has moved: the
+// buckets below describe a different Pandoc until they are re-measured.
+func TestPandocIsThePinnedVersion(t *testing.T) {
+	path, err := exec.LookPath("pandoc")
+	if err != nil {
+		t.Skip("pandoc not on PATH; run `just compat` on a machine that has it")
+	}
+	pin, err := os.ReadFile("pandoc-version")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.TrimSpace(string(pin))
+	out, err := exec.Command(path, "--version").Output()
+	if err != nil {
+		t.Fatalf("pandoc --version: %v", err)
+	}
+	first, _, _ := strings.Cut(string(out), "\n")
+	got := strings.TrimPrefix(strings.TrimSpace(first), "pandoc ")
+	if got != want {
+		t.Fatalf("pandoc on PATH is %s, but the suite is calibrated against %s.\n"+
+			"Install %s, or re-measure the suite against %s and write that to compat/pandoc-version.",
+			got, want, want, got)
+	}
+}
 
 func pandoc(t *testing.T, src string) string {
 	t.Helper()
