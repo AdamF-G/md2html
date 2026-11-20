@@ -123,6 +123,8 @@ func TestAgreeOnConstructs(t *testing.T) {
 		{"fenced div, id and classes", "::: {#note .callout .compact}\nB.\n:::\n", "div", "compact"},
 		{"heading attributes", "## T {#breaking .lead}\n", "h2", "lead"},
 		{"span at the end of a heading", "## R [b]{.chip}\n", "span", "chip"},
+		{"span with a Markdown label", "x [**new** in v2]{.chip} y\n", "span", "chip"},
+		{"span with nested brackets", "x [a [b] c]{.chip} y\n", "span", "chip"},
 		{"definition list", "Term\n:   The definition.\n", "dl", ""},
 		{"pipe table", "| A | B |\n|---|---|\n| 1 | 2 |\n", "table", ""},
 		{"bracketed span", "x [proven]{.chip} y\n", "span", "chip"},

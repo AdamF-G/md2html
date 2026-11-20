@@ -203,28 +203,40 @@ func plainLine(s string) bool {
 	return fuzzable(s) && s == strings.TrimSpace(s) && s != "" && !strings.ContainsAny(s, "\t\f\v")
 }
 
-// A label that renders as plain text in a paragraph is a chip whose text
-// is that text exactly. One that renders with markup stays literal, as the
-// guide says of [**x**]{.chip}; that is not this property.
+// A chip's label is inline Markdown, so the chip's contents render as the
+// same text does between brackets in a paragraph: no more structure, and no
+// less. Between brackets, not bare: goldmark and Pandoc both read [**0!*]
+// as written, where bare **0!* is *<em>0!</em>. Raw HTML
+// is the author's markup anywhere, so "<" is left out, and brackets and
+// braces, whose pairing is a span's own syntax, are left to its tests.
 func FuzzChipLabel(f *testing.F) {
 	for _, s := range textSeeds {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, label string) {
-		if !plainLine(label) || strings.ContainsAny(label, "[]{}") {
+		if !plainLine(label) || strings.ContainsAny(label, "[]{}<") {
 			t.Skip()
 		}
 		// A backslash is written doubled, in the label and in the
 		// paragraph alike: left single at the end, it escapes the "]".
 		label = strings.ReplaceAll(label, `\`, `\\`)
-		_, plain, markup, ok := asParagraph(t, label)
-		if !ok || markup {
+		bracketed, _, _, ok := asParagraph(t, "["+label+"] z")
+		want, inBrackets := strings.CutPrefix(bracketed, "[")
+		if want, inBrackets = strings.CutSuffix(want, "] z"); !ok || !inBrackets {
 			t.Skip()
 		}
 		main := fuzzMain(t, "x ["+label+"]{.chip} y\n")
-		chip := first(main, "span")
-		if chip == nil || textOf(chip) != plain || len(elements(main)) != 2 {
-			t.Fatalf("[%s]{.chip}: elements %q, chip text %q, want one chip %q", label, elements(main), textOf(chip), plain)
+		var chip *html.Node
+		walk(main, func(n *html.Node) {
+			if chip == nil && hasClass(n, "chip") {
+				chip = n
+			}
+		})
+		if chip == nil {
+			t.Fatalf("[%s]{.chip}: no chip in %q", label, elements(main))
+		}
+		if got := innerHTML(t, chip); got != want {
+			t.Fatalf("[%s]{.chip}: chip renders %q, a paragraph %q", label, got, want)
 		}
 	})
 }

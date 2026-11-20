@@ -25,29 +25,6 @@ func TestCheckAttrBlockHeadingWho(t *testing.T) {
 	}
 }
 
-// A parser option set on goldmark reaches the heading parsers wrapped.
-func TestHeadingParsersTakeParserOptions(t *testing.T) {
-	var got parser.OptionName
-	for _, p := range headingParsers(nil) {
-		if o, ok := p.Value.(parser.SetOptioner); ok {
-			if hp, ok := p.Value.(*headingAttrParser); ok {
-				hp.BlockParser = optionSpy{BlockParser: hp.BlockParser, saw: &got}
-				o.SetOption("probe", true)
-			}
-		}
-	}
-	if got != "probe" {
-		t.Errorf("option not forwarded: got %q", got)
-	}
-}
-
-type optionSpy struct {
-	parser.BlockParser
-	saw *parser.OptionName
-}
-
-func (s optionSpy) SetOption(name parser.OptionName, _ interface{}) { *s.saw = name }
-
 // headingOut converts src and returns the first heading's element, from
 // its opening tag to the anchor HeadingAnchors adds (or its close), and
 // the warnings.
@@ -164,3 +141,43 @@ func TestHeadingRefusedLinkBlockSaysFixIt(t *testing.T) {
 		t.Errorf("warnings %q, want one saying to fix the link's block", w)
 	}
 }
+
+// An escaped brace is text by the author's own word, so a heading ending
+// in one is not a block nothing took.
+func TestHeadingEscapedBraceQuiet(t *testing.T) {
+	if _, w := headingOut(t, "## f(x)\\{#a}\n"); len(w) != 0 {
+		t.Errorf("warnings %q, want none", w)
+	}
+}
+
+// The warning names the heading by the text a reader sees, without a
+// footnote's number.
+func TestHeadingWarningNamesTheHeadingWithoutFootnotes(t *testing.T) {
+	_, w := headingOut(t, "## Note[^1]{#n}\n\n[^1]: x\n")
+	if len(w) != 1 || !strings.Contains(w[0], `heading "Note"`) {
+		t.Errorf("warnings %q, want one naming heading \"Note\"", w)
+	}
+}
+
+// A parser option set on goldmark reaches the heading parsers wrapped.
+func TestHeadingParsersTakeParserOptions(t *testing.T) {
+	var got parser.OptionName
+	for _, p := range headingParsers(nil) {
+		if o, ok := p.Value.(parser.SetOptioner); ok {
+			if hp, ok := p.Value.(*headingAttrParser); ok {
+				hp.BlockParser = optionSpy{BlockParser: hp.BlockParser, saw: &got}
+				o.SetOption("probe", true)
+			}
+		}
+	}
+	if got != "probe" {
+		t.Errorf("option not forwarded: got %q", got)
+	}
+}
+
+type optionSpy struct {
+	parser.BlockParser
+	saw *parser.OptionName
+}
+
+func (s optionSpy) SetOption(name parser.OptionName, _ interface{}) { *s.saw = name }

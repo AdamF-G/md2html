@@ -27,7 +27,7 @@ func TestValidTipDelay(t *testing.T) {
 func chipsWarn(t *testing.T, src string) (string, []string) {
 	t.Helper()
 	var w []string
-	got := apply(t, "<p>x "+src+" y</p>", chips(func(m string) { w = append(w, m) }))
+	got := chipsMarkdown(t, "x "+src+" y\n", func(m string) { w = append(w, m) })
 	return got, w
 }
 

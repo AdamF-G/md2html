@@ -65,6 +65,28 @@ func titleText(h *nethtml.Node) string {
 	var b strings.Builder
 	var visit func(*nethtml.Node)
 	visit = func(x *nethtml.Node) {
+		if block, ok := attr(x, spanMarker); ok && x.Type == nethtml.ElementNode {
+			// A bracketed span, not yet resolved: a chip is a status
+			// marker with no business in a browser tab, so it is written
+			// as a bare badge for stripChipTokens to take out with the
+			// space beside it; another span keeps its label; and one whose
+			// block the page leaves as text stays as that text.
+			a, isSpan := spanBlock(textOf(x), block[1:len(block)-1], nil)
+			switch {
+			case isSpan && hasClassToken(a.classes, "chip"):
+				b.WriteString("[draft]")
+				return
+			case !isSpan:
+				b.WriteString("[")
+			}
+			for c := x.FirstChild; c != nil; c = c.NextSibling {
+				visit(c)
+			}
+			if !isSpan {
+				b.WriteString("]" + block)
+			}
+			return
+		}
 		if x.Type == nethtml.TextNode {
 			d := x.Data
 			if p := x.PrevSibling; p != nil && p.Type == nethtml.ElementNode && (p.DataAtom == atom.A || p.DataAtom == atom.Img) && strings.HasPrefix(d, "{") {

@@ -231,6 +231,7 @@ func newParser(warn func(string), charts chartContext, hl highlightContext) gold
 				// A span's or a link's {…}, taken before Markdown sees it.
 				util.Prioritized(rawBlockParser{}, 150))...),
 			parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+			parser.WithASTTransformers(util.Prioritized(spanTransformer{warn: warn}, 100)),
 		)),
 		goldmark.WithRendererOptions(
 			goldhtml.WithUnsafe(),
@@ -240,6 +241,7 @@ func newParser(warn func(string), charts chartContext, hl highlightContext) gold
 			renderer.WithNodeRenderers(
 				util.Prioritized(newCodeFenceRenderer(warn, charts, hl), 100),
 				util.Prioritized(headingRenderer{}, 100),
+				util.Prioritized(spanRenderer{}, 100),
 			),
 		),
 	)

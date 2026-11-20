@@ -27,7 +27,8 @@ is neutral.
 
 The span syntax takes any class: `[lead in]{.lead}` is a
 `<span class="lead">`, unstyled unless your stylesheet names it. The label
-must be plain text, since `[**x**]{.chip}` stays literal.
+is Markdown, `[**new** in v2]{.chip}`, and its brackets can nest,
+`[a [b] c]{.x}`; write `\]` for a lone bracket, `[a \] b]{.x}`.
 
 A span keeps the attributes a link's attribute block keeps: `title`,
 `lang`, `dir`, `role` and the other global attributes, and any `data-` or

@@ -15,8 +15,10 @@ import (
 //
 // It takes a block only straight after a "]" or a ")", the bytes that end
 // a span's label and a link, and only one that closes on its line, as
-// chipRe would read it. The block becomes a raw string: goldmark escapes
-// it and parses nothing inside. A brace anywhere else is left alone.
+// chipRe once read it (spanBlockEnd). The block becomes a rawBlock:
+// goldmark parses nothing inside it, spanTransformer pairs one after a "]"
+// with its span's "[", and any other is written back as escaped text. A
+// brace anywhere else is left alone.
 type rawBlockParser struct{}
 
 func (rawBlockParser) Trigger() []byte { return []byte{'{'} }
@@ -27,12 +29,11 @@ func (rawBlockParser) Parse(_ ast.Node, block gmtext.Reader, _ parser.Context) a
 	if seg.Start == 0 || (src[seg.Start-1] != ']' && src[seg.Start-1] != ')') {
 		return nil
 	}
-	end := braceSpan(string(line), 0)
+	end := spanBlockEnd(string(line))
 	if end < 0 {
 		return nil
 	}
-	s := ast.NewString(append([]byte(nil), line[:end+1]...))
-	s.SetRaw(true)
+	b := &rawBlock{value: append([]byte(nil), line[:end+1]...), after: src[seg.Start-1]}
 	block.Advance(end + 1)
-	return s
+	return b
 }

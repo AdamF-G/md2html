@@ -9,6 +9,7 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	goldhtml "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/util"
 )
@@ -47,8 +48,10 @@ func newFigRenderer() *figRenderer {
 			parser.WithInlineParsers(append(parser.DefaultInlineParsers(),
 				util.Prioritized(rawBlockParser{}, 150))...),
 			parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+			parser.WithASTTransformers(util.Prioritized(spanTransformer{}, 100)),
 		)),
-		goldmark.WithRendererOptions(goldhtml.WithUnsafe()),
+		goldmark.WithRendererOptions(goldhtml.WithUnsafe(),
+			renderer.WithNodeRenderers(util.Prioritized(spanRenderer{}, 100))),
 	)}
 }
 

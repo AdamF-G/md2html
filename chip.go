@@ -19,32 +19,12 @@ import (
 // vocabulary — explicit, so it can never fire by accident. The label is
 // capped and excludes newlines so a stray "[c:" cannot swallow a paragraph.
 //
-// A span's block may hold a quoted value, and a "}" inside one belongs to
-// the value: [x]{title="a } b"} is one span, not a span with ` b"}` left
-// after it. Only a quote straight after "=" opens a value. Anywhere else a
-// quote is an ordinary character, so the apostrophe in title=don't, or in
-// [x]{it's .c}, can neither cost the span nor run on into a later block.
-//
-// A block the quoted form cannot match — a stray quote, or a value whose
-// quote never closes — is matched by the second form, which ends at the
-// first "}" as every block once did. spanBlock then says what is wrong
-// with it, rather than the text staying with no word.
-var chipRe = regexp.MustCompile(
-	`\[([^\]\n]+)\]\{((?:[^}"'\n]|="(?:[^"\\\n]|\\.)*"|='(?:[^'\\\n]|\\.)*')*)\}` +
-		`|\[([^\]\n]+)\]\{([^}\n]*)\}` +
-		`|\[(proven|verified|designed|planned|draft|deprecated|c:[^\]\n]{0,60})\]`)
-
-// spanMatch reports the label and block of a chipRe match that is a
-// bracketed span, from whichever of its two forms matched.
-func spanMatch(s string, loc []int) (label, block string, ok bool) {
-	switch {
-	case loc[2] >= 0:
-		return s[loc[2]:loc[3]], s[loc[4]:loc[5]], true
-	case loc[6] >= 0:
-		return s[loc[6]:loc[7]], s[loc[8]:loc[9]], true
-	}
-	return "", "", false
-}
+// A bracketed span is not matched here: it is paired on goldmark's tree
+// (spanTransformer), where its label can be Markdown and its brackets can
+// nest or be escaped, and reaches Chips as an element carrying spanMarker.
+// Matched here too, the pattern would make a span of text the tree had
+// ruled out: [x\]{.c} renders as [x]{.c}.
+var chipRe = regexp.MustCompile(`\[(proven|verified|designed|planned|draft|deprecated|c:[^\]\n]{0,60})\]`)
 
 // statusWords is the closed vocabulary the bare form recognizes, and the
 // set that gives a bracketed span its chip-<word> modifier class.
@@ -169,41 +149,67 @@ func checkAttrBlock(who, block string, tips bool, warn func(string)) (span spanA
 	return span, true
 }
 
-// spanNode builds the <span> for a bracketed span — Pandoc's
-// bracketed_spans — from its label and the contents of its attribute
-// block. It returns nil for a block spanBlock leaves literal, so
-// "[thing]{}" stays as written rather than becoming an empty element.
+// applySpan gives el, a bracketed span — Pandoc's bracketed_spans — the
+// attributes its block means, in place of its spanMarker.
 //
 // A chip earns its modifier class here rather than in the vocabulary
 // regex: [proven]{.chip} carries chip-proven, while [proven]{.lead} is
 // just a span the author classed themselves. The modifier is skipped when
 // the author already wrote a chip-* class of their own, so
 // [shipped]{.chip .chip-ok} keeps exactly the classes it names.
-func spanNode(label, block string) []*html.Node {
-	a, ok := spanBlock(label, block, nil)
-	if !ok {
-		return nil
-	}
+func applySpan(el *html.Node, label string, a spanAttrs) {
 	classes := a.classes
 	if statusWords[label] && hasClassToken(classes, "chip") && !hasClassTokenPrefix(classes, "chip-") {
 		classes = append(classes, "chip-"+label)
 	}
-	span := &html.Node{Type: html.ElementNode, DataAtom: atom.Span, Data: "span"}
+	removeAttr(el, spanMarker)
 	if a.id != "" {
-		span.Attr = append(span.Attr, html.Attribute{Key: "id", Val: a.id})
+		el.Attr = append(el.Attr, html.Attribute{Key: "id", Val: a.id})
 	}
 	if len(classes) > 0 {
-		span.Attr = append(span.Attr, html.Attribute{Key: "class", Val: strings.Join(classes, " ")})
+		el.Attr = append(el.Attr, html.Attribute{Key: "class", Val: strings.Join(classes, " ")})
 	}
-	span.Attr = append(span.Attr, a.extra...)
+	el.Attr = append(el.Attr, a.extra...)
 	if a.tip != "" {
-		span.Attr = append(span.Attr, html.Attribute{Key: tipAttr, Val: a.tip})
+		el.Attr = append(el.Attr, html.Attribute{Key: tipAttr, Val: a.tip})
 		if a.tipDelay != "" {
-			span.Attr = append(span.Attr, html.Attribute{Key: tipDelayAttr, Val: a.tipDelay})
+			el.Attr = append(el.Attr, html.Attribute{Key: tipDelayAttr, Val: a.tipDelay})
 		}
 	}
-	span.AppendChild(&html.Node{Type: html.TextNode, Data: label})
-	return []*html.Node{span}
+}
+
+// resolveSpans turns each element spanTransformer marked into the span its
+// block means, or, for a block spanBlock refuses, back into the literal
+// [label]{…} the author wrote, warning as spanBlock does. The innermost go
+// first, so a span in a label is settled before the label is read.
+func resolveSpans(root *html.Node, warn func(string)) {
+	var marked []*html.Node
+	walk(root, func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			if _, ok := attr(n, spanMarker); ok {
+				marked = append(marked, n)
+			}
+		}
+	})
+	for i := len(marked) - 1; i >= 0; i-- {
+		el := marked[i]
+		block, _ := attr(el, spanMarker)
+		label := textOf(el)
+		if a, ok := spanBlock(label, block[1:len(block)-1], warn); ok {
+			applySpan(el, label, a)
+			continue
+		}
+		p := el.Parent
+		p.InsertBefore(textNode("["), el)
+		for c := el.FirstChild; c != nil; {
+			next := c.NextSibling
+			el.RemoveChild(c)
+			p.InsertBefore(c, el)
+			c = next
+		}
+		p.InsertBefore(textNode("]"+block), el)
+		p.RemoveChild(el)
+	}
 }
 
 func hasClassToken(classes []string, want string) bool {
@@ -239,14 +245,7 @@ func hasClassTokenPrefix(classes []string, prefix string) bool {
 // text, when spanBlock has a reason the author can act on.
 func chipNodes(s string, warn func(string)) []*html.Node {
 	return splitMatches(s, chipRe, func(loc []int) []*html.Node {
-		if label, block, ok := spanMatch(s, loc); ok {
-			// Bracketed span: [label]{...}.
-			if _, ok := spanBlock(label, block, warn); !ok {
-				return nil
-			}
-			return spanNode(label, block)
-		}
-		token := s[loc[10]:loc[11]]
+		token := s[loc[2]:loc[3]]
 		class, label := "chip", token
 		if strings.HasPrefix(token, "c:") {
 			label = strings.TrimSpace(token[2:])
@@ -281,6 +280,9 @@ func Chips() Transform { return chips(nil) }
 func chips(warn func(string)) Transform {
 	return Transform{Name: "chips", Fn: func(root *html.Node) error {
 		rewriteText(root, func(s string) []*html.Node { return chipNodes(s, warn) })
+		// After the bare badges, so a refused span's literal text is not
+		// read again: [proven]{.chip hidden} stays as written, whole.
+		resolveSpans(root, warn)
 		if warn != nil {
 			warnUnclaimedHeadingBlocks(root, warn)
 		}
@@ -288,54 +290,41 @@ func chips(warn func(string)) Transform {
 	}}
 }
 
-// warnUnclaimedHeadingBlocks reports a heading that still ends in an
-// attribute block once spans and links have taken theirs. A heading leaves
-// a block touching a "]" or a ")" for the span or link before it
-// (takeHeadingBlock); in ## Call f(x){#call}, or after a footnote
-// reference, there is none, and the block would sit in the heading as
-// text with no word. Only a block meant as attributes, with an id, a class
-// or a key=value, is reported. LinkAttrs runs before Chips, so by now
-// both have had their turn.
+// warnUnclaimedHeadingBlocks reports a heading that ends in a link's or an
+// image's block LinkAttrs refused: it was never the heading's, so the fix
+// is in the block. A block touching a "]" or a ")" that no span or link
+// took at all is reported on goldmark's tree (spanTransformer), where an
+// escaped brace is still escaped; this case needs LinkAttrs' verdict, so
+// it waits until LinkAttrs has run, which is before Chips.
 func warnUnclaimedHeadingBlocks(root *html.Node, warn func(string)) {
 	walk(root, func(n *html.Node) {
 		if n.Type != html.ElementNode || !isHeading(n) {
 			return
 		}
 		last := n.LastChild
-		if last == nil || last.Type != html.TextNode {
+		if last == nil || last.Type != html.TextNode || !strings.HasPrefix(last.Data, "{") {
+			return
+		}
+		prev := last.PrevSibling
+		if prev == nil || prev.Type != html.ElementNode || (prev.DataAtom != atom.A && prev.DataAtom != atom.Img) {
 			return
 		}
 		s := strings.TrimRight(last.Data, " \t")
-		for i := 0; i < len(s); i++ {
-			if s[i] != '{' || braceSpan(s, i) != len(s)-1 {
-				continue
-			}
-			a, ok := parseAttrs(s[i+1 : len(s)-1])
-			if !ok || (a.id == "" && len(a.classes) == 0 && len(a.bare) == len(a.kv)) {
-				return
-			}
-			title := strings.TrimSpace(strings.TrimSuffix(textOf(n), s[i:]))
-			prev := last.PrevSibling
-			switch {
-			case i == 0 && prev != nil && prev.Type == html.ElementNode && (prev.DataAtom == atom.A || prev.DataAtom == atom.Img):
-				// A link's or an image's block LinkAttrs refused: it was
-				// never the heading's, so the fix is in the block.
-				warn(fmt.Sprintf("heading %q: %s after a link is not a block the link takes; fix the block, or write a space before it to give it to the heading", title, s[i:]))
-			case i > 0 && s[i-1] == ']' && spanLabelRe.MatchString(s[:i]):
-				// A bracketed span's block, which checkAttrBlock refused and
-				// has warned about, or left quietly as text: the span's, not
-				// the heading's.
-			case (i > 0 && (s[i-1] == ']' || s[i-1] == ')')) || (i == 0 && prev != nil && prev.Type == html.ElementNode):
-				warn(fmt.Sprintf("heading %q: %s touches a ] or ) but no span or link took it; write a space before it to give it to the heading", title, s[i:]))
-			}
+		if braceSpan(s, 0) != len(s)-1 || !meantAsAttrs(s[1:len(s)-1]) {
 			return
 		}
+		title := strings.TrimSpace(strings.TrimSuffix(textOf(n), s))
+		warn(fmt.Sprintf("heading %q: %s after a link is not a block the link takes; fix the block, or write a space before it to give it to the heading", title, s))
 	})
 }
 
-// spanLabelRe matches a bracketed span's label at the end of a string, as
-// chipRe reads one.
-var spanLabelRe = regexp.MustCompile(`\[[^\]\n]+\]$`)
+// meantAsAttrs reports whether block, the inside of a {…}, was clearly
+// written as attributes: an id, a class or a key=value, not bare words
+// alone, which is far more often a path or prose.
+func meantAsAttrs(block string) bool {
+	a, ok := parseAttrs(block)
+	return ok && (a.id != "" || len(a.classes) > 0 || len(a.bare) < len(a.kv))
+}
 
 func isHeading(n *html.Node) bool {
 	switch n.DataAtom {
@@ -377,24 +366,6 @@ func stripChipTokens(s string) string {
 	for _, loc := range locs {
 		b.WriteString(s[last:loc[0]])
 		last = loc[1]
-		if label, block, ok := spanMatch(s, loc); ok {
-			// A bracketed span. Only a chip is a status marker that has no
-			// business in a browser tab; any other span is ordinary prose
-			// the author wrapped for styling, so its label survives with
-			// only the syntax removed.
-			//
-			// A block the page leaves as text stays in the title as text
-			// too, so the tab and the page say the same thing.
-			a, isSpan := spanBlock(label, block, nil)
-			if !isSpan {
-				b.WriteString(s[loc[0]:loc[1]])
-				continue
-			}
-			if !hasClassToken(a.classes, "chip") {
-				b.WriteString(label)
-				continue
-			}
-		}
 		if strings.HasSuffix(b.String(), " ") && last < len(s) && s[last] == ' ' {
 			last++ // merge the flanking single-space pair into one
 		}

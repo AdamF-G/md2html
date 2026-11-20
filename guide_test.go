@@ -195,10 +195,11 @@ func TestGuideClaims(t *testing.T) {
 			want:  []string{"<p>[Proven]</p>"},
 		},
 		{
-			name:  "a span's label must be plain text",
-			quote: "`[**x**]{.chip}` stays literal",
-			src:   "[**x**]{.chip}\n",
-			want:  []string{"[<strong>x</strong>]{.chip}"},
+			name:  "a span's label is Markdown, and its brackets nest",
+			quote: "`[**new** in v2]{.chip}`",
+			src:   "[**new** in v2]{.chip} [a [b] c]{.x} [a \\] b]{.x}\n",
+			want: []string{`<span class="chip"><strong>new</strong> in v2</span>`,
+				`<span class="x">a [b] c</span>`, `<span class="x">a ] b</span>`},
 		},
 		{
 			name:  "a badge in a link's text is inert",
