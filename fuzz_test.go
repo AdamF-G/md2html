@@ -159,3 +159,179 @@ func FuzzTipNote(f *testing.F) {
 		}
 	})
 }
+
+// The rest hold the same idea for text that is not an attribute value but
+// is still the author's to write: a chip's label, a container's title, a
+// code block's caption and a fig label. Each comes out as the author's
+// text, and where the construct takes inline Markdown, as exactly what the
+// same text renders to in a paragraph: never more structure than that.
+
+var textSeeds = []string{
+	"since v2", "a *b* c", "x & y", "&amp;", `say "hi" it's`, "a\\b", "ü 中文 😀",
+	"[c:x]", "`code`", "§1", "a  b", "50%", "a: b", "a # b", "@x", "!x", "|x|",
+}
+
+// asParagraph renders text inside a paragraph and returns that
+// paragraph's rendering of it. A word goes first: alone, "0)" or "- x"
+// would start a list, not a paragraph. ok is false if it still is not one.
+func asParagraph(t *testing.T, text string) (inner, plain string, markup bool, ok bool) {
+	t.Helper()
+	p := first(fuzzMain(t, "w "+text+"\n"), "p")
+	if p == nil {
+		return "", "", false, false
+	}
+	inner, okInner := strings.CutPrefix(innerHTML(t, p), "w ")
+	plain, okPlain := strings.CutPrefix(textOf(p), "w ")
+	return inner, plain, len(elements(p)) > 0, okInner && okPlain
+}
+
+// innerHTML renders n's children.
+func innerHTML(t *testing.T, n *html.Node) string {
+	t.Helper()
+	var b strings.Builder
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if err := html.Render(&b, c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return b.String()
+}
+
+// plainText reports whether s is text with no structure-bearing byte and
+// no edge spaces a construct may trim.
+func plainLine(s string) bool {
+	return fuzzable(s) && s == strings.TrimSpace(s) && s != "" && !strings.ContainsAny(s, "\t\f\v")
+}
+
+// A label that renders as plain text in a paragraph is a chip whose text
+// is that text exactly. One that renders with markup stays literal, as the
+// guide says of [**x**]{.chip}; that is not this property.
+func FuzzChipLabel(f *testing.F) {
+	for _, s := range textSeeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, label string) {
+		if !plainLine(label) || strings.ContainsAny(label, "[]{}") {
+			t.Skip()
+		}
+		// A backslash is written doubled, in the label and in the
+		// paragraph alike: left single at the end, it escapes the "]".
+		label = strings.ReplaceAll(label, `\`, `\\`)
+		_, plain, markup, ok := asParagraph(t, label)
+		if !ok || markup {
+			t.Skip()
+		}
+		main := fuzzMain(t, "x ["+label+"]{.chip} y\n")
+		chip := first(main, "span")
+		if chip == nil || textOf(chip) != plain || len(elements(main)) != 2 {
+			t.Fatalf("[%s]{.chip}: elements %q, chip text %q, want one chip %q", label, elements(main), textOf(chip), plain)
+		}
+	})
+}
+
+// A container's title renders as the same text does in a paragraph, and
+// the container's body is untouched. Raw HTML is the author's markup,
+// passed through anywhere, so a title holding "<" is left out, as is a
+// trailing {…}, which is the container's attribute block.
+func FuzzContainerTitle(f *testing.F) {
+	for _, s := range textSeeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, title string) {
+		if !plainLine(title) || strings.ContainsAny(title, "<{}") {
+			t.Skip()
+		}
+		want, _, _, ok := asParagraph(t, title)
+		if !ok {
+			t.Skip()
+		}
+		main := fuzzMain(t, "::: warning "+title+"\nbody\n:::\n")
+		var got *html.Node
+		walk(main, func(n *html.Node) {
+			if got == nil && hasClass(n, "container-title") {
+				got = n
+			}
+		})
+		if got == nil {
+			t.Fatalf("%q: no container title in %q", title, elements(main))
+		}
+		if a := innerHTML(t, got); a != want {
+			t.Fatalf("%q: title renders %q, a paragraph %q", title, a, want)
+		}
+		var paras []string
+		for c := got.Parent.FirstChild; c != nil; c = c.NextSibling {
+			if c.Type == html.ElementNode {
+				paras = append(paras, c.Data+":"+textOf(c))
+			}
+		}
+		if len(paras) != 2 || paras[1] != "p:body" {
+			t.Fatalf("%q: the container holds %q, want its title and the body", title, paras)
+		}
+	})
+}
+
+// A code block's caption is plain text: any value written double-quoted
+// in the braced form comes back exactly. A backtick is left out: it ends
+// the fence's info string (silent trap 10).
+//
+// It found that a caption did not decode a character reference, so
+// caption="a &amp; b" showed "&amp;", where every other value means "&".
+func FuzzCodeCaption(f *testing.F) {
+	for _, s := range fuzzSeeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, v string) {
+		if !fuzzable(v) || strings.ContainsRune(v, '`') || v == "" {
+			t.Skip()
+		}
+		// "Plain text apart from status badges and § references", the
+		// guide says, so those are left to their own tests.
+		if chipRe.MatchString(v) || strings.Contains(v, "§") {
+			t.Skip()
+		}
+		main := fuzzMain(t, "```{.go caption="+quoteValue(v)+"}\nx\n```\n")
+		cap := first(main, "figcaption")
+		if cap == nil || textOf(cap) != v {
+			t.Fatalf("caption %q: got %q (elements %q)", v, textOf(cap), elements(main))
+		}
+	})
+}
+
+// A fig label takes inline Markdown when YAML reads it as a string, so,
+// double-quoted for YAML, it renders as the same text does in a paragraph.
+func FuzzFigLabel(f *testing.F) {
+	for _, s := range textSeeds {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, label string) {
+		// A fig label takes CommonMark inline syntax, not GFM's: no
+		// strikethrough and no bare autolinks (figrender.go), which a
+		// paragraph has.
+		if !plainLine(label) || strings.ContainsAny(label, "<~@") || strings.Contains(label, "www.") || strings.Contains(label, "://") {
+			t.Skip()
+		}
+		for _, r := range label {
+			if r < 0x20 || (r >= 0x7f && r <= 0x9f) || r == 0x2028 || r == 0x2029 || r == 0xfeff {
+				t.Skip() // characters YAML will not take in a string
+			}
+		}
+		yaml := `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(label) + `"`
+		main := fuzzMain(t, "```fig\nitems:\n  - box: "+yaml+"\n```\n")
+		var box *html.Node
+		walk(main, func(n *html.Node) {
+			if box == nil && hasClass(n, "fig-box") {
+				box = n
+			}
+		})
+		if box == nil {
+			t.Fatalf("%q: no fig box in %q", label, elements(main))
+		}
+		want, _, _, ok := asParagraph(t, label)
+		if !ok {
+			t.Skip()
+		}
+		if a := innerHTML(t, box); a != want {
+			t.Fatalf("%q: box renders %q, a paragraph %q", label, a, want)
+		}
+	})
+}
