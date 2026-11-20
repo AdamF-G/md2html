@@ -2,7 +2,6 @@ package md2html
 
 import (
 	"fmt"
-	stdhtml "html"
 	"regexp"
 	"strings"
 
@@ -131,13 +130,6 @@ func checkAttrBlock(who, block string, tips bool, warn func(string)) (span spanA
 		return spanAttrs{}, false
 	}
 
-	// A value is the text the author typed, taken before Markdown saw it
-	// (rawBlockParser, headingAttrParser), so a character reference in it
-	// is decoded here, once: title="a &amp; b" is "a & b".
-	for k, v := range a.kv {
-		a.kv[k] = stdhtml.UnescapeString(v)
-	}
-	a.id = stdhtml.UnescapeString(a.id)
 	span = spanAttrs{id: a.id, classes: a.classes}
 	// Walking the keys in sorted order makes the winner of two spellings
 	// of one name, Title and title, the same on every run.

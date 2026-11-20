@@ -1136,3 +1136,12 @@ func TestContainerUppercaseIDIsTheID(t *testing.T) {
 		t.Errorf("ID= not used as the id\ngot: %s", got)
 	}
 }
+
+// A container's attribute values decode a character reference, as every
+// other attribute block's do, and only once.
+func TestContainerValueDecodesReferencesOnce(t *testing.T) {
+	got := convert(t, "::: {.note title=\"a &amp; b &amp;amp; c\"}\nhi\n:::\n", nil)
+	if !strings.Contains(got, `title="a &amp; b &amp;amp; c"`) {
+		t.Errorf("want the value a & b &amp; c\ngot: %s", got)
+	}
+}

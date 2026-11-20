@@ -1,6 +1,7 @@
 package md2html
 
 import (
+	stdhtml "html"
 	"sort"
 	"strings"
 )
@@ -45,10 +46,17 @@ type attrs struct {
 // proposal settled on and Pandoc's own behavior. The names ignore case, as
 // HTML's do, so ID= is the id and Class= a class: left in kv, an ID beat
 // every id written after it.
+//
+// A value, an id and a class are decoded of character references here,
+// once, for every block: each reaches the parser as the author typed it,
+// before Markdown resolved anything (rawBlockParser, headingAttrParser, a
+// fence's info string), so title="a &amp; b" is "a & b" on a span, a link,
+// a heading, a container and a code fence alike.
 func parseAttrs(content string) (attrs, bool) {
 	a := attrs{kv: map[string]string{}}
 	found := false
 	for _, tok := range attrTokens(content) {
+		tok.key, tok.val = stdhtml.UnescapeString(tok.key), stdhtml.UnescapeString(tok.val)
 		switch {
 		case strings.HasPrefix(tok.key, "#") && tok.val == "":
 			if name := tok.key[1:]; name != "" {

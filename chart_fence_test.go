@@ -33,7 +33,9 @@ func TestVegaLiteFenceKeepsItsClasses(t *testing.T) {
 			t.Errorf("%s: the classes did not reach the figure: %.300s", info, got)
 		}
 	}
-	if got := convert(t, "```vega-lite {class=\"a&quot;b\"}\n"+body, nil); !strings.Contains(got, `<figure class="md2html-chart a&amp;quot;b"`) {
+	// &quot; is a quote, decoded as every value's references are; written
+	// back it must be escaped, or it would end the class attribute.
+	if got := convert(t, "```vega-lite {class=\"a&quot;b\"}\n"+body, nil); !strings.Contains(got, `<figure class="md2html-chart a&#34;b"`) {
 		t.Errorf("a class was not escaped: %.300s", got)
 	}
 }
