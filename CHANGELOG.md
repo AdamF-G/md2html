@@ -9,7 +9,7 @@ This is 0.x: the exported API is not stable yet, and a change marked
 **breaking** can land in a minor release. From v1.0.0 on, one needs a new
 major version instead.
 
-## Unreleased
+## v0.16.0 — 2026-11-19
 
 ### Added
 
@@ -31,25 +31,26 @@ major version instead.
 
 ### Changed
 
-- A span block with a bare word stays as written. `map[key]{value}` used
-  to render `map<span>key</span>` and lose `{value}`; it now renders as
-  typed, quietly, and `[x]{.chip draft}` stays as typed with a warning.
-  The silent trap is gone from the guide.
-- A span's `key="value"` pairs that the attribute rules keep now reach the
-  page, where before every pair was dropped.
-- A span block with a name no attribute can have stays as written and
-  warns, where before it rendered a span without that name.
-- A span block left as text keeps its text in the page title too, as it
-  does on the page.
-- A bracketed span's label is inline Markdown, and its brackets nest:
-  `[**new** in v2]{.chip}` is a chip with bold text, `[a [b] c]{.x}` is a
-  span, and `\]` is a lone bracket, `[a \] b]{.x}`. A span is paired as
-  Pandoc pairs one; `[**x**]{.chip}`, which stayed literal, is now a chip.
-- A span's or a link's block is taken as written, before inline Markdown:
-  a value holding `*b*` or `<b>` keeps it as text, where the whole span
-  stayed literal and a `<b>` reached the page, and `\"` is a quote inside a
-  double-quoted value. A `{…}` straight after `]` or `)` in prose is
-  likewise left unparsed: `f(x){*a*}` shows `{*a*}`.
+- A bracketed span is read as Pandoc reads one, and its block as written:
+  - Its label is inline Markdown, and its brackets nest:
+    `[**new** in v2]{.chip}` is a chip with bold text, `[a [b] c]{.x}` is a
+    span, and `\]` is a lone bracket, `[a \] b]{.x}`. `[**x**]{.chip}`,
+    which stayed literal, is now a chip.
+  - Its block is taken before inline Markdown, so a value holding `*b*` or
+    `<b>` keeps it as text, where the whole span stayed literal and a `<b>`
+    reached the page, and `\"` is a quote inside a double-quoted value. A
+    `{…}` straight after `]` or `)` in prose is likewise left unparsed:
+    `f(x){*a*}` shows `{*a*}`.
+  - The `key="value"` pairs the attribute rules keep reach the page, where
+    before every pair was dropped.
+  - A block with a bare word stays as written: `map[key]{value}` used to
+    render `map<span>key</span>` and lose `{value}`, and now renders as
+    typed, quietly; `[x]{.chip draft}` stays as typed and warns. The silent
+    trap is gone from the guide.
+  - A block with a name no attribute can have stays as written and warns,
+    where before it rendered a span without that name.
+  - A block left as text keeps its text in the page title too, as it does
+    on the page.
 - An attribute block's `ID=` and `Class=` are its id and a class, as
   `id=` and `class=` are, in the order written. A container or a code
   fence used to drop `ID=`, and on a link or a span an `ID=` beat an
@@ -80,23 +81,39 @@ major version instead.
 
   ```sh
   # 1. a heading ending in a span's or a link's block
-  grep -rnE '^#{1,6} .*[])]\{[^}]*\}[[:space:]]*$' --include='*.md' .
+  grep -rnE '^ {0,3}#{1,6}[[:blank:]].*[])]\{[^}]*\}[[:space:]]*$' --include='*.md' .
   # 2-3. a heading block with a quote or an unquoted value
-  grep -rnE "^#{1,6} .*\{[^}]*('|=[^\"[:space:]}])[^}]*\}[[:space:]]*$" --include='*.md' .
+  grep -rnE "^ {0,3}#{1,6}[[:blank:]].*\{[^}]*('|=[^\"[:space:]}])[^}]*\}[[:space:]]*$" --include='*.md' .
   # 4. a heading ending in an empty {}
-  grep -rnE '^#{1,6} .*\{\}[[:space:]]*$' --include='*.md' .
+  grep -rnE '^ {0,3}#{1,6}[[:blank:]].*\{\}[[:space:]]*$' --include='*.md' .
+  # 5. a heading block with an aria- name
+  grep -rnE '^ {0,3}#{1,6}[[:blank:]].*\{[^}]*aria-[^}]*\}[[:space:]]*$' --include='*.md' .
+  # 6. a bare word beside an id or a class
+  grep -rnE '^ {0,3}#{1,6}[[:blank:]].*\{([^}]*[[:space:]])?[A-Za-z][-A-Za-z0-9_]*([[:space:]][^}]*)?\}[[:space:]]*$' --include='*.md' . | grep -E '\{[^}]*[#.]'
   ```
 
-  These search `#` headings; an underlined heading's text line is read the
-  same way and is not searched. Silent trap 17, a heading's block needing
+  These search `#` headings, indented or not; an underlined heading's text
+  line is read the same way and is not searched. Silent trap 17, a heading's block needing
   double quotes, is gone.
 
 ### Fixed
 
+- A code block's caption and a container's attribute values decode a
+  character reference, as every other attribute block's do:
+  `caption="a &amp; b"` showed the reader "&amp;".
 - A link the site shell drops, one it has nowhere to send, no longer
   leaves its attribute block on every page as text: the shell reads its
   link blocks before dropping links, as a page does, so the block goes
   with the link and a `tip` stays on its text.
+
+### Repository
+
+- `just compat` runs again: the compat module lacked a dependency the
+  highlighter brought in. Pandoc 3.13 renders task lists as md2html does,
+  so the suite now checks that they agree, and the README says so.
+- Fuzz tests hold attribute values, chip labels, container titles, code
+  captions and fig labels to coming back exactly as written, and never as
+  markup.
 
 ## v0.15.0 — 2026-10-17
 
