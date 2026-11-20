@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-19
 **Author:** AdamF-G
-**Status:** Draft for review.
+**Status:** Built, 2026-11-19.
 
 ## Purpose
 

@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-19
 **Author:** AdamF-G
-**Status:** Approved (option B).
+**Status:** Built, 2026-11-19.
 
 ## Purpose
 
